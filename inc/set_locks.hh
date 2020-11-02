@@ -1,10 +1,11 @@
 #pragma once
 
+#include "template_util.hh"
+
 #include <cstddef>
 #include <vector>
 
 namespace Tecs {
-
     template<typename, typename...>
     class ComponentSetReadLock {};
 
