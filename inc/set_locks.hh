@@ -4,7 +4,7 @@
 #include <vector>
 
 namespace Tecs {
-    
+
     template<typename, typename...>
     class ComponentSetReadLock {};
 
@@ -109,8 +109,9 @@ namespace Tecs {
                 ecs.validIndex.writeValidDirty = true;
                 return id;
             } else {
-                //throw std::runtime_error("Can't Add entity without setting AllowAddRemove to true");
-                while(1);
+                // throw std::runtime_error("Can't Add entity without setting AllowAddRemove to true");
+                while (1)
+                    ;
                 ;
             }
         }
@@ -144,7 +145,8 @@ namespace Tecs {
             if (!validBitset[ecs.template GetIndex<T>()]) {
                 if (!AllowAddRemove) {
                     // throw std::runtime_error("Can't add new component without setting AllowAddRemove to true");
-                    while(1);
+                    while (1)
+                        ;
                     ;
                 }
                 validBitset[ecs.template GetIndex<T>()] = true;
@@ -160,7 +162,8 @@ namespace Tecs {
             if (!validBitset[ecs.template GetIndex<T>()]) {
                 if (!AllowAddRemove) {
                     // throw std::runtime_error("Can't add new component without setting AllowAddRemove to true");
-                    while(1);
+                    while (1)
+                        ;
                     ;
                 }
                 validBitset[ecs.template GetIndex<T>()] = true;
@@ -180,7 +183,8 @@ namespace Tecs {
                 }
             } else {
                 // throw std::runtime_error("Can't remove entity without setting AllowAddRemove to true");
-                while(1);
+                while (1)
+                    ;
                 ;
             }
         }

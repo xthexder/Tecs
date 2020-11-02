@@ -4,7 +4,6 @@ ColumnLimit: 120
 Language: Cpp
 TabWidth: 4
 IndentWidth: 4
-UseTab: ForContinuationAndIndentation
 NamespaceIndentation: All
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
