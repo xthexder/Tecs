@@ -1,14 +1,11 @@
 #pragma once
 
-#include "Tecs_util.hh"
-#include "Tecs_set_wrappers.hh"
+#include "template_util.hh"
+#include "set_locks.hh"
 
 #include <atomic>
 #include <bitset>
-#include <cstdint>
-#include <deque>
-#include <initializer_list>
-#include <iostream>
+#include <cstddef>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -147,24 +144,33 @@ namespace Tecs {
 			return ComponentSetWriteTransaction<ECS<Tn...>, AllowAddRemove, Un...>(*this);
 		}
 
+		template<typename U>
+		inline static constexpr size_t GetIndex() {
+            return GetIndex<0, U>();
+        }
+
+		inline static constexpr size_t GetComponentCount() {
+            return sizeof...(Tn);
+        }
+
 	private:
 		using ValidComponentSet = std::bitset<sizeof...(Tn)>;
 		using IndexStorage = typename wrap_tuple_args<ComponentIndex, Tn...>::type;
 
 		template<size_t I, typename U>
-		inline static constexpr size_t FindIndex() {
+		inline static constexpr size_t GetIndex() {
 			static_assert(I < sizeof...(Tn), "Component does not exist");
 
 			if constexpr (std::is_same<U, typename std::tuple_element<I, std::tuple<Tn...>>::type>::value) {
 				return I;
 			} else {
-				return FindIndex<I + 1, U>();
+				return GetIndex<I + 1, U>();
 			}
 		}
 
 		template<typename U>
 		inline static constexpr bool BitsetHas(ValidComponentSet &validBitset) {
-			return validBitset[FindIndex<0, U>()];
+			return validBitset[GetIndex<0, U>()];
 		}
 
 		template<typename U, typename U2, typename... Un>

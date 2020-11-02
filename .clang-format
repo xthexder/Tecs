@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+ColumnLimit: 120
+
+Language: Cpp
+TabWidth: 4
+IndentWidth: 4
+UseTab: ForContinuationAndIndentation
+NamespaceIndentation: All
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLambdasOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: true
+IndentPPDirectives: BeforeHash
+IncludeBlocks: Regroup
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: false
+SpaceAfterTemplateKeyword: false

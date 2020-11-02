@@ -146,6 +146,8 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
+    
+    std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
 
 	{
 		Timer t("Run threads");
