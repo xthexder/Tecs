@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## Setup compiler flags for various build types
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(CMAKE_CXX_FLAGS                 "/MP")
+    set(CMAKE_CXX_FLAGS                 "/MP /EHsc")
     set(CMAKE_CXX_FLAGS_RELEASE         "/MD /O2")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "/MDd")
     set(CMAKE_CXX_FLAGS_DEBUG           "/MDd /DEBUG /ZI /FC")
