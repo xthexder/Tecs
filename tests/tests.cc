@@ -9,13 +9,15 @@ using namespace testing;
 
 static Tecs::ECS<Transform, Renderable, Script> ecs;
 
+#define ENTITY_COUNT 10000
+
 int main(int argc, char **argv) {
     std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
 
     {
         Timer t("Test adding each component type");
         auto writeLock = ecs.AddRemoveEntities();
-        for (size_t i = 0; i < 1000; i++) {
+        for (size_t i = 0; i < ENTITY_COUNT; i++) {
             size_t id = writeLock.AddEntity();
             Assert(!writeLock.Has<Transform, Renderable, Script>(id), "Entity must start with no components");
 
@@ -58,6 +60,29 @@ int main(int argc, char **argv) {
             Assert(script.data[1] == 2, "Script component should have value [1, (2), 3, 4]");
             Assert(script.data[2] == 3, "Script component should have value [1, 2, (3), 4]");
             Assert(script.data[3] == 4, "Script component should have value [1, 2, 3, (4)]");
+        }
+    }
+    {
+        Timer t("Test read + write lock");
+        // Read locks can be created after a write lock without deadlock, but not the other way around.
+        auto writeLock = ecs.WriteEntitiesWith<Transform>();
+        auto readLock = ecs.ReadEntitiesWith<Transform>();
+        for (size_t id : writeLock.ValidIndexes<Transform>()) {
+            // Both current and previous values can be read at the same time.
+            auto &currentTransform = writeLock.Get<Transform>(id);
+            auto &previousTransform = readLock.Get<Transform>(id);
+            currentTransform.pos[0] = previousTransform.pos[0] + 1;
+            currentTransform.pos[0] = previousTransform.pos[0] + 1;
+
+            Assert(readLock.Get<Transform>(id).pos[0] == 0, "Expected previous position to be 0");
+            Assert(writeLock.Get<Transform>(id).pos[0] == 1, "Expected current position to be 1");
+        }
+    }
+    {
+        Timer t("Test write was committed");
+        auto readLock = ecs.ReadEntitiesWith<Transform>();
+        for (size_t id : readLock.ValidIndexes<Transform>()) {
+            Assert(readLock.Get<Transform>(id).pos[0] == 1, "Expected previous position to be 1");
         }
     }
 
