@@ -4,6 +4,7 @@
 #include <Tecs.hh>
 #include <chrono>
 #include <cstring>
+#include <future>
 
 using namespace testing;
 
@@ -63,18 +64,17 @@ int main(int argc, char **argv) {
         }
     }
     {
-        Timer t("Test read + write lock");
+        Timer t("Test reading previous values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.WriteEntitiesWith<Transform>();
-        auto readLock = ecs.ReadEntitiesWith<Transform>();
         for (size_t id : writeLock.ValidIndexes<Transform>()) {
             // Both current and previous values can be read at the same time.
             auto &currentTransform = writeLock.Get<Transform>(id);
-            auto &previousTransform = readLock.Get<Transform>(id);
+            auto &previousTransform = writeLock.GetPrevious<Transform>(id);
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
 
-            Assert(readLock.Get<Transform>(id).pos[0] == 0, "Expected previous position to be 0");
+            Assert(writeLock.GetPrevious<Transform>(id).pos[0] == 0, "Expected previous position to be 0");
             Assert(writeLock.Get<Transform>(id).pos[0] == 1, "Expected current position to be 1");
         }
     }
@@ -83,6 +83,27 @@ int main(int argc, char **argv) {
         auto readLock = ecs.ReadEntitiesWith<Transform>();
         for (size_t id : readLock.ValidIndexes<Transform>()) {
             Assert(readLock.Get<Transform>(id).pos[0] == 1, "Expected previous position to be 1");
+        }
+    }
+    {
+        Timer t("Test write priority");
+        std::vector<std::thread> readThreads;
+        std::atomic_int counter(0);
+        for (int i = 0; i < 100; i++) {
+            readThreads.emplace_back([&counter, i]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(i));
+                auto readLock = ecs.ReadEntitiesWith<Transform>();
+                counter++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            });
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        {
+            auto writeLock = ecs.WriteEntitiesWith<Transform>();
+            Assert(counter < 100, "Writer lock did not take priority over readers");
+        }
+        for (auto &thread : readThreads) {
+            thread.join();
         }
     }
 

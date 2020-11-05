@@ -17,6 +17,12 @@ namespace Tecs {
     template<typename T>
     class ComponentIndex {
     public:
+        /**
+         * Lock this Component type for reading. Multiple readers can hold this lock at once.
+         * This function will only block if a writer is in the process of commiting.
+         *
+         * RUnlock() must be called exactly once after reading has completed.
+         */
         inline void RLock() {
             int retry = 0;
             while (true) {
@@ -36,10 +42,20 @@ namespace Tecs {
             }
         }
 
+        /**
+         * Unlock this Component type from a read lock. Behavior is undefined if RLock() is not called first.
+         */
         inline void RUnlock() {
             readers--;
         }
 
+        /**
+         * Lock this Component type for writing. Only a single writer can be active at once. Readers are still allowed
+         * to hold locks until the write is being committed.
+         * This function will block if another writer has already started.
+         *
+         * CommitWrite() must be called exactly once after writing has completed.
+         */
         inline void StartWrite() {
             int retry = 0;
             while (true) {
@@ -58,6 +74,15 @@ namespace Tecs {
             }
         }
 
+        /**
+         * Commit changes made to this Component type so that readers will begin to see the written values.
+         *
+         * Once this function is called, new reader locks will begin to block. When all existing readers have completed,
+         * the changes are applied to the reader buffer.
+         *
+         * Once the commit is complete, both reader and writer locks will be free.
+         * Behavior is undefined if StartWrite() is not called first.
+         */
         template<bool AllowAddRemove>
         inline void CommitWrite() {
             int retry = 0;
@@ -83,6 +108,7 @@ namespace Tecs {
         }
 
     private:
+        // Lock states
         static const uint32_t WRITER_FREE = 0;
         static const uint32_t WRITER_STARTED = 1;
         static const uint32_t WRITER_COMMITING = 2;
@@ -92,6 +118,10 @@ namespace Tecs {
         std::atomic_uint32_t readers = 0;
         std::atomic_uint32_t writer = 0;
 
+        /**
+         * Copies the write buffer to the read buffer. This should only be called inside CommitWrite().
+         * The valid index list is only copied if AllowAddRemove is true.
+         */
         template<bool AllowAddRemove>
         inline void commitEntities() {
             if (AllowAddRemove) {
@@ -112,8 +142,8 @@ namespace Tecs {
 
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
-        std::vector<size_t> readValidIndexes;
-        std::vector<size_t> writeValidIndexes;
+        std::vector<EntityId> readValidIndexes;
+        std::vector<EntityId> writeValidIndexes;
 
         template<typename, typename...>
         friend class ReadLock;
