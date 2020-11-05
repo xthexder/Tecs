@@ -1,8 +1,8 @@
 #pragma once
 
-#include "set_locks.hh"
-#include "storage.hh"
-#include "template_util.hh"
+#include "Tecs_set_locks.hh"
+#include "Tecs_storage.hh"
+#include "Tecs_template_util.hh"
 
 #include <bitset>
 #include <cstddef>
