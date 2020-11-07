@@ -6,11 +6,11 @@ namespace Tecs {
     struct Entity {
         size_t id;
 
-        inline bool operator==(const Entity &other) {
+        inline bool operator==(const Entity &other) const {
             return id == other.id;
         }
 
-        inline bool operator!=(const Entity &other) {
+        inline bool operator!=(const Entity &other) const {
             return id != other.id;
         }
 
