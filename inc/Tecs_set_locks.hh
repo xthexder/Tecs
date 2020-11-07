@@ -229,7 +229,7 @@ namespace Tecs {
 
         inline Entity AddEntity() {
             AddEntityToComponents<AllComponentTypes...>();
-            Entity id = Entity{ecs.validIndex.writeComponents.size()};
+            Entity id(ecs.validIndex.writeComponents.size());
             ecs.validIndex.writeComponents.emplace_back();
             return id;
         }

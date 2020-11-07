@@ -1,10 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 
 namespace Tecs {
     struct Entity {
         size_t id;
+
+        inline Entity() : id(std::numeric_limits<decltype(id)>::max()) {}
+        inline Entity(size_t id) : id(id) {}
 
         inline bool operator==(const Entity &other) const {
             return id == other.id;
@@ -12,6 +16,14 @@ namespace Tecs {
 
         inline bool operator!=(const Entity &other) const {
             return id != other.id;
+        }
+
+        inline bool operator!() const {
+            return id == std::numeric_limits<decltype(id)>::max();
+        }
+
+        inline operator bool() const {
+            return id != std::numeric_limits<decltype(id)>::max();
         }
 
         template<typename... Tn, typename LockType>
