@@ -19,29 +19,29 @@ int main(int argc, char **argv) {
         Timer t("Test adding each component type");
         auto writeLock = ecs.AddRemoveEntities();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            size_t id = writeLock.AddEntity();
-            Assert(!writeLock.Has<Transform, Renderable, Script>(id), "Entity must start with no components");
+            Tecs::Entity e = writeLock.AddEntity();
+            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
 
             // Test adding each component type
             Transform value(0.0, 0.0, 0.0, 1);
-            writeLock.Set<Transform>(id, value);
-            Assert(writeLock.Has<Transform>(id), "Entity should have a Transform component");
-            Assert(!writeLock.Has<Renderable, Script>(id), "Entity has extra components");
+            writeLock.Set<Transform>(e, value);
+            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
+            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
 
-            writeLock.Set<Renderable>(id, "entity" + std::to_string(i));
-            Assert(writeLock.Has<Transform, Renderable>(id), "Entity should have a Transform and Renderable component");
-            Assert(!writeLock.Has<Script>(id), "Entity has extra components");
+            writeLock.Set<Renderable>(e, "entity" + std::to_string(i));
+            Assert(writeLock.Has<Transform, Renderable>(e), "Entity should have a Transform and Renderable component");
+            Assert(!writeLock.Has<Script>(e), "Entity has extra components");
 
-            writeLock.Set<Script>(id, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
-            Assert(writeLock.Has<Transform, Renderable, Script>(id), "Entity should have all components");
+            writeLock.Set<Script>(e, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+            Assert(writeLock.Has<Transform, Renderable, Script>(e), "Entity should have all components");
 
             // Test removing a component
-            writeLock.Unset<Renderable>(id);
-            Assert(writeLock.Has<Transform, Script>(id), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(id), "Entity should not have a Renderable component");
+            writeLock.Unset<Renderable>(e);
+            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
+            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
 
             // Test references work after Set()
-            auto &script = writeLock.Get<Script>(id);
+            auto &script = writeLock.Get<Script>(e);
             Assert(script.data.size() == 8, "Script component should have size 8");
             Assert(script.data[0] == 0, "Script component should have value [(0), 0, 0, 0, 0, 0, 0, 0]");
             Assert(script.data[1] == 0, "Script component should have value [0, (0), 0, 0, 0, 0, 0, 0]");
@@ -52,9 +52,9 @@ int main(int argc, char **argv) {
             Assert(script.data[6] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, (0), 0]");
             Assert(script.data[7] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, 0, (0)]");
 
-            writeLock.Set<Script>(id, std::initializer_list<uint8_t>({1, 2, 3, 4}));
-            Assert(writeLock.Has<Transform, Script>(id), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(id), "Entity should not have a Renderable component");
+            writeLock.Set<Script>(e, std::initializer_list<uint8_t>({1, 2, 3, 4}));
+            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
+            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
 
             Assert(script.data.size() == 4, "Script component should have size 4");
             Assert(script.data[0] == 1, "Script component should have value [(1), 2, 3, 4]");
@@ -67,22 +67,22 @@ int main(int argc, char **argv) {
         Timer t("Test reading previous values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.WriteEntitiesWith<Transform>();
-        for (size_t id : writeLock.ValidIndexes<Transform>()) {
+        for (Tecs::Entity e : writeLock.ValidEntities<Transform>()) {
             // Both current and previous values can be read at the same time.
-            auto &currentTransform = writeLock.Get<Transform>(id);
-            auto &previousTransform = writeLock.GetPrevious<Transform>(id);
+            auto &currentTransform = writeLock.Get<Transform>(e);
+            auto &previousTransform = writeLock.GetPrevious<Transform>(e);
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
 
-            Assert(writeLock.GetPrevious<Transform>(id).pos[0] == 0, "Expected previous position to be 0");
-            Assert(writeLock.Get<Transform>(id).pos[0] == 1, "Expected current position to be 1");
+            Assert(writeLock.GetPrevious<Transform>(e).pos[0] == 0, "Expected previous position to be 0");
+            Assert(writeLock.Get<Transform>(e).pos[0] == 1, "Expected current position to be 1");
         }
     }
     {
         Timer t("Test write was committed");
         auto readLock = ecs.ReadEntitiesWith<Transform>();
-        for (size_t id : readLock.ValidIndexes<Transform>()) {
-            Assert(readLock.Get<Transform>(id).pos[0] == 1, "Expected previous position to be 1");
+        for (Tecs::Entity e : readLock.ValidEntities<Transform>()) {
+            Assert(readLock.Get<Transform>(e).pos[0] == 1, "Expected previous position to be 1");
         }
     }
     {

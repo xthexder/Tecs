@@ -31,13 +31,13 @@ void renderThread() {
             Timer t(timer);
             auto readLock = ecs.ReadEntitiesWith<Renderable, Transform>();
             Timer t2(timer2);
-            auto &validRenderables = readLock.ValidIndexes<Renderable>();
-            auto &validTransforms = readLock.ValidIndexes<Transform>();
-            auto &validIndexes = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
-            for (auto i : validIndexes) {
-                if (readLock.Has<Renderable, Transform>(i)) {
-                    auto &renderable = readLock.Get<Renderable>(i);
-                    auto &transform = readLock.Get<Transform>(i);
+            auto &validRenderables = readLock.ValidEntities<Renderable>();
+            auto &validTransforms = readLock.ValidEntities<Transform>();
+            auto &validEntities = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
+            for (auto e : validEntities) {
+                if (e.Has<Renderable, Transform>(readLock)) {
+                    auto &renderable = e.Get<Renderable>(readLock);
+                    auto &transform = e.Get<Transform>(readLock);
                     if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                         bad.emplace_back(renderable.name);
                     } else {
@@ -120,9 +120,9 @@ void transformWorkerThread() {
             Timer t(timer);
             auto writeLock = ecs.WriteEntitiesWith<Transform>();
             Timer t2(timer2);
-            auto &validTransforms = writeLock.ValidIndexes<Transform>();
-            for (auto i : validTransforms) {
-                auto &transform = writeLock.Get<Transform>(i);
+            auto &validTransforms = writeLock.ValidEntities<Transform>();
+            for (auto e : validTransforms) {
+                auto &transform = e.Get<Transform>(writeLock);
                 transform.pos[0]++;
                 transform.pos[1]++;
                 transform.pos[2]++;
@@ -137,11 +137,11 @@ int main(int argc, char **argv) {
         Timer t("Create entities");
         auto writeLock = ecs.AddRemoveEntities();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            size_t id = writeLock.AddEntity();
-            if (i % TRANSFORM_DIVISOR == 0) { writeLock.Set<Transform>(id, 0.0, 0.0, 0.0, 1); }
-            if (i % RENDERABLE_DIVISOR == 0) { writeLock.Set<Renderable>(id, "entity" + std::to_string(i)); }
+            Tecs::Entity e = writeLock.AddEntity();
+            if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
+            if (i % RENDERABLE_DIVISOR == 0) { e.Set<Renderable>(writeLock, "entity" + std::to_string(i)); }
             if (i % SCRIPT_DIVISOR == 0) {
-                writeLock.Set<Script>(id, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+                e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             }
         }
     }
@@ -176,9 +176,10 @@ int main(int argc, char **argv) {
         int valid = 0;
         double commonValue;
         auto readLock = ecs.ReadEntitiesWith<Transform>();
-        auto &validIndexes = readLock.ValidIndexes<Transform>();
-        for (auto i : validIndexes) {
-            auto transform = readLock.Get<Transform>(i);
+        auto &validEntities = readLock.ValidEntities<Transform>();
+        for (auto e : validEntities) {
+            auto transform = e.Get<Transform>(readLock);
+
             if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                 if (invalid == 0) {
                     std::cerr << "Component is not in correct place! " << transform.pos[0] << ", " << transform.pos[1]
@@ -199,7 +200,7 @@ int main(int argc, char **argv) {
             }
         }
         if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
-        std::cout << validIndexes.size() << " total components (" << valid << " with value " << commonValue << ")"
+        std::cout << validEntities.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
 

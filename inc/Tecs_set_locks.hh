@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_entity.hh"
 #include "Tecs_template_util.hh"
 
 #include <cstddef>
@@ -8,9 +9,6 @@
 #include <vector>
 
 namespace Tecs {
-
-    typedef size_t EntityId;
-
     /**
      * ReadLock<Tn...> is a lock handle allowing read-only access to Component types specified in the template.
      *
@@ -34,23 +32,23 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline constexpr const std::vector<EntityId> &ValidIndexes() const {
-            return ecs.template Storage<T>().readValidIndexes;
+        inline constexpr const std::vector<Entity> &ValidEntities() const {
+            return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename... Tn>
-        inline bool Has(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline bool Has(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename T>
-        inline const T &Get(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline const T &Get(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return ecs.template Storage<T>().readComponents[e];
+            return ecs.template Storage<T>().readComponents[e.id];
         }
 
     private:
@@ -107,61 +105,61 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline constexpr const std::vector<EntityId> &PreviousValidIndexes() const {
-            return ecs.template Storage<T>().readValidIndexes;
+        inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
+            return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
-        inline constexpr const std::vector<EntityId> &ValidIndexes() const {
-            return ecs.template Storage<T>().writeValidIndexes;
+        inline constexpr const std::vector<Entity> &ValidEntities() const {
+            return ecs.template Storage<T>().writeValidEntities;
         }
 
         template<typename... Tn>
-        inline bool Had(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline bool Had(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename... Tn>
-        inline bool Has(EntityId e) const {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline bool Has(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename T>
-        inline const T &GetPrevious(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline const T &GetPrevious(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return ecs.template Storage<T>().readComponents[e];
+            return ecs.template Storage<T>().readComponents[e.id];
         }
 
         template<typename T>
-        inline T &Get(EntityId e) {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline T &Get(const Entity &e) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return ecs.template Storage<T>().writeComponents[e];
+            return ecs.template Storage<T>().writeComponents[e.id];
         }
 
         template<typename T>
-        inline void Set(EntityId e, T &value) {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline void Set(const Entity &e, T &value) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            ecs.template Storage<T>().writeComponents[e] = value;
+            ecs.template Storage<T>().writeComponents[e.id] = value;
         }
 
         template<typename T, typename... Args>
-        inline void Set(EntityId e, Args... args) {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline void Set(const Entity &e, Args... args) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            ecs.template Storage<T>().writeComponents[e] = std::move(T(args...));
+            ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
         }
 
     private:
@@ -220,81 +218,81 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline constexpr const std::vector<EntityId> &PreviousValidIndexes() const {
-            return ecs.template Storage<T>().readValidIndexes;
+        inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
+            return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
-        inline constexpr const std::vector<EntityId> &ValidIndexes() const {
-            return ecs.template Storage<T>().writeValidIndexes;
+        inline constexpr const std::vector<Entity> &ValidEntities() const {
+            return ecs.template Storage<T>().writeValidEntities;
         }
 
-        inline EntityId AddEntity() {
+        inline Entity AddEntity() {
             AddEntityToComponents<AllComponentTypes...>();
-            EntityId id = ecs.validIndex.writeComponents.size();
+            Entity id = Entity{ecs.validIndex.writeComponents.size()};
             ecs.validIndex.writeComponents.emplace_back();
             return id;
         }
 
         template<typename... Tn>
-        inline bool Had(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline bool Had(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename... Tn>
-        inline bool Has(EntityId e) const {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline bool Has(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename T>
-        inline const T &GetPrevious(EntityId e) const {
-            auto &validBitset = ecs.validIndex.readComponents[e];
+        inline const T &GetPrevious(const Entity &e) const {
+            auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return ecs.template Storage<T>().readComponents[e];
+            return ecs.template Storage<T>().readComponents[e.id];
         }
 
         template<typename T>
-        inline T &Get(EntityId e) {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline T &Get(const Entity &e) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return ecs.template Storage<T>().writeComponents[e];
+            return ecs.template Storage<T>().writeComponents[e.id];
         }
 
         template<typename T>
-        inline void Set(EntityId e, T &value) {
-            ecs.template Storage<T>().writeComponents[e] = value;
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline void Set(const Entity &e, T &value) {
+            ecs.template Storage<T>().writeComponents[e.id] = value;
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 validBitset[ecs.template GetComponentIndex<T>()] = true;
-                ecs.template Storage<T>().writeValidIndexes.emplace_back(e);
+                ecs.template Storage<T>().writeValidEntities.emplace_back(e);
             }
         }
 
         template<typename T, typename... Args>
-        inline void Set(EntityId e, Args... args) {
-            ecs.template Storage<T>().writeComponents[e] = std::move(T(args...));
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline void Set(const Entity &e, Args... args) {
+            ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 validBitset[ecs.template GetComponentIndex<T>()] = true;
-                ecs.template Storage<T>().writeValidIndexes.emplace_back(e);
+                ecs.template Storage<T>().writeValidEntities.emplace_back(e);
             }
         }
 
         template<typename T>
-        inline void Unset(EntityId e) {
-            auto &validBitset = ecs.validIndex.writeComponents[e];
+        inline void Unset(const Entity &e) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (validBitset[ecs.template GetComponentIndex<T>()]) {
                 validBitset[ecs.template GetComponentIndex<T>()] = false;
-                auto &validIndexes = ecs.template Storage<T>().writeValidIndexes;
-                for (auto itr = validIndexes.begin(); itr != validIndexes.end(); itr++) {
+                auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                for (auto itr = validEntities.begin(); itr != validEntities.end(); itr++) {
                     if (*itr == e) {
-                        validIndexes.erase(itr);
+                        validEntities.erase(itr);
                         break;
                     }
                 }

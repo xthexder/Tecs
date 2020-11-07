@@ -125,16 +125,16 @@ namespace Tecs {
         template<bool AllowAddRemove>
         inline void commitEntities() {
             if (AllowAddRemove) {
-                // The number of components, or list of valid indexes may have changed.
+                // The number of components, or list of valid entities may have changed.
                 readComponents = writeComponents;
-                readValidIndexes = writeValidIndexes;
+                readValidEntities = writeValidEntities;
             } else {
                 // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
-                if (writeValidIndexes.size() > writeComponents.size() / 6) {
+                if (writeValidEntities.size() > writeComponents.size() / 6) {
                     readComponents = writeComponents;
                 } else {
-                    for (auto &valid : writeValidIndexes) {
-                        readComponents[valid] = writeComponents[valid];
+                    for (auto &valid : writeValidEntities) {
+                        readComponents[valid.id] = writeComponents[valid.id];
                     }
                 }
             }
@@ -142,8 +142,8 @@ namespace Tecs {
 
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
-        std::vector<EntityId> readValidIndexes;
-        std::vector<EntityId> writeValidIndexes;
+        std::vector<Entity> readValidEntities;
+        std::vector<Entity> writeValidEntities;
 
         template<typename, typename...>
         friend class ReadLock;
