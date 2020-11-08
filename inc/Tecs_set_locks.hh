@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Tecs_common.hh"
 #include "Tecs_entity.hh"
 #include "Tecs_template_util.hh"
 
@@ -10,14 +9,30 @@
 #include <vector>
 
 namespace Tecs {
+    template<typename... Tn>
+    class ECS;
+
+    template<typename, typename...>
+    class ReadLock {};
+    template<typename, typename...>
+    class ReadLockBase {};
+    template<typename, typename...>
+    class WriteLock {};
+    template<typename, typename...>
+    class WriteLockBase {};
+    template<typename>
+    class AddRemoveLock {};
+    template<typename>
+    class AddRemoveLockBase {};
+
     /**
      * ReadLock<Tn...> is a lock handle allowing read-only access to Component types specified in the template.
      *
      * Entities and Components cannot be added or removed while a ReadLock is held, and the values of Components
      * read through the ReadLock will remain constant until the ReadLock is freed by being deconstructed.
      */
-    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    template<typename... AllComponentTypes, typename... LockedTypes>
+    class ReadLock<ECS<AllComponentTypes...>, LockedTypes...> {
     public:
         template<typename T>
         inline constexpr const std::vector<Entity> &ValidEntities() const {
@@ -42,46 +57,46 @@ namespace Tecs {
         }
 
         template<typename... Tn>
-        inline operator ReadLockRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator ReadLock<ECS<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECS<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline ReadLockRef<ECSType<AllComponentTypes...>, Tn...> Subset() {
+        inline ReadLock<ECS<AllComponentTypes...>, Tn...> Subset() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECS<AllComponentTypes...>, Tn...>(ecs);
         }
 
     protected:
-        ReadLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+        ReadLock(ECS<AllComponentTypes...> &ecs) : ecs(ecs) {}
 
-        ECSType<AllComponentTypes...> &ecs;
+        ECS<AllComponentTypes...> &ecs;
 
         template<typename, typename...>
-        friend class ReadLockRef;
+        friend class ReadLock;
         template<typename, typename...>
-        friend class WriteLockRef;
+        friend class WriteLock;
         template<typename>
-        friend class AddRemoveLockRef;
+        friend class AddRemoveLock;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class ReadLock<ECSType<AllComponentTypes...>, LockedTypes...>
-        : public ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    class ReadLockBase<ECSType<AllComponentTypes...>, LockedTypes...>
+        : public ReadLock<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         // Delete copy constructor
-        ReadLock(const ReadLock<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
+        ReadLockBase(const ReadLockBase<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
 
-        inline ReadLock(ECSType<AllComponentTypes...> &ecs)
-            : ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
+        inline ReadLockBase(ECSType<AllComponentTypes...> &ecs)
+            : ReadLock<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
             ecs.validIndex.RLock();
             LockInOrder<AllComponentTypes...>();
         }
 
-        inline ~ReadLock() {
+        inline ~ReadLockBase() {
             UnlockInOrder<AllComponentTypes...>();
             this->ecs.validIndex.RUnlock();
         }
@@ -117,12 +132,11 @@ namespace Tecs {
      * template.
      *
      * Entities and Components cannot be added or removed while a WriteLock is in progress.
-     * The values of valid Components may be modified through the WriteLock and will be
-     * applied when the WriteLock is deconstructed.
-     * Each Component type can only be part of a single WriteLock at once.
+     * The values of valid Components may be modified through the WriteLock and will be applied when the WriteLock is
+     * deconstructed. Each Component type can only be part of a single WriteLock at once.
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    class WriteLock<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         template<typename T>
         inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
@@ -192,59 +206,59 @@ namespace Tecs {
 
         // Reference as read lock of subset
         template<typename... Tn>
-        inline operator ReadLockRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator ReadLock<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline ReadLockRef<ECSType<AllComponentTypes...>, Tn...> ReadLock() {
+        inline ReadLock<ECSType<AllComponentTypes...>, Tn...> AsReadLock() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         // Reference as subset of lock
         template<typename... Tn>
-        inline operator WriteLockRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator WriteLock<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline WriteLockRef<ECSType<AllComponentTypes...>, Tn...> Subset() {
+        inline WriteLock<ECSType<AllComponentTypes...>, Tn...> Subset() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
     protected:
-        WriteLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+        WriteLock(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
 
         ECSType<AllComponentTypes...> &ecs;
 
         template<typename, typename...>
-        friend class WriteLockRef;
+        friend class WriteLock;
         template<typename>
-        friend class AddRemoveLockRef;
+        friend class AddRemoveLock;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class WriteLock<ECSType<AllComponentTypes...>, LockedTypes...>
-        : public WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    class WriteLockBase<ECSType<AllComponentTypes...>, LockedTypes...>
+        : public WriteLock<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         // Delete copy constructor
-        WriteLock(const WriteLock<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
+        WriteLockBase(const WriteLockBase<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
 
-        inline WriteLock(ECSType<AllComponentTypes...> &ecs)
-            : WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
+        inline WriteLockBase(ECSType<AllComponentTypes...> &ecs)
+            : WriteLock<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
             ecs.validIndex.RLock();
             LockInOrder<AllComponentTypes...>();
         }
 
-        inline ~WriteLock() {
+        inline ~WriteLockBase() {
             UnlockInOrder<AllComponentTypes...>();
             this->ecs.validIndex.RUnlock();
         }
@@ -276,16 +290,15 @@ namespace Tecs {
     };
 
     /**
-     * AddRemoveLock<Tn...> is a lock handle allowing creation and deletion of entities, as well as
-     * adding and removing of Components to entities.
+     * AddRemoveLock is a lock handle allowing creation and deletion of entities, as well as adding and removing of
+     * Components to entities.
      *
-     * An AddRemoveLock cannot be in progress at the same time as a WriteLock and will block
-     * until other transactions have completed.
-     * In addition to allowing creation and deletion of entities, a AddRemoveLock also allows write to all
-     * Component types as if they were part of a WriteLock.
+     * An AddRemoveLock cannot be in progress at the same time as a WriteLock and will block until other transactions
+     * have completed. In addition to allowing creation and deletion of entities, an AddRemoveLock also allows reads and
+     * writes to all Component types as if they were part of a WriteLock or ReadLock.
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class AddRemoveLockRef<ECSType<AllComponentTypes...>> {
+    class AddRemoveLock<ECSType<AllComponentTypes...>> {
     public:
         template<typename T>
         inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
@@ -371,32 +384,32 @@ namespace Tecs {
 
         // Reference as read lock of subset
         template<typename... Tn>
-        inline operator ReadLockRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator ReadLock<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline ReadLockRef<ECSType<AllComponentTypes...>, Tn...> ReadLock() {
+        inline ReadLock<ECSType<AllComponentTypes...>, Tn...> AsReadLock() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return ReadLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         // Reference as component write transaction
         template<typename... Tn>
-        inline operator WriteLockRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator WriteLock<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline WriteLockRef<ECSType<AllComponentTypes...>, Tn...> WriteLock() {
+        inline WriteLock<ECSType<AllComponentTypes...>, Tn...> AsWriteLock() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLock<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
     private:
@@ -412,27 +425,27 @@ namespace Tecs {
         }
 
     protected:
-        AddRemoveLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+        AddRemoveLock(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
 
         ECSType<AllComponentTypes...> &ecs;
 
         template<typename>
-        friend class AddRemoveLockRef;
+        friend class AddRemoveLock;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class AddRemoveLock<ECSType<AllComponentTypes...>> : public AddRemoveLockRef<ECSType<AllComponentTypes...>> {
+    class AddRemoveLockBase<ECSType<AllComponentTypes...>> : public AddRemoveLock<ECSType<AllComponentTypes...>> {
     public:
         // Delete copy constructor
-        AddRemoveLock(const AddRemoveLock<ECSType<AllComponentTypes...>> &) = delete;
+        AddRemoveLockBase(const AddRemoveLockBase<ECSType<AllComponentTypes...>> &) = delete;
 
-        inline AddRemoveLock(ECSType<AllComponentTypes...> &ecs)
-            : AddRemoveLockRef<ECSType<AllComponentTypes...>>(ecs) {
+        inline AddRemoveLockBase(ECSType<AllComponentTypes...> &ecs)
+            : AddRemoveLock<ECSType<AllComponentTypes...>>(ecs) {
             ecs.validIndex.StartWrite();
             LockInOrder<AllComponentTypes...>();
         }
 
-        inline ~AddRemoveLock() {
+        inline ~AddRemoveLockBase() {
             UnlockInOrder<AllComponentTypes...>();
             this->ecs.validIndex.template CommitWrite<true>();
         }

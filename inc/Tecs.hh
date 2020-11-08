@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Tecs_common.hh"
 #include "Tecs_set_locks.hh"
 #include "Tecs_storage.hh"
 #include "Tecs_template_util.hh"
@@ -31,8 +30,7 @@ namespace Tecs {
          * Values read through the returned handle will remain constant.
          */
         template<typename... Un>
-        inline ReadLock<ECS<Tn...>, Un...> ReadEntitiesWith() {
-            // return ReadLock<ECS<Tn...>, Un...>(*this);
+        inline ReadLockBase<ECS<Tn...>, Un...> ReadEntitiesWith() {
             return {*this};
         }
 
@@ -44,8 +42,7 @@ namespace Tecs {
          * The lock is held until the returned handle is deconstructed.
          */
         template<typename... Un>
-        inline WriteLock<ECS<Tn...>, Un...> WriteEntitiesWith() {
-            // return WriteLock<ECS<Tn...>, Un...>(*this);
+        inline WriteLockBase<ECS<Tn...>, Un...> WriteEntitiesWith() {
             return {*this};
         }
 
@@ -55,8 +52,7 @@ namespace Tecs {
          *
          * The lock is held until the returned handle is deconstructed.
          */
-        inline AddRemoveLock<ECS<Tn...>> AddRemoveEntities() {
-            // return AddRemoveLock<ECS<Tn...>>(*this);
+        inline AddRemoveLockBase<ECS<Tn...>> AddRemoveEntities() {
             return {*this};
         }
 
@@ -109,16 +105,16 @@ namespace Tecs {
         IndexStorage indexes;
 
         template<typename, typename...>
-        friend class ReadLockRef;
-        template<typename, typename...>
         friend class ReadLock;
         template<typename, typename...>
-        friend class WriteLockRef;
+        friend class ReadLockBase;
         template<typename, typename...>
         friend class WriteLock;
-        template<typename>
-        friend class AddRemoveLockRef;
+        template<typename, typename...>
+        friend class WriteLockBase;
         template<typename>
         friend class AddRemoveLock;
+        template<typename>
+        friend class AddRemoveLockBase;
     };
 } // namespace Tecs

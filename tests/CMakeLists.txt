@@ -1,5 +1,5 @@
-add_executable(${PROJECT_NAME}-benchmark benchmark.cc)
+add_executable(${PROJECT_NAME}-benchmark benchmark.cc test_components.cc)
 target_link_libraries(${PROJECT_NAME}-benchmark ${PROJECT_NAME})
 
-add_executable(${PROJECT_NAME}-tests tests.cc)
+add_executable(${PROJECT_NAME}-tests tests.cc test_components.cc)
 target_link_libraries(${PROJECT_NAME}-tests ${PROJECT_NAME})

@@ -9,7 +9,7 @@
 using namespace testing;
 
 std::atomic_bool running;
-static Tecs::ECS<Transform, Renderable, Script> ecs;
+static ECS ecs;
 
 #define ENTITY_COUNT 1000000
 #define THREAD_COUNT 0

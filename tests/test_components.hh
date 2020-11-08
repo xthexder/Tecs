@@ -1,5 +1,8 @@
 #pragma once
 
+#include "test_ecs.hh"
+
+#include <Tecs.hh>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -7,19 +10,21 @@
 namespace testing {
     struct Transform {
         double pos[3] = {0};
-        uint64_t generation = 0;
+        Tecs::Entity parent;
 
         Transform() {}
-        Transform(double x, double y, double z) {
+        Transform(double x, double y, double z) : parent() {
             pos[0] = x;
             pos[1] = y;
             pos[2] = z;
         }
-        Transform(double x, double y, double z, uint64_t generation) : generation(generation) {
+        Transform(double x, double y, double z, Tecs::Entity parent) : parent(parent) {
             pos[0] = x;
             pos[1] = y;
             pos[2] = z;
         }
+
+        bool HasParent(Tecs::ReadLock<ECS, Transform> lock);
     };
 
     struct Script {

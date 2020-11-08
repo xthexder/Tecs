@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Tecs_common.hh"
 #include "Tecs_template_util.hh"
 
 #include <cstddef>
