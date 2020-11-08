@@ -108,9 +108,15 @@ namespace Tecs {
         IndexStorage indexes;
 
         template<typename, typename...>
+        friend class ReadLockRef;
+        template<typename, typename...>
         friend class ReadLock;
         template<typename, typename...>
+        friend class ComponentWriteTransactionRef;
+        template<typename, typename...>
         friend class ComponentWriteTransaction;
+        template<typename>
+        friend class EntityWriteTransactionRef;
         template<typename>
         friend class EntityWriteTransaction;
     };

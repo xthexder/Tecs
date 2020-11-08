@@ -16,22 +16,23 @@ namespace Tecs {
      * read through the ReadLock will remain constant until the ReadLock is freed by being deconstructed.
      */
     template<typename, typename...>
+    class ReadLockRef {};
+    template<typename, typename...>
     class ReadLock {};
 
-    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... ReadComponentTypes>
-    class ReadLock<ECSType<AllComponentTypes...>, ReadComponentTypes...> {
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
+    class ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
-        // Delete copy constructor
-        ReadLock(const ReadLock<ECSType<AllComponentTypes...>, ReadComponentTypes...> &) = delete;
-
-        inline ReadLock(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
-            ecs.validIndex.RLock();
-            LockInOrder<AllComponentTypes...>();
+        template<typename... Tn>
+        ReadLockRef(const ReadLock<ECSType<AllComponentTypes...>, Tn...> &readLock) : ecs(readLock.ecs) {
+            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
+                "Lock reference must be a subset of lock types.");
         }
 
-        inline ~ReadLock() {
-            UnlockInOrder<AllComponentTypes...>();
-            ecs.validIndex.RUnlock();
+        template<typename... Tn>
+        ReadLockRef(const ReadLockRef<ECSType<AllComponentTypes...>, Tn...> &readLock) : ecs(readLock.ecs) {
+            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
+                "Lock reference must be a subset of lock types.");
         }
 
         template<typename T>
@@ -47,7 +48,7 @@ namespace Tecs {
 
         template<typename T>
         inline const T &Get(const Entity &e) const {
-            static_assert(is_type_in_set<T, ReadComponentTypes...>::value, "Component type is not locked.");
+            static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
@@ -56,12 +57,44 @@ namespace Tecs {
             return ecs.template Storage<T>().readComponents[e.id];
         }
 
+        template<typename... Tn>
+        inline ReadLockRef<ECSType<AllComponentTypes...>, Tn...> Subset() const {
+            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(*this);
+        }
+
+    protected:
+        ReadLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+
+        ECSType<AllComponentTypes...> &ecs;
+
+        template<typename, typename...>
+        friend class ReadLockRef;
+    };
+
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
+    class ReadLock<ECSType<AllComponentTypes...>, LockedTypes...>
+        : public ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    public:
+        // Delete copy constructor
+        ReadLock(const ReadLock<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
+
+        inline ReadLock(ECSType<AllComponentTypes...> &ecs)
+            : ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
+            ecs.validIndex.RLock();
+            LockInOrder<AllComponentTypes...>();
+        }
+
+        inline ~ReadLock() {
+            UnlockInOrder<AllComponentTypes...>();
+            this->ecs.validIndex.RUnlock();
+        }
+
     private:
-        // Call lock operations on ReadComponentTypes in the same order they are defined in AllComponentTypes
-        // This is accomplished by filtering AllComponentTypes by ReadComponentTypes
+        // Call lock operations on LockedTypes in the same order they are defined in AllComponentTypes
+        // This is accomplished by filtering AllComponentTypes by LockedTypes
         template<typename U>
         inline void LockInOrder() {
-            if (is_type_in_set<U, ReadComponentTypes...>::value) { ecs.template Storage<U>().RLock(); }
+            if (contains<U, LockedTypes...>::value) { this->ecs.template Storage<U>().RLock(); }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -72,7 +105,7 @@ namespace Tecs {
 
         template<typename U>
         inline void UnlockInOrder() {
-            if (is_type_in_set<U, ReadComponentTypes...>::value) { ecs.template Storage<U>().RUnlock(); }
+            if (contains<U, LockedTypes...>::value) { this->ecs.template Storage<U>().RUnlock(); }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -80,8 +113,6 @@ namespace Tecs {
             UnlockInOrder<U2, Un...>();
             UnlockInOrder<U>();
         }
-
-        ECSType<AllComponentTypes...> &ecs;
     };
 
     /**
@@ -94,23 +125,25 @@ namespace Tecs {
      * Each Component type can only be part of a single ComponentWriteTransaction at once.
      */
     template<typename, typename...>
+    class ComponentWriteTransactionRef {};
+    template<typename, typename...>
     class ComponentWriteTransaction {};
 
-    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... WriteComponentTypes>
-    class ComponentWriteTransaction<ECSType<AllComponentTypes...>, WriteComponentTypes...> {
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
+    class ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
-        // Delete copy constructor
-        ComponentWriteTransaction(
-            const ComponentWriteTransaction<ECSType<AllComponentTypes...>, WriteComponentTypes...> &) = delete;
-
-        inline ComponentWriteTransaction(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
-            ecs.validIndex.RLock();
-            LockInOrder<AllComponentTypes...>();
+        template<typename... Tn>
+        ComponentWriteTransactionRef(const ComponentWriteTransaction<ECSType<AllComponentTypes...>, Tn...> &readLock)
+            : ecs(readLock.ecs) {
+            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
+                "Lock reference must be a subset of lock types.");
         }
 
-        inline ~ComponentWriteTransaction() {
-            UnlockInOrder<AllComponentTypes...>();
-            ecs.validIndex.RUnlock();
+        template<typename... Tn>
+        ComponentWriteTransactionRef(const ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> &readLock)
+            : ecs(readLock.ecs) {
+            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
+                "Lock reference must be a subset of lock types.");
         }
 
         template<typename T>
@@ -137,7 +170,7 @@ namespace Tecs {
 
         template<typename T>
         inline const T &GetPrevious(const Entity &e) const {
-            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+            static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
@@ -148,7 +181,7 @@ namespace Tecs {
 
         template<typename T>
         inline T &Get(const Entity &e) {
-            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+            static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
@@ -159,7 +192,7 @@ namespace Tecs {
 
         template<typename T>
         inline void Set(const Entity &e, T &value) {
-            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+            static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
@@ -170,7 +203,7 @@ namespace Tecs {
 
         template<typename T, typename... Args>
         inline void Set(const Entity &e, Args... args) {
-            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+            static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
@@ -179,12 +212,45 @@ namespace Tecs {
             ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
         }
 
+        template<typename... Tn>
+        inline ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> Subset() const {
+            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs, *this);
+        }
+
+    protected:
+        ComponentWriteTransactionRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+
+        ECSType<AllComponentTypes...> &ecs;
+
+        template<typename, typename...>
+        friend class ComponentWriteTransactionRef;
+    };
+
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
+    class ComponentWriteTransaction<ECSType<AllComponentTypes...>, LockedTypes...>
+        : public ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    public:
+        // Delete copy constructor
+        ComponentWriteTransaction(
+            const ComponentWriteTransaction<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
+
+        inline ComponentWriteTransaction(ECSType<AllComponentTypes...> &ecs)
+            : ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
+            ecs.validIndex.RLock();
+            LockInOrder<AllComponentTypes...>();
+        }
+
+        inline ~ComponentWriteTransaction() {
+            UnlockInOrder<AllComponentTypes...>();
+            this->ecs.validIndex.RUnlock();
+        }
+
     private:
-        // Call lock operations on WriteComponentTypes in the same order they are defined in AllComponentTypes
-        // This is accomplished by filtering AllComponentTypes by WriteComponentTypes
+        // Call lock operations on LockedTypes in the same order they are defined in AllComponentTypes
+        // This is accomplished by filtering AllComponentTypes by LockedTypes
         template<typename U>
         inline void LockInOrder() {
-            if (is_type_in_set<U, WriteComponentTypes...>::value) { ecs.template Storage<U>().StartWrite(); }
+            if (contains<U, LockedTypes...>::value) { this->ecs.template Storage<U>().StartWrite(); }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -195,9 +261,7 @@ namespace Tecs {
 
         template<typename U>
         inline void UnlockInOrder() {
-            if (is_type_in_set<U, WriteComponentTypes...>::value) {
-                ecs.template Storage<U>().template CommitWrite<false>();
-            }
+            if (contains<U, LockedTypes...>::value) { this->ecs.template Storage<U>().template CommitWrite<false>(); }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -205,8 +269,6 @@ namespace Tecs {
             UnlockInOrder<U2, Un...>();
             UnlockInOrder<U>();
         }
-
-        ECSType<AllComponentTypes...> &ecs;
     };
 
     /**
@@ -219,23 +281,17 @@ namespace Tecs {
      * Component types as if they were part of a ComponentWriteTransaction.
      */
     template<typename>
+    class EntityWriteTransactionRef {};
+    template<typename>
     class EntityWriteTransaction {};
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class EntityWriteTransaction<ECSType<AllComponentTypes...>> {
+    class EntityWriteTransactionRef<ECSType<AllComponentTypes...>> {
     public:
-        // Delete copy constructor
-        EntityWriteTransaction(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &) = delete;
-
-        inline EntityWriteTransaction(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
-            ecs.validIndex.StartWrite();
-            LockInOrder<AllComponentTypes...>();
-        }
-
-        inline ~EntityWriteTransaction() {
-            UnlockInOrder<AllComponentTypes...>();
-            ecs.validIndex.template CommitWrite<true>();
-        }
+        EntityWriteTransactionRef(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &readLock)
+            : ecs(readLock.ecs) {}
+        EntityWriteTransactionRef(const EntityWriteTransactionRef<ECSType<AllComponentTypes...>> &readLock)
+            : ecs(readLock.ecs) {}
 
         template<typename T>
         inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
@@ -320,29 +376,6 @@ namespace Tecs {
         }
 
     private:
-        // Call lock operations in the order they are defined in AllComponentTypes
-        template<typename U>
-        inline void LockInOrder() {
-            ecs.template Storage<U>().StartWrite();
-        }
-
-        template<typename U, typename U2, typename... Un>
-        inline void LockInOrder() {
-            LockInOrder<U>();
-            LockInOrder<U2, Un...>();
-        }
-
-        template<typename U>
-        inline void UnlockInOrder() {
-            ecs.template Storage<U>().template CommitWrite<true>();
-        }
-
-        template<typename U, typename U2, typename... Un>
-        inline void UnlockInOrder() {
-            UnlockInOrder<U2, Un...>();
-            UnlockInOrder<U>();
-        }
-
         template<typename U>
         inline void AddEntityToComponents() {
             ecs.template Storage<U>().writeComponents.emplace_back();
@@ -354,6 +387,55 @@ namespace Tecs {
             AddEntityToComponents<U2, Un...>();
         }
 
+    protected:
+        EntityWriteTransactionRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+
         ECSType<AllComponentTypes...> &ecs;
+
+        template<typename>
+        friend class EntityWriteTransactionRef;
+    };
+
+    template<template<typename...> typename ECSType, typename... AllComponentTypes>
+    class EntityWriteTransaction<ECSType<AllComponentTypes...>>
+        : public EntityWriteTransactionRef<ECSType<AllComponentTypes...>> {
+    public:
+        // Delete copy constructor
+        EntityWriteTransaction(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &) = delete;
+
+        inline EntityWriteTransaction(ECSType<AllComponentTypes...> &ecs)
+            : EntityWriteTransactionRef<ECSType<AllComponentTypes...>>(ecs) {
+            ecs.validIndex.StartWrite();
+            LockInOrder<AllComponentTypes...>();
+        }
+
+        inline ~EntityWriteTransaction() {
+            UnlockInOrder<AllComponentTypes...>();
+            this->ecs.validIndex.template CommitWrite<true>();
+        }
+
+    private:
+        // Call lock operations in the order they are defined in AllComponentTypes
+        template<typename U>
+        inline void LockInOrder() {
+            this->ecs.template Storage<U>().StartWrite();
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void LockInOrder() {
+            LockInOrder<U>();
+            LockInOrder<U2, Un...>();
+        }
+
+        template<typename U>
+        inline void UnlockInOrder() {
+            this->ecs.template Storage<U>().template CommitWrite<true>();
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void UnlockInOrder() {
+            UnlockInOrder<U2, Un...>();
+            UnlockInOrder<U>();
+        }
     };
 }; // namespace Tecs

@@ -146,10 +146,10 @@ namespace Tecs {
         std::vector<Entity> writeValidEntities;
 
         template<typename, typename...>
-        friend class ReadLock;
+        friend class ReadLockRef;
         template<typename, typename...>
-        friend class ComponentWriteTransaction;
+        friend class ComponentWriteTransactionRef;
         template<typename>
-        friend class EntityWriteTransaction;
+        friend class EntityWriteTransactionRef;
     };
 } // namespace Tecs

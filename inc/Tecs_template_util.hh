@@ -4,19 +4,16 @@
 #include <type_traits>
 
 namespace Tecs {
-    // is_type_in_set<T, Un...>::value is true if T is in the set Un
+    // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>
-    struct is_type_in_set {};
+    struct contains : std::disjunction<std::is_same<T, Un>...> {};
 
-    template<typename T, typename U>
-    struct is_type_in_set<T, U> {
-        static constexpr bool value = std::is_same<T, U>::value;
-    };
+    // is_subset_of<std::tuple<Tn...>, std::tuple<Un...>>::value is true if Tn... is a subset of Un...
+    template<typename...>
+    struct is_subset_of : std::false_type {};
 
-    template<typename T, typename U, typename... Un>
-    struct is_type_in_set<T, U, Un...> {
-        static constexpr bool value = is_type_in_set<T, U>::value || is_type_in_set<T, Un...>::value;
-    };
+    template<typename... Tn, typename... Un>
+    struct is_subset_of<std::tuple<Tn...>, std::tuple<Un...>> : std::conjunction<contains<Tn, Un...>...> {};
 
     // Template magic to create
     //     std::tuple<ComponentIndex<T1>, ComponentIndex<T2>, ...>

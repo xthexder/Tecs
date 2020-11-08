@@ -45,7 +45,7 @@ namespace Tecs {
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked>
         inline decltype(auto) Get(LockType<ECSType, FirstLocked, MoreLocked...> &lock) const {
-            static_assert(is_type_in_set<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
+            static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
             return lock.template Get<T>(*this);
         }
@@ -60,7 +60,7 @@ namespace Tecs {
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked>
         inline const T &GetPrevious(LockType<ECSType, FirstLocked, MoreLocked...> &lock) const {
-            static_assert(is_type_in_set<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
+            static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
             return lock.template GetPrevious<T>(*this);
         }
@@ -75,7 +75,7 @@ namespace Tecs {
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked>
         inline void Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, T &value) const {
-            static_assert(is_type_in_set<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
+            static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
             lock.template Set<T>(*this, value);
         }
@@ -90,7 +90,7 @@ namespace Tecs {
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked, typename... Args>
         inline void Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, Args... args) const {
-            static_assert(is_type_in_set<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
+            static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
             lock.template Set<T>(*this, args...);
         }
