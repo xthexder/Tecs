@@ -43,8 +43,8 @@ namespace Tecs {
          * The lock is held until the returned handle is deconstructed.
          */
         template<typename... Un>
-        inline ComponentWriteTransaction<ECS<Tn...>, Un...> WriteEntitiesWith() {
-            // return ComponentWriteTransaction<ECS<Tn...>, Un...>(*this);
+        inline WriteLock<ECS<Tn...>, Un...> WriteEntitiesWith() {
+            // return WriteLock<ECS<Tn...>, Un...>(*this);
             return {*this};
         }
 
@@ -54,8 +54,8 @@ namespace Tecs {
          *
          * The lock is held until the returned handle is deconstructed.
          */
-        inline EntityWriteTransaction<ECS<Tn...>> AddRemoveEntities() {
-            // return EntityWriteTransaction<ECS<Tn...>>(*this);
+        inline AddRemoveLock<ECS<Tn...>> AddRemoveEntities() {
+            // return AddRemoveLock<ECS<Tn...>>(*this);
             return {*this};
         }
 
@@ -112,12 +112,12 @@ namespace Tecs {
         template<typename, typename...>
         friend class ReadLock;
         template<typename, typename...>
-        friend class ComponentWriteTransactionRef;
+        friend class WriteLockRef;
         template<typename, typename...>
-        friend class ComponentWriteTransaction;
+        friend class WriteLock;
         template<typename>
-        friend class EntityWriteTransactionRef;
+        friend class AddRemoveLockRef;
         template<typename>
-        friend class EntityWriteTransaction;
+        friend class AddRemoveLock;
     };
 } // namespace Tecs

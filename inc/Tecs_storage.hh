@@ -148,8 +148,8 @@ namespace Tecs {
         template<typename, typename...>
         friend class ReadLockRef;
         template<typename, typename...>
-        friend class ComponentWriteTransactionRef;
+        friend class WriteLockRef;
         template<typename>
-        friend class EntityWriteTransactionRef;
+        friend class AddRemoveLockRef;
     };
 } // namespace Tecs

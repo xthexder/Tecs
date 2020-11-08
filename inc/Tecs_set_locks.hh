@@ -14,13 +14,13 @@ namespace Tecs {
     template<typename, typename...>
     class ReadLock {};
     template<typename, typename...>
-    class ComponentWriteTransactionRef {};
+    class WriteLockRef {};
     template<typename, typename...>
-    class ComponentWriteTransaction {};
+    class WriteLock {};
     template<typename>
-    class EntityWriteTransactionRef {};
+    class AddRemoveLockRef {};
     template<typename>
-    class EntityWriteTransaction {};
+    class AddRemoveLock {};
 
     /**
      * ReadLock<Tn...> is a lock handle allowing read-only access to Component types specified in the template.
@@ -31,9 +31,6 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
     class ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
-        template<typename... Tn>
-        inline ReadLockRef(ReadLockRef<ECSType<AllComponentTypes...>, Tn...> lock) : ecs(lock.ecs) {}
-
         template<typename T>
         inline constexpr const std::vector<Entity> &ValidEntities() const {
             return ecs.template Storage<T>().readValidEntities;
@@ -78,9 +75,9 @@ namespace Tecs {
         template<typename, typename...>
         friend class ReadLockRef;
         template<typename, typename...>
-        friend class ComponentWriteTransactionRef;
+        friend class WriteLockRef;
         template<typename>
-        friend class EntityWriteTransactionRef;
+        friend class AddRemoveLockRef;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
@@ -128,21 +125,17 @@ namespace Tecs {
     };
 
     /**
-     * ComponentWriteTransaction<Tn...> is a lock handle allowing write access to Component types specified in the
+     * WriteLock<Tn...> is a lock handle allowing write access to Component types specified in the
      * template.
      *
-     * Entities and Components cannot be added or removed while a ComponentWriteTransaction is in progress.
-     * The values of valid Components may be modified through the ComponentWriteTransaction and will be
-     * applied when the ComponentWriteTransaction is deconstructed.
-     * Each Component type can only be part of a single ComponentWriteTransaction at once.
+     * Entities and Components cannot be added or removed while a WriteLock is in progress.
+     * The values of valid Components may be modified through the WriteLock and will be
+     * applied when the WriteLock is deconstructed.
+     * Each Component type can only be part of a single WriteLock at once.
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    class WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
-        template<typename... Tn>
-        inline ComponentWriteTransactionRef(ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> lock)
-            : ecs(lock.ecs) {}
-
         template<typename T>
         inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
             return ecs.template Storage<T>().readValidEntities;
@@ -226,45 +219,44 @@ namespace Tecs {
 
         // Reference as subset of lock
         template<typename... Tn>
-        inline operator ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator WriteLockRef<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> Subset() {
+        inline WriteLockRef<ECSType<AllComponentTypes...>, Tn...> Subset() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<LockedTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
     protected:
-        ComponentWriteTransactionRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+        WriteLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
 
         ECSType<AllComponentTypes...> &ecs;
 
         template<typename, typename...>
-        friend class ComponentWriteTransactionRef;
+        friend class WriteLockRef;
         template<typename>
-        friend class EntityWriteTransactionRef;
+        friend class AddRemoveLockRef;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... LockedTypes>
-    class ComponentWriteTransaction<ECSType<AllComponentTypes...>, LockedTypes...>
-        : public ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...> {
+    class WriteLock<ECSType<AllComponentTypes...>, LockedTypes...>
+        : public WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         // Delete copy constructor
-        ComponentWriteTransaction(
-            const ComponentWriteTransaction<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
+        WriteLock(const WriteLock<ECSType<AllComponentTypes...>, LockedTypes...> &) = delete;
 
-        inline ComponentWriteTransaction(ECSType<AllComponentTypes...> &ecs)
-            : ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
+        inline WriteLock(ECSType<AllComponentTypes...> &ecs)
+            : WriteLockRef<ECSType<AllComponentTypes...>, LockedTypes...>(ecs) {
             ecs.validIndex.RLock();
             LockInOrder<AllComponentTypes...>();
         }
 
-        inline ~ComponentWriteTransaction() {
+        inline ~WriteLock() {
             UnlockInOrder<AllComponentTypes...>();
             this->ecs.validIndex.RUnlock();
         }
@@ -296,16 +288,16 @@ namespace Tecs {
     };
 
     /**
-     * EntityWriteTransaction<Tn...> is a lock handle allowing creation and deletion of entities, as well as
+     * AddRemoveLock<Tn...> is a lock handle allowing creation and deletion of entities, as well as
      * adding and removing of Components to entities.
      *
-     * An EntityWriteTransaction cannot be in progress at the same time as a ComponentWriteTransaction and will block
+     * An AddRemoveLock cannot be in progress at the same time as a WriteLock and will block
      * until other transactions have completed.
-     * In addition to allowing creation and deletion of entities, a EntityWriteTransaction also allows write to all
-     * Component types as if they were part of a ComponentWriteTransaction.
+     * In addition to allowing creation and deletion of entities, a AddRemoveLock also allows write to all
+     * Component types as if they were part of a WriteLock.
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class EntityWriteTransactionRef<ECSType<AllComponentTypes...>> {
+    class AddRemoveLockRef<ECSType<AllComponentTypes...>> {
     public:
         template<typename T>
         inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
@@ -406,17 +398,17 @@ namespace Tecs {
 
         // Reference as component write transaction
         template<typename... Tn>
-        inline operator ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>() {
+        inline operator WriteLockRef<ECSType<AllComponentTypes...>, Tn...>() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
         template<typename... Tn>
-        inline ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> ComponentWriteTransaction() {
+        inline WriteLockRef<ECSType<AllComponentTypes...>, Tn...> WriteLock() {
             static_assert(is_subset_of<std::tuple<Tn...>, std::tuple<AllComponentTypes...>>::value,
                 "Lock reference must be a subset of lock types.");
-            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
+            return WriteLockRef<ECSType<AllComponentTypes...>, Tn...>(ecs);
         }
 
     private:
@@ -432,28 +424,27 @@ namespace Tecs {
         }
 
     protected:
-        EntityWriteTransactionRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
+        AddRemoveLockRef(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {}
 
         ECSType<AllComponentTypes...> &ecs;
 
         template<typename>
-        friend class EntityWriteTransactionRef;
+        friend class AddRemoveLockRef;
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class EntityWriteTransaction<ECSType<AllComponentTypes...>>
-        : public EntityWriteTransactionRef<ECSType<AllComponentTypes...>> {
+    class AddRemoveLock<ECSType<AllComponentTypes...>> : public AddRemoveLockRef<ECSType<AllComponentTypes...>> {
     public:
         // Delete copy constructor
-        EntityWriteTransaction(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &) = delete;
+        AddRemoveLock(const AddRemoveLock<ECSType<AllComponentTypes...>> &) = delete;
 
-        inline EntityWriteTransaction(ECSType<AllComponentTypes...> &ecs)
-            : EntityWriteTransactionRef<ECSType<AllComponentTypes...>>(ecs) {
+        inline AddRemoveLock(ECSType<AllComponentTypes...> &ecs)
+            : AddRemoveLockRef<ECSType<AllComponentTypes...>>(ecs) {
             ecs.validIndex.StartWrite();
             LockInOrder<AllComponentTypes...>();
         }
 
-        inline ~EntityWriteTransaction() {
+        inline ~AddRemoveLock() {
             UnlockInOrder<AllComponentTypes...>();
             this->ecs.validIndex.template CommitWrite<true>();
         }
