@@ -31,7 +31,8 @@ namespace Tecs {
          */
         template<typename... Un>
         inline ReadLock<ECS<Tn...>, Un...> ReadEntitiesWith() {
-            return ReadLock<ECS<Tn...>, Un...>(*this);
+            // return ReadLock<ECS<Tn...>, Un...>(*this);
+            return {*this};
         }
 
         /**
@@ -43,7 +44,8 @@ namespace Tecs {
          */
         template<typename... Un>
         inline ComponentWriteTransaction<ECS<Tn...>, Un...> WriteEntitiesWith() {
-            return ComponentWriteTransaction<ECS<Tn...>, Un...>(*this);
+            // return ComponentWriteTransaction<ECS<Tn...>, Un...>(*this);
+            return {*this};
         }
 
         /**
@@ -53,7 +55,8 @@ namespace Tecs {
          * The lock is held until the returned handle is deconstructed.
          */
         inline EntityWriteTransaction<ECS<Tn...>> AddRemoveEntities() {
-            return EntityWriteTransaction<ECS<Tn...>>(*this);
+            // return EntityWriteTransaction<ECS<Tn...>>(*this);
+            return {*this};
         }
 
         /**

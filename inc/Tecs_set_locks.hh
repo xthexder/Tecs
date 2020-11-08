@@ -21,6 +21,9 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... ReadComponentTypes>
     class ReadLock<ECSType<AllComponentTypes...>, ReadComponentTypes...> {
     public:
+        // Delete copy constructor
+        ReadLock(const ReadLock<ECSType<AllComponentTypes...>, ReadComponentTypes...> &) = delete;
+
         inline ReadLock(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
             ecs.validIndex.RLock();
             LockInOrder<AllComponentTypes...>();
@@ -44,6 +47,8 @@ namespace Tecs {
 
         template<typename T>
         inline const T &Get(const Entity &e) const {
+            static_assert(is_type_in_set<T, ReadComponentTypes...>::value, "Component type is not locked.");
+
             auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -94,6 +99,10 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... WriteComponentTypes>
     class ComponentWriteTransaction<ECSType<AllComponentTypes...>, WriteComponentTypes...> {
     public:
+        // Delete copy constructor
+        ComponentWriteTransaction(
+            const ComponentWriteTransaction<ECSType<AllComponentTypes...>, WriteComponentTypes...> &) = delete;
+
         inline ComponentWriteTransaction(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
             ecs.validIndex.RLock();
             LockInOrder<AllComponentTypes...>();
@@ -128,6 +137,8 @@ namespace Tecs {
 
         template<typename T>
         inline const T &GetPrevious(const Entity &e) const {
+            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+
             auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -137,6 +148,8 @@ namespace Tecs {
 
         template<typename T>
         inline T &Get(const Entity &e) {
+            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -146,6 +159,8 @@ namespace Tecs {
 
         template<typename T>
         inline void Set(const Entity &e, T &value) {
+            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -155,6 +170,8 @@ namespace Tecs {
 
         template<typename T, typename... Args>
         inline void Set(const Entity &e, Args... args) {
+            static_assert(is_type_in_set<T, WriteComponentTypes...>::value, "Component type is not locked.");
+
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -207,6 +224,9 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class EntityWriteTransaction<ECSType<AllComponentTypes...>> {
     public:
+        // Delete copy constructor
+        EntityWriteTransaction(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &) = delete;
+
         inline EntityWriteTransaction(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
             ecs.validIndex.StartWrite();
             LockInOrder<AllComponentTypes...>();
