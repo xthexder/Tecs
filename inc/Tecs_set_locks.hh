@@ -24,12 +24,6 @@ namespace Tecs {
     class ReadLockRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         template<typename... Tn>
-        ReadLockRef(const ReadLock<ECSType<AllComponentTypes...>, Tn...> &readLock) : ecs(readLock.ecs) {
-            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
-                "Lock reference must be a subset of lock types.");
-        }
-
-        template<typename... Tn>
         ReadLockRef(const ReadLockRef<ECSType<AllComponentTypes...>, Tn...> &readLock) : ecs(readLock.ecs) {
             static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
                 "Lock reference must be a subset of lock types.");
@@ -55,6 +49,11 @@ namespace Tecs {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
             return ecs.template Storage<T>().readComponents[e.id];
+        }
+
+        template<typename... Tn>
+        inline operator ReadLockRef<ECSType<AllComponentTypes...>, Tn...>() const {
+            return ReadLockRef<ECSType<AllComponentTypes...>, Tn...>(*this);
         }
 
         template<typename... Tn>
@@ -133,13 +132,6 @@ namespace Tecs {
     class ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, LockedTypes...> {
     public:
         template<typename... Tn>
-        ComponentWriteTransactionRef(const ComponentWriteTransaction<ECSType<AllComponentTypes...>, Tn...> &readLock)
-            : ecs(readLock.ecs) {
-            static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
-                "Lock reference must be a subset of lock types.");
-        }
-
-        template<typename... Tn>
         ComponentWriteTransactionRef(const ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> &readLock)
             : ecs(readLock.ecs) {
             static_assert(is_subset_of<std::tuple<LockedTypes...>, std::tuple<Tn...>>::value,
@@ -213,8 +205,13 @@ namespace Tecs {
         }
 
         template<typename... Tn>
+        inline operator ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>() const {
+            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(*this);
+        }
+
+        template<typename... Tn>
         inline ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...> Subset() const {
-            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(ecs, *this);
+            return ComponentWriteTransactionRef<ECSType<AllComponentTypes...>, Tn...>(*this);
         }
 
     protected:
@@ -288,8 +285,6 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class EntityWriteTransactionRef<ECSType<AllComponentTypes...>> {
     public:
-        EntityWriteTransactionRef(const EntityWriteTransaction<ECSType<AllComponentTypes...>> &readLock)
-            : ecs(readLock.ecs) {}
         EntityWriteTransactionRef(const EntityWriteTransactionRef<ECSType<AllComponentTypes...>> &readLock)
             : ecs(readLock.ecs) {}
 
@@ -373,6 +368,10 @@ namespace Tecs {
                     }
                 }
             }
+        }
+
+        inline operator EntityWriteTransactionRef<ECSType<AllComponentTypes...>>() const {
+            return EntityWriteTransactionRef<ECSType<AllComponentTypes...>>(*this);
         }
 
     private:
