@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_common.hh"
 #include "Tecs_entity.hh"
 #include "Tecs_template_util.hh"
 
@@ -9,19 +10,6 @@
 #include <vector>
 
 namespace Tecs {
-    template<typename, typename...>
-    class ReadLockRef {};
-    template<typename, typename...>
-    class ReadLock {};
-    template<typename, typename...>
-    class WriteLockRef {};
-    template<typename, typename...>
-    class WriteLock {};
-    template<typename>
-    class AddRemoveLockRef {};
-    template<typename>
-    class AddRemoveLock {};
-
     /**
      * ReadLock<Tn...> is a lock handle allowing read-only access to Component types specified in the template.
      *

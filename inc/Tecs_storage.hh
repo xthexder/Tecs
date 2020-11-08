@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_common.hh"
 #include "Tecs_set_locks.hh"
 
 #include <atomic>

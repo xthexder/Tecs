@@ -56,7 +56,7 @@ void renderThread() {
 }
 
 // static std::atomic_size_t scriptWorkerQueue;
-// static std::atomic<ComponentSetWriteTransaction<decltype(ecs), Script> *> scriptLock;
+// static std::atomic<WriteLock<decltype(ecs), Script> *> scriptLock;
 
 void scriptWorkerThread(bool master) {
     MultiTimer timer("ScriptWorkerThread", master);
@@ -66,7 +66,7 @@ void scriptWorkerThread(bool master) {
         /*{
             Timer t(timer);
             if (master) {
-                ComponentSetWriteTransaction<decltype(ecs), Script> writeLock(ecs);
+                WriteLock<decltype(ecs), Script> writeLock(ecs);
                 scriptWorkerQueue = 0;
                 scriptLock = &writeLock;
 
