@@ -183,25 +183,25 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void Set(const Entity &e, T &value) {
+        inline T &Set(const Entity &e, T &value) {
             static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            ecs.template Storage<T>().writeComponents[e.id] = value;
+            return (ecs.template Storage<T>().writeComponents[e.id] = value);
         }
 
         template<typename T, typename... Args>
-        inline void Set(const Entity &e, Args... args) {
+        inline T &Set(const Entity &e, Args... args) {
             static_assert(contains<T, LockedTypes...>::value, "Component type is not locked.");
 
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
+            return (ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...)));
         }
 
         // Reference as read lock of subset
@@ -348,23 +348,23 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void Set(const Entity &e, T &value) {
-            ecs.template Storage<T>().writeComponents[e.id] = value;
+        inline T &Set(const Entity &e, T &value) {
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 validBitset[ecs.template GetComponentIndex<T>()] = true;
                 ecs.template Storage<T>().writeValidEntities.emplace_back(e);
             }
+            return (ecs.template Storage<T>().writeComponents[e.id] = value);
         }
 
         template<typename T, typename... Args>
-        inline void Set(const Entity &e, Args... args) {
-            ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
+        inline T &Set(const Entity &e, Args... args) {
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (!validBitset[ecs.template GetComponentIndex<T>()]) {
                 validBitset[ecs.template GetComponentIndex<T>()] = true;
                 ecs.template Storage<T>().writeValidEntities.emplace_back(e);
             }
+            return (ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...)));
         }
 
         template<typename T>

@@ -74,30 +74,30 @@ namespace Tecs {
         // Includes a lock type check to make errors more readable.
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked>
-        inline void Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, T &value) const {
+        inline T &Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, T &value) const {
             static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
-            lock.template Set<T>(*this, value);
+            return lock.template Set<T>(*this, value);
         }
 
         template<typename T, template<typename> typename LockType, typename ECSType>
-        inline void Set(LockType<ECSType> &lock, T &value) const {
-            lock.template Set<T>(*this, value);
+        inline T &Set(LockType<ECSType> &lock, T &value) const {
+            return lock.template Set<T>(*this, value);
         }
 
         // Alias lock.Set<T>(e, args...) to allow e.Set<T>(lock, args...)
         // Includes a lock type check to make errors more readable.
         template<typename T, template<typename, typename...> typename LockType, typename ECSType, typename FirstLocked,
             typename... MoreLocked, typename... Args>
-        inline void Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, Args... args) const {
+        inline T &Set(LockType<ECSType, FirstLocked, MoreLocked...> &lock, Args... args) const {
             static_assert(contains<T, FirstLocked, MoreLocked...>::value, "Component type is not locked.");
 
-            lock.template Set<T>(*this, args...);
+            return lock.template Set<T>(*this, args...);
         }
 
         template<typename T, template<typename> typename LockType, typename ECSType, typename... Args>
-        inline void Set(LockType<ECSType> &lock, Args... args) const {
-            lock.template Set<T>(*this, args...);
+        inline T &Set(LockType<ECSType> &lock, Args... args) const {
+            return lock.template Set<T>(*this, args...);
         }
 
         // Alias lock.Unset<T>(e) to allow e.Unset<T>(lock)
