@@ -53,8 +53,6 @@ namespace Tecs {
     struct is_write_allowed : std::false_type {};
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
-    template<typename T, typename Lock, typename SubLock>
-    struct is_lock_subset : std::false_type {};
 
     // Lock<Permissions...> and Transaction<Permissions...> specializations
     template<typename T, template<typename, typename...> typename L, typename ECSType, typename... Permissions>
@@ -64,14 +62,12 @@ namespace Tecs {
     template<template<typename, typename...> typename L, typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<L<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
 
-    // Welcome to template hell
-    template<typename T, template<typename, typename...> typename L, typename ECSType, typename... Permissions,
-        typename... PermissionsSub>
-    struct is_lock_subset<T, L<ECSType, Permissions...>, L<ECSType, PermissionsSub...>>
-        : std::conjunction<std::disjunction<std::conditional_t<is_write_allowed<T, PermissionsSub>::value,
-                               is_write_allowed<T, Permissions>, std::true_type>>...,
-              std::disjunction<std::conditional_t<is_read_allowed<T, PermissionsSub>::value,
-                  is_read_allowed<T, Permissions>, std::true_type>>...> {};
+    // Check Lock >= SubLock for component type T
+    template<typename T, typename Lock, typename SubLock>
+    struct is_lock_subset
+        : std::conjunction<
+              std::conditional_t<is_write_allowed<T, SubLock>::value, is_write_allowed<T, Lock>, std::true_type>,
+              std::conditional_t<is_read_allowed<T, SubLock>::value, is_read_allowed<T, Lock>, std::true_type>> {};
 
     // Read<LockedTypes...> specialization
     template<typename T, typename... LockedTypes>
