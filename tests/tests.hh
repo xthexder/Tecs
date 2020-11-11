@@ -5,7 +5,7 @@
 #include <Tecs.hh>
 
 namespace testing {
-    void TestReadLock(Tecs::ReadLock<ECS, Transform> lock);
-    void TestWriteLock(Tecs::WriteLock<ECS, Transform> lock);
-    void TestAddRemoveLock(Tecs::AddRemoveLock<ECS> lock);
+    void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);
+    void TestWriteLock(Tecs::Lock<ECS, Tecs::Write<Transform>> lock);
+    void TestAddRemoveLock(Tecs::Lock<ECS, Tecs::AddRemove> lock);
 } // namespace testing

@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
 
     {
         Timer t("Test adding each component type");
-        auto writeLock = ecs.AddRemoveEntities();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.AddEntity();
             Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     {
         Timer t("Test reading previous values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
-        auto writeLock = ecs.WriteEntitiesWith<Transform>();
+        auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
         for (Tecs::Entity e : writeLock.ValidEntities<Transform>()) {
             // Both current and previous values can be read at the same time.
             auto &currentTransform = writeLock.Get<Transform>(e);
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     }
     {
         Timer t("Test write was committed");
-        auto readLock = ecs.ReadEntitiesWith<Transform>();
+        auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
         for (Tecs::Entity e : readLock.ValidEntities<Transform>()) {
             Assert(readLock.Get<Transform>(e).pos[0] == 1, "Expected previous position.x to be 1");
         }
@@ -95,14 +95,14 @@ int main(int argc, char **argv) {
         for (int i = 0; i < 100; i++) {
             readThreads.emplace_back([&counter, i]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(i));
-                auto readLock = ecs.ReadEntitiesWith<Transform>();
+                auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
                 counter++;
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             });
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         {
-            auto writeLock = ecs.WriteEntitiesWith<Transform>();
+            auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
             Assert(counter < 100, "Writer lock did not take priority over readers");
         }
         for (auto &thread : readThreads) {
@@ -111,23 +111,23 @@ int main(int argc, char **argv) {
     }
     {
         Timer t("Test read lock typecasting");
-        auto readLockAll = ecs.ReadEntitiesWith<Transform, Renderable, Script>();
+        auto readLockAll = ecs.StartTransaction<Tecs::Read<Transform, Renderable, Script>>();
         { // Test Subset() method
-            auto readLockTransform = readLockAll.Subset<Transform>();
+            auto readLockTransform = readLockAll.Subset<Tecs::Read<Transform>>();
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto readLockScript = readLockAll.Subset<Script, Renderable>();
+            auto readLockScript = readLockAll.Subset<Tecs::Read<Script, Renderable>>();
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
         }
         { // Test typecast method
-            Tecs::ReadLock<ECS, Transform> readLockTransform = readLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = readLockAll;
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            Tecs::ReadLock<ECS, Script, Renderable> readLockScript = readLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Script, Renderable>> readLockScript = readLockAll;
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
@@ -136,41 +136,41 @@ int main(int argc, char **argv) {
     }
     {
         Timer t("Test component write lock typecasting");
-        auto writeLockAll = ecs.WriteEntitiesWith<Transform, Renderable, Script>();
+        auto writeLockAll = ecs.StartTransaction<Tecs::Write<Transform, Renderable, Script>>();
         { // Test Subset() method
-            auto readLockTransform = writeLockAll.AsReadLock<Transform>();
+            auto readLockTransform = writeLockAll.Subset<Tecs::Read<Transform>>();
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto readLockScript = writeLockAll.AsReadLock<Script, Renderable>();
+            auto readLockScript = writeLockAll.Subset<Tecs::Read<Script, Renderable>>();
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
 
-            auto writeLockTransform = writeLockAll.Subset<Transform>();
+            auto writeLockTransform = writeLockAll.Subset<Tecs::Write<Transform>>();
             for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
                 Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto writeLockScript = writeLockAll.Subset<Script, Renderable>();
+            auto writeLockScript = writeLockAll.Subset<Tecs::Write<Script, Renderable>>();
             for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
                 Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
         }
         { // Test typecast method
-            Tecs::ReadLock<ECS, Transform> readLockTransform = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = writeLockAll;
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            Tecs::ReadLock<ECS, Script, Renderable> readLockScript = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Script, Renderable>> readLockScript = writeLockAll;
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
 
-            Tecs::WriteLock<ECS, Transform> writeLockTransform = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Write<Transform>> writeLockTransform = writeLockAll;
             for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
                 Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            Tecs::WriteLock<ECS, Script, Renderable> writeLockScript = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Write<Script, Renderable>> writeLockScript = writeLockAll;
             for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
                 Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
@@ -180,43 +180,43 @@ int main(int argc, char **argv) {
     }
     {
         Timer t("Test entity write lock typecasting");
-        auto writeLockAll = ecs.AddRemoveEntities();
+        auto writeLockAll = ecs.StartTransaction<Tecs::AddRemove>();
         { // Test Subset() method
-            auto writeLockTransform = writeLockAll.AsWriteLock<Transform>();
-            for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
-                Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
-            }
-            auto writeLockScript = writeLockAll.AsWriteLock<Script, Renderable>();
-            for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
-                Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
-            }
-
-            auto readLockTransform = writeLockAll.AsReadLock<Transform>();
+            auto readLockTransform = writeLockAll.Subset<Tecs::Read<Transform>>();
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto readLockScript = writeLockAll.AsReadLock<Script, Renderable>();
+            auto readLockScript = writeLockAll.Subset<Tecs::Read<Script, Renderable>>();
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
+            }
+
+            auto writeLockTransform = writeLockAll.Subset<Tecs::Write<Transform>>();
+            for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
+                Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto writeLockScript = writeLockAll.Subset<Tecs::Write<Script, Renderable>>();
+            for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
+                Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
         }
         { // Test typecast method
-            Tecs::WriteLock<ECS, Transform> writeLockTransform = writeLockAll;
-            for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
-                Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
-            }
-            Tecs::WriteLock<ECS, Script, Renderable> writeLockScript = writeLockAll;
-            for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
-                Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
-            }
-
-            Tecs::ReadLock<ECS, Transform> readLockTransform = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = writeLockAll;
             for (Tecs::Entity e : readLockTransform.ValidEntities<Transform>()) {
                 Assert(readLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             }
-            Tecs::ReadLock<ECS, Script, Renderable> readLockScript = writeLockAll;
+            Tecs::Lock<ECS, Tecs::Read<Script, Renderable>> readLockScript = writeLockAll;
             for (Tecs::Entity e : readLockScript.ValidEntities<Script>()) {
                 Assert(readLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
+            }
+
+            Tecs::Lock<ECS, Tecs::Write<Transform>> writeLockTransform = writeLockAll;
+            for (Tecs::Entity e : writeLockTransform.ValidEntities<Transform>()) {
+                Assert(writeLockTransform.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
+            }
+            Tecs::Lock<ECS, Tecs::Write<Script, Renderable>> writeLockScript = writeLockAll;
+            for (Tecs::Entity e : writeLockScript.ValidEntities<Script>()) {
+                Assert(writeLockScript.Get<Script>(e).data[0] == 1, "Expected script[0] to be 1");
             }
         }
         TestReadLock(writeLockAll);
@@ -228,21 +228,21 @@ int main(int argc, char **argv) {
 }
 
 namespace testing {
-    void TestReadLock(Tecs::ReadLock<ECS, Transform> lock) {
+    void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
         for (Tecs::Entity e : lock.ValidEntities<Transform>()) {
             Assert(lock.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
         }
     }
 
-    void TestWriteLock(Tecs::WriteLock<ECS, Transform> lock) {
+    void TestWriteLock(Tecs::Lock<ECS, Tecs::Write<Transform>> lock) {
         for (Tecs::Entity e : lock.ValidEntities<Transform>()) {
             Assert(lock.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
         }
     }
 
-    void TestAddRemoveLock(Tecs::AddRemoveLock<ECS> lock) {
+    void TestAddRemoveLock(Tecs::Lock<ECS, Tecs::AddRemove> lock) {
         for (Tecs::Entity e : lock.ValidEntities<Transform>()) {
             Assert(lock.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
             Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");

@@ -8,8 +8,8 @@
 #include <vector>
 
 namespace testing {
-    bool Transform::HasParent(Tecs::ReadLock<ECS, Transform> lock) {
-        Tecs::ReadLock<ECS, Transform> readLock = lock;
+    bool Transform::HasParent(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
+        Tecs::Lock<ECS, Tecs::Read<Transform>> readLock = lock;
         for (auto entity : readLock.ValidEntities<Transform>()) {
             if (entity == parent) { return true; }
         }

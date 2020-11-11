@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tecs_set_locks.hh"
+#include "Tecs_transaction.hh"
 
 #include <atomic>
 #include <cstddef>
@@ -146,10 +146,6 @@ namespace Tecs {
         std::vector<Entity> writeValidEntities;
 
         template<typename, typename...>
-        friend class ReadLock;
-        template<typename, typename...>
-        friend class WriteLock;
-        template<typename>
-        friend class AddRemoveLock;
+        friend class Lock;
     };
 } // namespace Tecs

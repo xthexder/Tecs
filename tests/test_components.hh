@@ -5,6 +5,7 @@
 #include <Tecs.hh>
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace testing {
@@ -24,7 +25,7 @@ namespace testing {
             pos[2] = z;
         }
 
-        bool HasParent(Tecs::ReadLock<ECS, Transform> lock);
+        bool HasParent(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);
     };
 
     struct Script {

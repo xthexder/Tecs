@@ -7,9 +7,10 @@
 #include <thread>
 
 using namespace testing;
+using namespace Tecs;
 
 std::atomic_bool running;
-static ECS ecs;
+static testing::ECS ecs;
 
 #define ENTITY_COUNT 1000000
 #define THREAD_COUNT 0
@@ -29,8 +30,9 @@ void renderThread() {
         std::vector<std::string> bad;
         {
             Timer t(timer);
-            auto readLock = ecs.ReadEntitiesWith<Renderable, Transform>();
+            auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
             Timer t2(timer2);
+
             auto &validRenderables = readLock.ValidEntities<Renderable>();
             auto &validTransforms = readLock.ValidEntities<Transform>();
             auto &validEntities = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
@@ -118,7 +120,7 @@ void transformWorkerThread() {
         auto start = std::chrono::high_resolution_clock::now();
         {
             Timer t(timer);
-            auto writeLock = ecs.WriteEntitiesWith<Transform>();
+            auto writeLock = ecs.StartTransaction<Write<Transform>>();
             Timer t2(timer2);
             auto &validTransforms = writeLock.ValidEntities<Transform>();
             for (auto e : validTransforms) {
@@ -135,7 +137,7 @@ void transformWorkerThread() {
 int main(int argc, char **argv) {
     {
         Timer t("Create entities");
-        auto writeLock = ecs.AddRemoveEntities();
+        auto writeLock = ecs.StartTransaction<AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.AddEntity();
             if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
@@ -175,7 +177,7 @@ int main(int argc, char **argv) {
         int invalid = 0;
         int valid = 0;
         double commonValue;
-        auto readLock = ecs.ReadEntitiesWith<Transform>();
+        auto readLock = ecs.StartTransaction<Read<Transform>>();
         auto &validEntities = readLock.ValidEntities<Transform>();
         for (auto e : validEntities) {
             auto transform = e.Get<Transform>(readLock);

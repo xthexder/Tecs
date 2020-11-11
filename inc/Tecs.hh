@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Tecs_set_locks.hh"
 #include "Tecs_storage.hh"
 #include "Tecs_template_util.hh"
+#include "Tecs_transaction.hh"
 
 #include <bitset>
 #include <cstddef>
@@ -29,11 +29,12 @@ namespace Tecs {
          * The lock is held until the returned handle is deconstructed.
          * Values read through the returned handle will remain constant.
          */
-        template<typename... Un>
-        inline ReadLockBase<ECS<Tn...>, Un...> ReadEntitiesWith() {
-            return {*this};
+        template<typename... Permissions>
+        inline Transaction<ECS<Tn...>, Permissions...> StartTransaction() {
+            return Transaction<ECS<Tn...>, Permissions...>(*this);
         }
 
+        // TODO: Rewrite me for StartTransaction
         /**
          * Lock a set of Component types to allow write access. This only allows changes to existing components.
          * Only a single write lock can be held at once per Component type, but non-overlapping writes can occur
@@ -41,20 +42,12 @@ namespace Tecs {
          *
          * The lock is held until the returned handle is deconstructed.
          */
-        template<typename... Un>
-        inline WriteLockBase<ECS<Tn...>, Un...> WriteEntitiesWith() {
-            return {*this};
-        }
-
         /**
          * Lock all entities to allow adding / removing of entities and components.
          * Only a instance of this lock can be held at once.
          *
          * The lock is held until the returned handle is deconstructed.
          */
-        inline AddRemoveLockBase<ECS<Tn...>> AddRemoveEntities() {
-            return {*this};
-        }
 
         /**
          * Returns the index of a Component type for use in a bitset.
@@ -87,12 +80,12 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline static constexpr bool BitsetHas(ValidComponentSet &validBitset) {
+        inline static constexpr bool BitsetHas(const ValidComponentSet &validBitset) {
             return validBitset[GetComponentIndex<0, U>()];
         }
 
         template<typename U, typename U2, typename... Un>
-        inline static constexpr bool BitsetHas(ValidComponentSet &validBitset) {
+        inline static constexpr bool BitsetHas(const ValidComponentSet &validBitset) {
             return BitsetHas<U>(validBitset) && BitsetHas<U2, Un...>(validBitset);
         }
 
@@ -105,16 +98,8 @@ namespace Tecs {
         IndexStorage indexes;
 
         template<typename, typename...>
-        friend class ReadLock;
+        friend class Lock;
         template<typename, typename...>
-        friend class ReadLockBase;
-        template<typename, typename...>
-        friend class WriteLock;
-        template<typename, typename...>
-        friend class WriteLockBase;
-        template<typename>
-        friend class AddRemoveLock;
-        template<typename>
-        friend class AddRemoveLockBase;
+        friend class Transaction;
     };
 } // namespace Tecs
