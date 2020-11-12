@@ -54,13 +54,21 @@ namespace Tecs {
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
 
-    // Lock<Permissions...> and Transaction<Permissions...> specializations
-    template<typename T, template<typename, typename...> typename L, typename ECSType, typename... Permissions>
-    struct is_read_allowed<T, L<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, template<typename, typename...> typename L, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, L<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<template<typename, typename...> typename L, typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<L<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    // Lock<Permissions...> specializations
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+
+    // Transaction<Permissions...> specializations
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, Transaction<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, Transaction<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<Transaction<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
 
     // Check Lock >= SubLock for component type T
     template<typename T, typename Lock, typename SubLock>
