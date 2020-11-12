@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_locks.hh"
 #include "Tecs_entity.hh"
 #include "Tecs_template_util.hh"
 
@@ -10,96 +11,22 @@
 #include <vector>
 
 namespace Tecs {
-    template<typename... Tn>
-    class ECS;
-
     /**
-     * Lock permissions are passed in as template arguments when creating a Transaction or Lock.
+     * Lock<ECS, Permissions...> is a reference to lock permissions held by an active Transaction.
      *
-     * Examples:
+     * Permissions... can be any combination of the following:
+     * Tecs::Read<Components...>
+     * Tecs::Write<Components...>
+     * Tecs::AddRemove
+     *
+     * // Examples:
      * using ECSType = Tecs::ECS<A, B, C>;
      *
-     * // Allow read access to A and B components, and write access to C components.
-     * Transaction<ECSType, Read<A, B>, Write<C>> transaction1 = ecs.NewTransaction<Read<A, B>, Write<C>>();
+     * // A lock allowing read access to A and B, as well as write access to C.
+     * Lock<ECSType, Read<A, B>, Write<C>> lock1;
      *
-     * // Allow read and write access to all components, as well as adding and removing entities and components.
-     * Transaction<ECSType, AddRemove> transaction2 = ecs.NewTransaction<AddRemove>();
-     *
-     * // Reference a transaction's permissions (or a subset of them) by using the Lock type.
-     * Lock<ECSType, AddRemove> lockAll = transaction2;
-     * Lock<ECSType, Read<A>, Write<B>> lockWriteB = transaction1;
-     *
-     * // Locks can be automatically cast to subsets of existing locks.
-     * Lock<ECSType, Read<A, B>> lockReadAB = lockWriteB;
-     * Lock<ECSType, Read<B>> lockReadB = lockReadAB;
-     */
-    template<typename... LockedTypes>
-    struct Read {};
-    template<typename... LockedTypes>
-    struct Write {};
-    struct AddRemove {};
-
-    template<typename, typename...>
-    class Lock {};
-    template<typename, typename...>
-    class Transaction {};
-
-    /*
-     * Compile time helpers for determining lock permissions.
-     */
-    template<typename T, typename Lock>
-    struct is_read_allowed : std::false_type {};
-    template<typename T, typename Lock>
-    struct is_write_allowed : std::false_type {};
-    template<typename Lock>
-    struct is_add_remove_allowed : std::false_type {};
-
-    // Lock<Permissions...> specializations
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
-
-    // Transaction<Permissions...> specializations
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_allowed<T, Transaction<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, Transaction<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<Transaction<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
-
-    // Check Lock >= SubLock for component type T
-    template<typename T, typename Lock, typename SubLock>
-    struct is_lock_subset
-        : std::conjunction<
-              std::conditional_t<is_write_allowed<T, SubLock>::value, is_write_allowed<T, Lock>, std::true_type>,
-              std::conditional_t<is_read_allowed<T, SubLock>::value, is_read_allowed<T, Lock>, std::true_type>> {};
-
-    // Read<LockedTypes...> specialization
-    template<typename T, typename... LockedTypes>
-    struct is_read_allowed<T, Read<LockedTypes...>> : contains<T, LockedTypes...> {};
-
-    // Write<LockedTypes...> specialization
-    template<typename T, typename... LockedTypes>
-    struct is_read_allowed<T, Write<LockedTypes...>> : contains<T, LockedTypes...> {};
-    template<typename T, typename... LockedTypes>
-    struct is_write_allowed<T, Write<LockedTypes...>> : contains<T, LockedTypes...> {};
-
-    // AddRemove specialization
-    template<typename T>
-    struct is_read_allowed<T, AddRemove> : std::true_type {};
-    template<typename T>
-    struct is_write_allowed<T, AddRemove> : std::true_type {};
-    template<>
-    struct is_add_remove_allowed<AddRemove> : std::true_type {};
-
-    /**
-     * ReadLock<Tn...> is a lock handle allowing read-only access to Component types specified in the template.
-     *
-     * Entities and Components cannot be added or removed while a ReadLock is held, and the values of Components
-     * read through the ReadLock will remain constant until the ReadLock is freed by being deconstructed.
+     * // A Lock allowing the creation and removal of entities and components.
+     * Lock<ECSType, AddRemove> lock2;
      */
     template<typename... AllComponentTypes, typename... Permissions>
     class Lock<ECS<AllComponentTypes...>, Permissions...> {
@@ -126,6 +53,8 @@ namespace Tecs {
         }
 
         inline Entity AddEntity() {
+            static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
+
             AddEntityToComponents<AllComponentTypes...>();
             Entity id(ecs.validIndex.writeComponents.size());
             ecs.validIndex.writeComponents.emplace_back();
@@ -276,6 +205,13 @@ namespace Tecs {
         friend class Lock;
     };
 
+    /**
+     * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.
+     * The permissions can then be referenced by passing around Lock objects.
+     * 
+     * Upon deconstruction, a Transaction will commit any changes written during its lifespan to the ECS.
+     * Once a Transaction is deconstructed, all Locks referencing its permissions become invalid.
+     */
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
     class Transaction<ECSType<AllComponentTypes...>, Permissions...>
         : public Lock<ECSType<AllComponentTypes...>, Permissions...> {
@@ -342,24 +278,4 @@ namespace Tecs {
             UnlockInOrder<U>();
         }
     };
-
-    // TODO: Rewrite me for Transaction
-    /**
-     * WriteLock<Tn...> is a lock handle allowing write access to Component types specified in the
-     * template.
-     *
-     * Entities and Components cannot be added or removed while a WriteLock is in progress.
-     * The values of valid Components may be modified through the WriteLock and will be applied when the WriteLock is
-     * deconstructed. Each Component type can only be part of a single WriteLock at once.
-     */
-
-    /**
-     * AddRemoveLock is a lock handle allowing creation and deletion of entities, as well as adding and removing of
-     * Components to entities.
-     *
-     * An AddRemoveLock cannot be in progress at the same time as a WriteLock and will block until other transactions
-     * have completed. In addition to allowing creation and deletion of entities, an AddRemoveLock also allows reads and
-     * writes to all Component types as if they were part of a WriteLock or ReadLock.
-     */
-
 }; // namespace Tecs

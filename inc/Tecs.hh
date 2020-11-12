@@ -22,6 +22,12 @@ namespace Tecs {
     template<typename... Tn>
     class ECS {
     public:
+        template<typename... Permissions>
+        inline Transaction<ECS<Tn...>, Permissions...> StartTransaction() {
+            return Transaction<ECS<Tn...>, Permissions...>(*this);
+        }
+
+        // TODO: Rewrite me for StartTransaction
         /**
          * Lock a set of Component types to allow read-only access.
          * Multiple read locks can be held at once.
@@ -29,12 +35,6 @@ namespace Tecs {
          * The lock is held until the returned handle is deconstructed.
          * Values read through the returned handle will remain constant.
          */
-        template<typename... Permissions>
-        inline Transaction<ECS<Tn...>, Permissions...> StartTransaction() {
-            return Transaction<ECS<Tn...>, Permissions...>(*this);
-        }
-
-        // TODO: Rewrite me for StartTransaction
         /**
          * Lock a set of Component types to allow write access. This only allows changes to existing components.
          * Only a single write lock can be held at once per Component type, but non-overlapping writes can occur
