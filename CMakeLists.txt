@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-project(Tecs VERSION 0.1)
+project(Tecs VERSION 0.2)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -54,9 +54,10 @@ install(
     FILES_MATCHING PATTERN "*.hh"
 )
 
-# Build tests if we are the root project
+# Build tests and examples if we are the root project
 if("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
     # set(GOOGLETEST_DIR ${EXT_PATH}/googletest/googletest)
     # add_subdirectory(${EXT_PATH}/googletest)
     add_subdirectory(tests)
+    add_subdirectory(examples)
 ENDIF ()
