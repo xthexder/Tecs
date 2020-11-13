@@ -4,6 +4,7 @@
 #include <Tecs.hh>
 #include <chrono>
 #include <cstring>
+#include <iomanip>
 #include <thread>
 
 using namespace testing;
@@ -15,19 +16,20 @@ static testing::ECS ecs;
 #define ENTITY_COUNT 1000000
 #define THREAD_COUNT 0
 
-#define TRANSFORM_DIVISOR 3
+#define TRANSFORM_DIVISOR 2
 #define RENDERABLE_DIVISOR 3
 #define SCRIPT_DIVISOR 10
 
 void renderThread() {
     MultiTimer timer("RenderThread");
     MultiTimer timer2("RenderThread Aquired");
-    std::string maxName;
-    double maxValue = 0;
-    size_t goodCount = 0;
+    std::vector<std::string> bad;
+    double currentValue = 0;
+    size_t readCount = 0;
+    size_t badCount = 0;
+    auto start = std::chrono::high_resolution_clock::now();
+    auto lastFrameEnd = start;
     while (running) {
-        auto start = std::chrono::high_resolution_clock::now();
-        std::vector<std::string> bad;
         {
             Timer t(timer);
             auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
@@ -36,6 +38,7 @@ void renderThread() {
             auto &validRenderables = readLock.ValidEntities<Renderable>();
             auto &validTransforms = readLock.ValidEntities<Transform>();
             auto &validEntities = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
+            auto firstName = &validEntities[0].Get<Renderable>(readLock).name;
             for (auto e : validEntities) {
                 if (e.Has<Renderable, Transform>(readLock)) {
                     auto &renderable = e.Get<Renderable>(readLock);
@@ -43,18 +46,30 @@ void renderThread() {
                     if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                         bad.emplace_back(renderable.name);
                     } else {
-                        goodCount++;
-                        if (transform.pos[0] > maxValue) {
-                            maxValue = transform.pos[0];
-                            maxName = renderable.name;
+                        if (&renderable.name == firstName) {
+                            currentValue = transform.pos[0];
+                        } else if (transform.pos[0] != currentValue) {
+                            bad.emplace_back(renderable.name);
                         }
                     }
                 }
             }
         }
-        std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
+        readCount++;
+        badCount += bad.size();
+        bad.clear();
+        lastFrameEnd += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds(1)) / 90;
+        std::this_thread::sleep_until(lastFrameEnd);
     }
-    std::cout << "[RenderThread] Max value (" << maxName << ") at " << maxValue << ", Good: " << goodCount << std::endl;
+    auto delta = std::chrono::high_resolution_clock::now() - start;
+    double durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+    double avgFrameRate = readCount * 1000 / (double)durationMs;
+    double avgUpdateRate = currentValue * 1000 / (double)durationMs;
+    if (badCount != 0) {
+        std::cerr << "[RenderThread Error] Detected " << badCount << " invalid entities during reading." << std::endl;
+    }
+    std::cout << "[RenderThread] Average frame rate: " << avgFrameRate << "Hz" << std::endl;
+    std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
 }
 
 // static std::atomic_size_t scriptWorkerQueue;
@@ -117,7 +132,7 @@ void transformWorkerThread() {
     MultiTimer timer("TransformWorkerThread");
     MultiTimer timer2("TransformWorkerThread Aquired");
     while (running) {
-        auto start = std::chrono::high_resolution_clock::now();
+        // auto start = std::chrono::high_resolution_clock::now();
         {
             Timer t(timer);
             auto writeLock = ecs.StartTransaction<Write<Transform>>();
@@ -130,7 +145,8 @@ void transformWorkerThread() {
                 transform.pos[2]++;
             }
         }
-        std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
+        std::this_thread::yield();
+        // std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
     }
 }
 
