@@ -64,15 +64,6 @@ namespace testing {
             start = std::chrono::high_resolution_clock::now();
         }
 
-        Timer &operator=(MultiTimer &newParent) {
-            Timer::~Timer();
-            this->name = "";
-            this->parent = &newParent;
-            start = std::chrono::high_resolution_clock::now();
-
-            return *this;
-        }
-
         ~Timer() {
             auto end = std::chrono::high_resolution_clock::now();
             if (parent != nullptr) {
@@ -80,6 +71,15 @@ namespace testing {
             } else if (!name.empty()) {
                 std::cout << "[" << name << "] End: " << ((end - start).count() / 1000000.0) << " ms" << std::endl;
             }
+        }
+
+        Timer &operator=(MultiTimer &newParent) {
+            Timer::~Timer();
+            this->name = "";
+            this->parent = &newParent;
+            start = std::chrono::high_resolution_clock::now();
+
+            return *this;
         }
 
     private:
