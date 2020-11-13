@@ -7,6 +7,7 @@ if ! ./extra/validate_format.py; then
     format_valid=1
 fi
 
+rm -r build/
 mkdir -p build
 echo -e "--- Running \033[33mcmake configure\033[0m :video_game:"
 if ! cmake -DCMAKE_BUILD_TYPE=Release -S . -B ./build -GNinja; then
