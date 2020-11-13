@@ -21,8 +21,9 @@ static testing::ECS ecs;
 #define SCRIPT_DIVISOR 10
 
 void renderThread() {
-    MultiTimer timer("RenderThread");
-    MultiTimer timer2("RenderThread Aquired");
+    MultiTimer timer1("RenderThread StartTransaction");
+    MultiTimer timer2("RenderThread Run");
+    MultiTimer timer3("RenderThread Unlock");
     std::vector<std::string> bad;
     double currentValue = 0;
     size_t readCount = 0;
@@ -31,9 +32,9 @@ void renderThread() {
     auto lastFrameEnd = start;
     while (running) {
         {
-            Timer t(timer);
+            Timer t(timer1);
             auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
-            Timer t2(timer2);
+            t = timer2;
 
             auto &validRenderables = readLock.ValidEntities<Renderable>();
             auto &validTransforms = readLock.ValidEntities<Transform>();
@@ -54,6 +55,8 @@ void renderThread() {
                     }
                 }
             }
+
+            t = timer3;
         }
         readCount++;
         badCount += bad.size();
@@ -76,8 +79,9 @@ void renderThread() {
 // static std::atomic<WriteLock<decltype(ecs), Script> *> scriptLock;
 
 void scriptWorkerThread(bool master) {
-    MultiTimer timer("ScriptWorkerThread", master);
-    MultiTimer timer2("ScriptWorkerThread Aquired", master);
+    MultiTimer timer1("ScriptWorkerThread StartTransaction", master);
+    MultiTimer timer2("ScriptWorkerThread Run", master);
+    MultiTimer timer3("ScriptWorkerThread Unlock", master);
     while (running) {
         auto start = std::chrono::high_resolution_clock::now();
         /*{
@@ -129,14 +133,15 @@ void scriptWorkerThread(bool master) {
 }
 
 void transformWorkerThread() {
-    MultiTimer timer("TransformWorkerThread");
-    MultiTimer timer2("TransformWorkerThread Aquired");
+    MultiTimer timer1("TransformWorkerThread StartTransaction");
+    MultiTimer timer2("TransformWorkerThread Run");
+    MultiTimer timer3("TransformWorkerThread Commit");
     while (running) {
         // auto start = std::chrono::high_resolution_clock::now();
         {
-            Timer t(timer);
+            Timer t(timer1);
             auto writeLock = ecs.StartTransaction<Write<Transform>>();
-            Timer t2(timer2);
+            t = timer2;
             auto &validTransforms = writeLock.ValidEntities<Transform>();
             for (auto e : validTransforms) {
                 auto &transform = e.Get<Transform>(writeLock);
@@ -144,6 +149,7 @@ void transformWorkerThread() {
                 transform.pos[1]++;
                 transform.pos[2]++;
             }
+            t = timer3;
         }
         std::this_thread::yield();
         // std::this_thread::sleep_until(start + std::chrono::milliseconds(11));

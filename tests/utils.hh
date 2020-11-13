@@ -16,6 +16,8 @@ namespace testing {
 
     class MultiTimer {
     public:
+        MultiTimer(const MultiTimer &) = delete;
+
         MultiTimer(std::string name, bool print = true) : name(name), print(print) {
             if (print) { std::cout << "[" << name << "] Start" << std::endl; }
         }
@@ -52,6 +54,8 @@ namespace testing {
 
     class Timer {
     public:
+        Timer(const Timer &) = delete;
+
         Timer(std::string name) : name(name) {
             std::cout << "[" << name << "] Start" << std::endl;
             start = std::chrono::high_resolution_clock::now();
@@ -59,11 +63,21 @@ namespace testing {
         Timer(MultiTimer &parent) : parent(&parent) {
             start = std::chrono::high_resolution_clock::now();
         }
+
+        Timer &operator=(MultiTimer &newParent) {
+            Timer::~Timer();
+            this->name = "";
+            this->parent = &newParent;
+            start = std::chrono::high_resolution_clock::now();
+
+            return *this;
+        }
+
         ~Timer() {
             auto end = std::chrono::high_resolution_clock::now();
             if (parent != nullptr) {
                 parent->AddValue(end - start);
-            } else {
+            } else if (!name.empty()) {
                 std::cout << "[" << name << "] End: " << ((end - start).count() / 1000000.0) << " ms" << std::endl;
             }
         }
