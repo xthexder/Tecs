@@ -36,8 +36,8 @@ void renderThread() {
             auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
             t = timer2;
 
-            auto &validRenderables = readLock.ValidEntities<Renderable>();
-            auto &validTransforms = readLock.ValidEntities<Transform>();
+            auto &validRenderables = readLock.EntitiesWith<Renderable>();
+            auto &validTransforms = readLock.EntitiesWith<Transform>();
             auto &validEntities = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
             auto firstName = &validEntities[0].Get<Renderable>(readLock).name;
             for (auto e : validEntities) {
@@ -142,7 +142,7 @@ void transformWorkerThread() {
             Timer t(timer1);
             auto writeLock = ecs.StartTransaction<Write<Transform>>();
             t = timer2;
-            auto &validTransforms = writeLock.ValidEntities<Transform>();
+            auto &validTransforms = writeLock.EntitiesWith<Transform>();
             for (auto e : validTransforms) {
                 auto &transform = e.Get<Transform>(writeLock);
                 transform.pos[0]++;
@@ -200,8 +200,8 @@ int main(int argc, char **argv) {
         int valid = 0;
         double commonValue;
         auto readLock = ecs.StartTransaction<Read<Transform>>();
-        auto &validEntities = readLock.ValidEntities<Transform>();
-        for (auto e : validEntities) {
+        auto &entityList = readLock.EntitiesWith<Transform>();
+        for (auto e : entityList) {
             auto transform = e.Get<Transform>(readLock);
 
             if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
             }
         }
         if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
-        std::cout << validEntities.size() << " total components (" << valid << " with value " << commonValue << ")"
+        std::cout << entityList.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
 

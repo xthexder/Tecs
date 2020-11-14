@@ -29,21 +29,22 @@ namespace Tecs {
             return id != std::numeric_limits<decltype(id)>::max();
         }
 
-        // Alias lock.Had<Tn...>(e) to allow e.Had<Tn...>(lock)
-        template<typename... Tn, typename LockType>
-        inline bool Had(LockType &lock) const {
-            return lock.template Had<Tn...>(*this);
-        }
-
         // Alias lock.Has<Tn...>(e) to allow e.Has<Tn...>(lock)
         template<typename... Tn, typename LockType>
         inline bool Has(LockType &lock) const {
             return lock.template Has<Tn...>(*this);
         }
 
+        // Alias lock.Had<Tn...>(e) to allow e.Had<Tn...>(lock)
+        template<typename... Tn, typename LockType>
+        inline bool Had(LockType &lock) const {
+            return lock.template Had<Tn...>(*this);
+        }
+
         // Alias lock.Get<T>(e) to allow e.Get<T>(lock)
         // Includes a lock type check to make errors more readable.
-        template<typename T, typename LockType, typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
+        template<typename T, typename LockType,
+            typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
         inline ReturnType &Get(LockType &lock) const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
             static_assert(is_write_allowed<T, LockType>() || std::is_const<ReturnType>(),

@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
         auto transaction = ecs.StartTransaction<Read<Name, Position>>();
 
         // List entities with a certain type of component
-        const std::vector<Entity> &entities = transaction.ValidEntities<Name>();
+        const std::vector<Entity> &entities = transaction.EntitiesWith<Name>();
 
         // Loop through entities with both a Name and Position component
         for (auto e : entities) {
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         auto transaction = ecs.StartTransaction<Read<Name>, Write<Position>>();
 
         // Loop through entities with a Position
-        for (auto e : transaction.ValidEntities<Position>()) {
+        for (auto e : transaction.EntitiesWith<Position>()) {
             // Move the entity to the right
             Position &pos = e.Get<Position>(transaction);
             pos.x++;

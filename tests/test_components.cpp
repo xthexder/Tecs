@@ -10,7 +10,7 @@
 namespace testing {
     bool Transform::HasParent(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
         Tecs::Lock<ECS, Tecs::Read<Transform>> readLock = lock;
-        for (auto entity : readLock.ValidEntities<Transform>()) {
+        for (auto entity : readLock.EntitiesWith<Transform>()) {
             if (entity == parent) { return true; }
         }
         return false;

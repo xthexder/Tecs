@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Tecs_locks.hh"
 #include "Tecs_entity.hh"
+#include "Tecs_locks.hh"
 #include "Tecs_template_util.hh"
 
 #include <cstddef>
@@ -35,14 +35,14 @@ namespace Tecs {
 
     public:
         template<typename T>
-        inline constexpr const std::vector<Entity> &PreviousValidEntities() const {
+        inline constexpr const std::vector<Entity> &PreviousEntitiesWith() const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
             return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
-        inline constexpr const std::vector<Entity> &ValidEntities() const {
+        inline constexpr const std::vector<Entity> &EntitiesWith() const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
             if (is_write_allowed<T, LockType>()) {
@@ -62,12 +62,6 @@ namespace Tecs {
         }
 
         template<typename... Tn>
-        inline bool Had(const Entity &e) const {
-            const auto &validBitset = ecs.validIndex.readComponents[e.id];
-            return ecs.template BitsetHas<Tn...>(validBitset);
-        }
-
-        template<typename... Tn>
         inline bool Has(const Entity &e) const {
             if (is_add_remove_allowed<LockType>()) {
                 const auto &validBitset = ecs.validIndex.writeComponents[e.id];
@@ -78,15 +72,10 @@ namespace Tecs {
             }
         }
 
-        template<typename T>
-        inline const T &GetPrevious(const Entity &e) const {
-            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
-
+        template<typename... Tn>
+        inline bool Had(const Entity &e) const {
             const auto &validBitset = ecs.validIndex.readComponents[e.id];
-            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
-                throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
-            }
-            return ecs.template Storage<T>().readComponents[e.id];
+            return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename T, typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
@@ -112,6 +101,17 @@ namespace Tecs {
             } else {
                 return ecs.template Storage<T>().readComponents[e.id];
             }
+        }
+
+        template<typename T>
+        inline const T &GetPrevious(const Entity &e) const {
+            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
+
+            const auto &validBitset = ecs.validIndex.readComponents[e.id];
+            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
+                throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
+            }
+            return ecs.template Storage<T>().readComponents[e.id];
         }
 
         template<typename T>
@@ -208,7 +208,7 @@ namespace Tecs {
     /**
      * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.
      * The permissions can then be referenced by passing around Lock objects.
-     * 
+     *
      * Upon deconstruction, a Transaction will commit any changes written during its lifespan to the ECS.
      * Once a Transaction is deconstructed, all Locks referencing its permissions become invalid.
      */

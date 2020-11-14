@@ -7,7 +7,7 @@
 #include <string>
 
 namespace testing {
-    static inline void Assert(bool condition, const std::string &message) {
+    static inline void Assert(bool condition, const char *message) {
         if (!condition) {
             std::cout << "Assertion failed: " << message << std::endl;
             throw std::runtime_error(message);
