@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         Timer t("Test adding each component type");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            Tecs::Entity e = writeLock.AddEntity();
+            Tecs::Entity e = writeLock.NewEntity();
             Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
 
             // Test adding each component type

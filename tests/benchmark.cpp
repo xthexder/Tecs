@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
         Timer t("Create entities");
         auto writeLock = ecs.StartTransaction<AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            Tecs::Entity e = writeLock.AddEntity();
+            Tecs::Entity e = writeLock.NewEntity();
             if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
             if (i % RENDERABLE_DIVISOR == 0) { e.Set<Renderable>(writeLock, "entity" + std::to_string(i)); }
             if (i % SCRIPT_DIVISOR == 0) {

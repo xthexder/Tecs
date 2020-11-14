@@ -62,14 +62,14 @@ static World ecs;
 
     // Add 10 entities with Names and Positions
     for (int i = 0; i < 10; i++) {
-        Tecs::Entity e = transaction.AddEntity();
+        Tecs::Entity e = transaction.NewEntity();
 
         e.Set<Name>(transaction, std::to_string(i));
         e.Set<Position>(transaction);
     }
     // Add 100 entities with only Positions
     for (int i = 0; i < 100; i++) {
-        transaction.AddEntity().Set<Position>(transaction);
+        transaction.NewEntity().Set<Position>(transaction);
     }
 
     // When `transaction` goes out of scope, it is deconstructed and any changes made to entities will be commited

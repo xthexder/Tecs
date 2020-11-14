@@ -52,7 +52,7 @@ namespace Tecs {
             }
         }
 
-        inline Entity AddEntity() {
+        inline Entity NewEntity() {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
             AddEntityToComponents<AllComponentTypes...>();
