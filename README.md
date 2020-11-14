@@ -21,16 +21,16 @@ Storage architecture details can be found in [the docs](https://github.com/xthex
 A Tecs Entity on its own is just a id, but if a Lock is held by a Transaction, it can be used to access component data.
 The following Entity operations are only valid if the held Lock has the correct permssions.
 
-| Operation                                | Required Permissions | Description                                                                                                            |
-|------------------------------------------|----------------------|------------------------------------------------------------------------------------------------------------------------|
-| `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity current has a Component of type T.                                                                  |
-| `bool Entity::Had<T>`                            | `Read<Any>`          | Check if an Entity had a Component of T at the start of the Transaction.                                               |
-| `const T &Entity::Get<T>`                        | `Read<T>`            | Read the current value of an Entity's T Component.                                                                     |
-| `T &Entity::Get<T>`                              | `Write<T>`           | Get a mutable reference to the current value of an Entity's T Component.                                               |
-| `const T &Entity::GetPrevious<T>`                | `Read<T>`            | Read the value of an Entity's T Component at the start of the Transaction.                                             |
+| Operation                                        | Required Permissions | Description                                                                |
+|--------------------------------------------------|----------------------|----------------------------------------------------------------------------|
+| `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity current has a Component of type T.                      |
+| `bool Entity::Had<T>`                            | `Read<Any>`          | Check if an Entity had a Component of T at the start of the Transaction.   |
+| `const T &Entity::Get<T>`                        | `Read<T>`            | Read the current value of an Entity's T Component.                         |
+| `T &Entity::Get<T>`                              | `Write<T>`           | Get a mutable reference to the current value of an Entity's T Component.   |
+| `const T &Entity::GetPrevious<T>`                | `Read<T>`            | Read the value of an Entity's T Component at the start of the Transaction. |
 | `// Existing Component` <br> `T &Entity::Set<T>` | `Write<T>`           | Set the current value of an existing T Component. <br> Note: The existence of a component is checked at runtime and will throw an exception if the required permissions aren't held |
-| `// New Component` <br> `T &Entity::Set<T>`      | `AddRemove`          | Add a new Component of type T to an Entity, or replace the current value.                                              |
-| `void Entity::Unset<T>`                          | `AddRemove`          | Remove the T Component from an Entity.                                                                                 |
+| `// New Component` <br> `T &Entity::Set<T>`      | `AddRemove`          | Add a new Component of type T to an Entity, or replace the current value.  |
+| `void Entity::Unset<T>`                          | `AddRemove`          | Remove the T Component from an Entity.                                     |
 
 
 ## Examples
