@@ -10,6 +10,12 @@
 #include <type_traits>
 #include <vector>
 
+#ifndef TECS_ENTITY_ALLOCATION_BATCH_SIZE
+    #define TECS_ENTITY_ALLOCATION_BATCH_SIZE 1000
+#endif
+
+static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
+
 namespace Tecs {
     /**
      * Lock<ECS, Permissions...> is a reference to lock permissions held by an active Transaction.
@@ -52,13 +58,50 @@ namespace Tecs {
             }
         }
 
+        inline constexpr const std::vector<Entity> &PreviousEntities() const {
+            return ecs.validIndex.readValidEntities;
+        }
+
+        inline constexpr const std::vector<Entity> &Entities() const {
+            if (is_add_remove_allowed<LockType>()) {
+                return ecs.validIndex.writeValidEntities;
+            } else {
+                return ecs.validIndex.readValidEntities;
+            }
+        }
+
         inline Entity NewEntity() {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
-            AddEntityToComponents<AllComponentTypes...>();
-            Entity id(ecs.validIndex.writeComponents.size());
-            ecs.validIndex.writeComponents.emplace_back();
-            return id;
+            Entity entity;
+            if (ecs.freeEntities.empty()) {
+                // Allocate a new set of entities and components
+                AllocateComponents<AllComponentTypes...>(TECS_ENTITY_ALLOCATION_BATCH_SIZE);
+                entity.id = ecs.validIndex.writeComponents.size();
+                ecs.validIndex.writeComponents.resize(entity.id + TECS_ENTITY_ALLOCATION_BATCH_SIZE);
+
+                // Add all but 1 of the new Entity ids to the free list.
+                for (size_t id = 1; id < TECS_ENTITY_ALLOCATION_BATCH_SIZE; id++) {
+                    ecs.freeEntities.emplace_back(entity.id + id);
+                }
+            } else {
+                entity.id = ecs.freeEntities.front();
+                ecs.freeEntities.pop_front();
+            }
+
+            ecs.validIndex.writeComponents[entity.id][0] = true;
+            ecs.validIndex.writeValidEntities.emplace_back(entity.id);
+
+            return entity;
+        }
+
+        inline void DestroyEntity(const Entity &e) {
+            static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
+
+            // Invalidate the entity and all of its Components
+            RemoveComponents<AllComponentTypes...>(e);
+            ecs.validIndex.writeComponents[e.id][0] = false;
+            ecs.freeEntities.emplace_back(e.id);
         }
 
         template<typename... Tn>
@@ -86,10 +129,10 @@ namespace Tecs {
 
             auto &validBitset = is_add_remove_allowed<LockType>() ? ecs.validIndex.writeComponents[e.id]
                                                                   : ecs.validIndex.readComponents[e.id];
-            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
-                    validBitset[ecs.template GetComponentIndex<T>()] = true;
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     ecs.template Storage<T>().writeValidEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
@@ -108,7 +151,7 @@ namespace Tecs {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
             const auto &validBitset = ecs.validIndex.readComponents[e.id];
-            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
             return ecs.template Storage<T>().readComponents[e.id];
@@ -120,9 +163,9 @@ namespace Tecs {
 
             auto &validBitset = is_add_remove_allowed<LockType>() ? ecs.validIndex.writeComponents[e.id]
                                                                   : ecs.validIndex.readComponents[e.id];
-            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[ecs.template GetComponentIndex<T>()] = true;
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     ecs.template Storage<T>().writeValidEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
@@ -138,9 +181,9 @@ namespace Tecs {
 
             auto &validBitset = is_add_remove_allowed<LockType>() ? ecs.validIndex.writeComponents[e.id]
                                                                   : ecs.validIndex.readComponents[e.id];
-            if (!validBitset[ecs.template GetComponentIndex<T>()]) {
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[ecs.template GetComponentIndex<T>()] = true;
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     ecs.template Storage<T>().writeValidEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
@@ -150,21 +193,11 @@ namespace Tecs {
             return ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
         }
 
-        template<typename T>
+        template<typename... Tn>
         inline void Unset(const Entity &e) {
             static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
 
-            auto &validBitset = ecs.validIndex.writeComponents[e.id];
-            if (validBitset[ecs.template GetComponentIndex<T>()]) {
-                validBitset[ecs.template GetComponentIndex<T>()] = false;
-                auto &validEntities = ecs.template Storage<T>().writeValidEntities;
-                for (auto itr = validEntities.begin(); itr != validEntities.end(); itr++) {
-                    if (*itr == e) {
-                        validEntities.erase(itr);
-                        break;
-                    }
-                }
-            }
+            RemoveComponents<Tn...>(e);
         }
 
         template<typename... PermissionsSubset>
@@ -190,15 +223,36 @@ namespace Tecs {
         ECS<AllComponentTypes...> &ecs;
 
     private:
-        template<typename U>
-        inline void AddEntityToComponents() {
-            ecs.template Storage<U>().writeComponents.emplace_back();
+        template<typename T>
+        inline void AllocateComponents(size_t count) {
+            ecs.template Storage<T>().writeComponents.resize(ecs.template Storage<T>().writeComponents.size() + count);
         }
 
-        template<typename U, typename U2, typename... Un>
-        inline void AddEntityToComponents() {
-            AddEntityToComponents<U>();
-            AddEntityToComponents<U2, Un...>();
+        template<typename T, typename T2, typename... Tn>
+        inline void AllocateComponents(size_t count) {
+            AllocateComponents<T>(count);
+            AllocateComponents<T2, Tn...>(count);
+        }
+
+        template<typename T>
+        inline void RemoveComponents(const Entity &e) {
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
+            if (ecs.template BitsetHas<T>(validBitset)) {
+                validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
+                auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                for (auto itr = validEntities.begin(); itr != validEntities.end(); itr++) {
+                    if (*itr == e) {
+                        validEntities.erase(itr);
+                        break;
+                    }
+                }
+            }
+        }
+
+        template<typename T, typename T2, typename... Tn>
+        inline void RemoveComponents(const Entity &e) {
+            RemoveComponents<T>(e);
+            RemoveComponents<T2, Tn...>(e);
         }
 
         template<typename, typename...>

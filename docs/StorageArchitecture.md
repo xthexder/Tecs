@@ -9,7 +9,9 @@
 | |                              | |  ComponentIndex<T1>  | |
 | | Stores a bitset representing | +----------------------+ |
 | | which components are valid   | |  ComponentIndex<T2>  | |
-| | for each entity.             | +----------------------+ |
+| | for each entity. The first   | +----------------------+ |
+| | bit is used to store which   | |  ComponentIndex<T3>  | |
+| | entities are valid.          | +----------------------+ |
 | |                              | |  ComponentIndex<Tn>  | |
 | +------------------------------+ +----------------------+ |
 +-----------------------------------------------------------+

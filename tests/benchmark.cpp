@@ -14,6 +14,7 @@ std::atomic_bool running;
 static testing::ECS ecs;
 
 #define ENTITY_COUNT 1000000
+#define ADD_REMOVE_COUNT 100000
 #define THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
@@ -161,7 +162,7 @@ int main(int argc, char **argv) {
         Timer t("Create entities");
         auto writeLock = ecs.StartTransaction<AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            Tecs::Entity e = writeLock.NewEntity();
+            Entity e = writeLock.NewEntity();
             if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
             if (i % RENDERABLE_DIVISOR == 0) { e.Set<Renderable>(writeLock, "entity" + std::to_string(i)); }
             if (i % SCRIPT_DIVISOR == 0) {
@@ -170,9 +171,49 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
+    struct RemovedEntity {
+        std::string name;
+        std::bitset<3> components;
+    };
+    std::vector<RemovedEntity> removedList;
+    {
+        Timer t("Remove the first " + std::to_string(ADD_REMOVE_COUNT) + " entities");
+        auto writeLock = ecs.StartTransaction<AddRemove>();
+        auto &entities = writeLock.Entities();
+
+        for (size_t i = 0; i < ADD_REMOVE_COUNT; i++) {
+            Entity e = entities[i];
+
+            auto &removedEntity = removedList.emplace_back();
+            removedEntity.components[0] = e.Has<Transform>(writeLock);
+            if (e.Has<Renderable>(writeLock)) {
+                removedEntity.name = e.Get<Renderable>(writeLock).name;
+                removedEntity.components[1] = true;
+            }
+            removedEntity.components[2] = e.Has<Script>(writeLock);
+            e.Destroy(writeLock);
+        }
+    }
+    {
+        Timer t("Recreate removed entities");
+        auto writeLock = ecs.StartTransaction<AddRemove>();
+        for (auto removedEntity : removedList) {
+            Entity e = writeLock.NewEntity();
+            if (removedEntity.components[0]) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
+            if (removedEntity.components[1]) { e.Set<Renderable>(writeLock, removedEntity.name); }
+            if (removedEntity.components[2]) {
+                e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+            }
+        }
+    }
 
     {
+        {
+            auto readLock = ecs.StartTransaction<>();
+            std::cout << "Running with " << readLock.Entities().size() << " Entities and " << ecs.GetComponentCount()
+                      << " Component types" << std::endl;
+        }
+
         Timer t("Run threads");
         running = true;
 

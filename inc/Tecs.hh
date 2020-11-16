@@ -6,6 +6,7 @@
 
 #include <bitset>
 #include <cstddef>
+#include <deque>
 
 namespace Tecs {
     /**
@@ -65,7 +66,7 @@ namespace Tecs {
         }
 
     private:
-        using ValidComponentSet = std::bitset<sizeof...(Tn)>;
+        using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
         using IndexStorage = typename wrap_tuple_args<ComponentIndex, Tn...>::type;
 
         template<size_t I, typename U>
@@ -80,12 +81,12 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline static constexpr bool BitsetHas(const ValidComponentSet &validBitset) {
-            return validBitset[GetComponentIndex<0, U>()];
+        inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
+            return validBitset[1 + GetComponentIndex<0, U>()];
         }
 
         template<typename U, typename U2, typename... Un>
-        inline static constexpr bool BitsetHas(const ValidComponentSet &validBitset) {
+        inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
             return BitsetHas<U>(validBitset) && BitsetHas<U2, Un...>(validBitset);
         }
 
@@ -94,8 +95,9 @@ namespace Tecs {
             return std::get<ComponentIndex<T>>(indexes);
         }
 
-        ComponentIndex<ValidComponentSet> validIndex;
+        ComponentIndex<ValidBitset> validIndex;
         IndexStorage indexes;
+        std::deque<Entity> freeEntities;
 
         template<typename, typename...>
         friend class Lock;

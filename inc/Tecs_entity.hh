@@ -4,14 +4,19 @@
 #include "Tecs_template_util.hh"
 
 #include <cstddef>
+#include <functional>
 #include <limits>
+
+#ifndef TECS_ENTITY_ID_TYPE
+    #define TECS_ENTITY_ID_TYPE size_t
+#endif
 
 namespace Tecs {
     struct Entity {
-        size_t id;
+        TECS_ENTITY_ID_TYPE id;
 
         inline Entity() : id(std::numeric_limits<decltype(id)>::max()) {}
-        inline Entity(size_t id) : id(id) {}
+        inline Entity(decltype(id) id) : id(id) {}
 
         inline bool operator==(const Entity &other) const {
             return id == other.id;
@@ -27,6 +32,10 @@ namespace Tecs {
 
         inline operator bool() const {
             return id != std::numeric_limits<decltype(id)>::max();
+        }
+
+        inline operator decltype(id)() const {
+            return id;
         }
 
         // Alias lock.Has<Tn...>(e) to allow e.Has<Tn...>(lock)
@@ -87,5 +96,22 @@ namespace Tecs {
 
             lock.template Unset<T>(*this);
         }
+
+        // Alias lock.DestroyEntity(e) to allow e.Destroy(lock)
+        template<typename LockType>
+        inline void Destroy(LockType &lock) const {
+            static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be removed without an AddRemove lock.");
+
+            lock.DestroyEntity(*this);
+        }
     };
 } // namespace Tecs
+
+namespace std {
+    template<>
+    struct hash<Tecs::Entity> {
+        std::size_t operator()(const Tecs::Entity &e) const {
+            return e.id;
+        }
+    };
+} // namespace std

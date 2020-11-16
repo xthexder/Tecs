@@ -2,6 +2,7 @@
 #include "components.hh"
 
 #include <iostream>
+#include <vector>
 
 using namespace example;
 using namespace Tecs;
