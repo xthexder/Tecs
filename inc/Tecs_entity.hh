@@ -89,12 +89,12 @@ namespace Tecs {
             return lock.template Set<T>(*this, args...);
         }
 
-        // Alias lock.Unset<T>(e) to allow e.Unset<T>(lock)
-        template<typename T, typename LockType>
+        // Alias lock.Unset<Tn...>(e) to allow e.Unset<Tn...>(lock)
+        template<typename... Tn, typename LockType>
         inline void Unset(LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
 
-            lock.template Unset<T>(*this);
+            lock.template Unset<Tn...>(*this);
         }
 
         // Alias lock.DestroyEntity(e) to allow e.Destroy(lock)

@@ -14,7 +14,7 @@ std::atomic_bool running;
 static testing::ECS ecs;
 
 #define ENTITY_COUNT 1000000
-#define ADD_REMOVE_COUNT 100000
+#define ADD_REMOVE_COUNT 10000
 #define THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
     {
         Timer t("Remove the first " + std::to_string(ADD_REMOVE_COUNT) + " entities");
         auto writeLock = ecs.StartTransaction<AddRemove>();
-        auto &entities = writeLock.Entities();
+        std::vector<Entity> entities(writeLock.Entities());
 
         for (size_t i = 0; i < ADD_REMOVE_COUNT; i++) {
             Entity e = entities[i];

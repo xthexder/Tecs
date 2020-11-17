@@ -101,6 +101,13 @@ namespace Tecs {
             // Invalidate the entity and all of its Components
             RemoveComponents<AllComponentTypes...>(e);
             ecs.validIndex.writeComponents[e.id][0] = false;
+            auto &validEntities = ecs.validIndex.writeValidEntities;
+            for (auto itr = validEntities.begin(); itr != validEntities.end(); itr++) {
+                if (*itr == e) {
+                    validEntities.erase(itr);
+                    break;
+                }
+            }
             ecs.freeEntities.emplace_back(e.id);
         }
 
