@@ -26,16 +26,16 @@ namespace Tecs {
             return id != other.id;
         }
 
+        inline bool operator<(const Entity &other) const {
+            return id < other.id;
+        }
+
         inline bool operator!() const {
             return id == std::numeric_limits<decltype(id)>::max();
         }
 
-        inline operator bool() const {
+        inline explicit operator bool() const {
             return id != std::numeric_limits<decltype(id)>::max();
-        }
-
-        inline operator decltype(id)() const {
-            return id;
         }
 
         // Alias lock.Has<Tn...>(e) to allow e.Has<Tn...>(lock)

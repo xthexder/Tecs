@@ -28,7 +28,7 @@ namespace testing {
 
         ~MultiTimer() {
             if (print) {
-                if (values.size() >= 1) {
+                if (values.size() > 1) {
                     std::chrono::nanoseconds total(0);
                     for (auto value : values) {
                         total += value;
@@ -40,6 +40,8 @@ namespace testing {
                               << " usec, P95: " << (values[(size_t)((double)values.size() * 0.95) - 1].count() / 1000.0)
                               << " usec, P99: " << (values[(size_t)((double)values.size() * 0.99) - 1].count() / 1000.0)
                               << " usec" << std::endl;
+                } else if (values.size() == 1) {
+                    std::cout << "[" << name << "] End: " << (values[0].count() / 1000000.0) << " ms" << std::endl;
                 } else {
                     std::cout << "[" << name << "] No timers completed" << std::endl;
                 }

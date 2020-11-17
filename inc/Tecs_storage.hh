@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Tecs_entity.hh"
 #include "Tecs_transaction.hh"
 
 #include <atomic>
 #include <cstddef>
 #include <thread>
 #include <vector>
+#include <set>
 
 #ifndef TECS_SPINLOCK_RETRY_YIELD
     #define TECS_SPINLOCK_RETRY_YIELD 10
@@ -56,6 +58,7 @@ namespace Tecs {
          *
          * CommitWrite() must be called exactly once after writing has completed.
          */
+        template<bool AllowAddRemove>
         inline void StartWrite() {
             int retry = 0;
             while (true) {
@@ -63,6 +66,10 @@ namespace Tecs {
                 if (current == WRITER_FREE) {
                     if (writer.compare_exchange_weak(current, WRITER_STARTED)) {
                         // Lock aquired
+                        if (AllowAddRemove) {
+                            // writeValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
+                            // writeValidEntities = readValidEntities;
+                        }
                         return;
                     }
                 }
@@ -127,13 +134,13 @@ namespace Tecs {
             if (AllowAddRemove) {
                 // The number of components, or list of valid entities may have changed.
                 readComponents = writeComponents;
-                readValidEntities = writeValidEntities;
+                readValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
             } else {
                 // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
-                if (writeValidEntities.size() > writeComponents.size() / 6) {
+                if (readValidEntities.size() > writeComponents.size() / 6) {
                     readComponents = writeComponents;
                 } else {
-                    for (auto &valid : writeValidEntities) {
+                    for (auto &valid : readValidEntities) {
                         readComponents[valid.id] = writeComponents[valid.id];
                     }
                 }
@@ -143,7 +150,8 @@ namespace Tecs {
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
-        std::vector<Entity> writeValidEntities;
+        // std::vector<Entity> writeValidEntities;
+        std::set<Entity> writeValidSet;
 
         template<typename, typename...>
         friend class Lock;
