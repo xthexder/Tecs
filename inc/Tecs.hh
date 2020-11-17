@@ -67,7 +67,6 @@ namespace Tecs {
 
     private:
         using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
-        using IndexStorage = typename wrap_tuple_args<ComponentIndex, Tn...>::type;
 
         template<size_t I, typename U>
         inline static constexpr size_t GetComponentIndex() {
@@ -96,7 +95,7 @@ namespace Tecs {
         }
 
         ComponentIndex<ValidBitset> validIndex;
-        IndexStorage indexes;
+        std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
 
         template<typename, typename...>

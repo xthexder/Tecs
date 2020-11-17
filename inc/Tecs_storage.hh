@@ -58,7 +58,6 @@ namespace Tecs {
          *
          * CommitWrite() must be called exactly once after writing has completed.
          */
-        template<bool AllowAddRemove>
         inline void StartWrite() {
             int retry = 0;
             while (true) {
@@ -66,10 +65,6 @@ namespace Tecs {
                 if (current == WRITER_FREE) {
                     if (writer.compare_exchange_weak(current, WRITER_STARTED)) {
                         // Lock aquired
-                        if (AllowAddRemove) {
-                            // writeValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
-                            // writeValidEntities = readValidEntities;
-                        }
                         return;
                     }
                 }
@@ -134,7 +129,8 @@ namespace Tecs {
             if (AllowAddRemove) {
                 // The number of components, or list of valid entities may have changed.
                 readComponents = writeComponents;
-                readValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
+                // readValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
+                readValidEntities = writeValidEntities;
             } else {
                 // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
                 if (readValidEntities.size() > writeComponents.size() / 6) {
@@ -150,10 +146,12 @@ namespace Tecs {
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
-        // std::vector<Entity> writeValidEntities;
-        std::set<Entity> writeValidSet;
+        std::vector<Entity> writeValidEntities;
+        // std::set<Entity> writeValidSet;
 
         template<typename, typename...>
         friend class Lock;
+        template<typename, typename...>
+        friend class Transaction;
     };
 } // namespace Tecs

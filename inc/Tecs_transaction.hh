@@ -91,7 +91,7 @@ namespace Tecs {
 
             ecs.validIndex.writeComponents[entity.id][0] = true;
             // ecs.validIndex.writeValidEntities.emplace_back(entity.id);
-            ecs.validIndex.writeValidSet.emplace(entity.id);
+            // ecs.validIndex.writeValidSet.emplace(entity.id);
 
             return entity;
         }
@@ -102,7 +102,7 @@ namespace Tecs {
             // Invalidate the entity and all of its Components
             RemoveComponents<AllComponentTypes...>(e);
             ecs.validIndex.writeComponents[e.id][0] = false;
-            ecs.validIndex.writeValidSet.erase(e);
+            // ecs.validIndex.writeValidSet.erase(e);
             ecs.freeEntities.emplace_back(e.id);
         }
 
@@ -136,7 +136,7 @@ namespace Tecs {
                     ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
                     validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     // ecs.template Storage<T>().writeValidEntities.emplace_back(e);
-                    ecs.template Storage<T>().writeValidSet.emplace(e);
+                    // ecs.template Storage<T>().writeValidSet.emplace(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -170,7 +170,7 @@ namespace Tecs {
                 if (is_add_remove_allowed<LockType>()) {
                     validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     // ecs.template Storage<T>().writeValidEntities.emplace_back(e);
-                    ecs.template Storage<T>().writeValidSet.emplace(e);
+                    // ecs.template Storage<T>().writeValidSet.emplace(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -189,7 +189,7 @@ namespace Tecs {
                 if (is_add_remove_allowed<LockType>()) {
                     validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
                     // ecs.template Storage<T>().writeValidEntities.emplace_back(e);
-                    ecs.template Storage<T>().writeValidSet.emplace(e);
+                    // ecs.template Storage<T>().writeValidSet.emplace(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
@@ -244,7 +244,7 @@ namespace Tecs {
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (ecs.template BitsetHas<T>(validBitset)) {
                 validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
-                ecs.template Storage<T>().writeValidSet.erase(e);
+                // ecs.template Storage<T>().writeValidSet.erase(e);
             }
         }
 
@@ -278,7 +278,7 @@ namespace Tecs {
         inline Transaction(ECSType<AllComponentTypes...> &ecs)
             : Lock<ECSType<AllComponentTypes...>, Permissions...>(ecs) {
             if (is_add_remove_allowed<LockType>()) {
-                ecs.validIndex.template StartWrite<true>();
+                ecs.validIndex.StartWrite();
             } else {
                 ecs.validIndex.RLock();
             }
@@ -288,6 +288,14 @@ namespace Tecs {
         inline ~Transaction() {
             UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
+                auto &newValidList = this->ecs.validIndex.writeValidEntities;
+                newValidList.clear();
+                auto &bitsets = this->ecs.validIndex.writeComponents;
+                for (size_t id = 0; id < bitsets.size(); id++) {
+                    if (bitsets[id][0]) {
+                        newValidList.emplace_back(id);
+                    }
+                }
                 this->ecs.validIndex.template CommitWrite<true>();
             } else {
                 this->ecs.validIndex.RUnlock();
@@ -300,7 +308,7 @@ namespace Tecs {
         template<typename U>
         inline void LockInOrder() const {
             if (is_write_allowed<U, LockType>()) {
-                this->ecs.template Storage<U>().template StartWrite<is_add_remove_allowed<LockType>::value>();
+                this->ecs.template Storage<U>().StartWrite();
             } else if (is_read_allowed<U, LockType>()) {
                 this->ecs.template Storage<U>().RLock();
             }
@@ -316,6 +324,14 @@ namespace Tecs {
         inline void UnlockInOrder() const {
             if (is_write_allowed<U, LockType>()) {
                 if (is_add_remove_allowed<LockType>()) {
+                    auto &newValidList = this->ecs.template Storage<U>().writeValidEntities;
+                    newValidList.clear();
+                    auto &bitsets = this->ecs.validIndex.writeComponents;
+                    for (size_t id = 0; id < bitsets.size(); id++) {
+                        if (this->ecs.template BitsetHas<U>(bitsets[id])) {
+                            newValidList.emplace_back(id);
+                        }
+                    }
                     this->ecs.template Storage<U>().template CommitWrite<true>();
                 } else {
                     this->ecs.template Storage<U>().template CommitWrite<false>();
