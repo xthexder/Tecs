@@ -89,6 +89,34 @@ int main(int argc, char **argv) {
         }
     }
     {
+        Timer t("Test remove while iterating");
+        // Read locks can be created after a write lock without deadlock, but not the other way around.
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto &entities = writeLock.EntitiesWith<Transform>();
+        size_t prevSize = entities.size();
+        for (size_t i = 0; i < entities.size() && i < 100; i++) {
+            entities[i].Destroy(writeLock);
+
+            Assert(!entities[i], "Entity in list should not be valid after removal.");
+            Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
+        }
+    }
+    {
+        Timer t("Test add while iterating");
+        // Read locks can be created after a write lock without deadlock, but not the other way around.
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto &entities = writeLock.EntitiesWith<Transform>();
+        size_t prevSize = entities.size();
+        for (size_t i = 0; i < 100; i++) {
+            Tecs::Entity e = writeLock.NewEntity();
+            Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
+
+            e.Set<Transform>(writeLock, 1.0, 0.0, 0.0, 1);
+            Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
+        }
+        Assert(writeLock.EntitiesWith<Transform>().size() == prevSize + 100, "Entity list should be updated for later calls.");
+    }
+    {
         Timer t("Test write priority");
         std::vector<std::thread> readThreads;
         std::atomic_int counter(0);

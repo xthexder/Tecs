@@ -129,7 +129,6 @@ namespace Tecs {
             if (AllowAddRemove) {
                 // The number of components, or list of valid entities may have changed.
                 readComponents = writeComponents;
-                // readValidEntities.assign(writeValidSet.begin(), writeValidSet.end());
                 readValidEntities = writeValidEntities;
             } else {
                 // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
@@ -147,7 +146,7 @@ namespace Tecs {
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
         std::vector<Entity> writeValidEntities;
-        // std::set<Entity> writeValidSet;
+        std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
 
         template<typename, typename...>
         friend class Lock;

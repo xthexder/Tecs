@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
         auto transaction = ecs.StartTransaction<Read<Name, Position>>();
 
         // List entities with a certain type of component
-        const std::vector<Entity> &entities = transaction.EntitiesWith<Name>();
+        auto &entities = transaction.EntitiesWith<Name>();
 
         // Loop through entities with both a Name and Position component
         for (auto e : entities) {
