@@ -4,6 +4,7 @@
 
 #include <Tecs.hh>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -30,6 +31,7 @@ namespace testing {
 
     struct Script {
         std::vector<uint8_t> data;
+        std::shared_ptr<std::string> filename;
 
         Script() {}
         Script(uint8_t *data, size_t size) : data(data, data + size) {}

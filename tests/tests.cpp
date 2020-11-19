@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
         Timer t("Test reading previous values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
+        size_t entityCount = 0;
         for (Tecs::Entity e : writeLock.EntitiesWith<Transform>()) {
             // Both current and previous values can be read at the same time.
             auto &currentTransform = writeLock.Get<Transform>(e);
@@ -79,13 +80,43 @@ int main(int argc, char **argv) {
 
             Assert(writeLock.GetPrevious<Transform>(e).pos[0] == 0, "Expected previous position.x to be 0");
             Assert(writeLock.Get<Transform>(e).pos[0] == 1, "Expected current position.x to be 1");
+            entityCount++;
         }
+        Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
     }
     {
         Timer t("Test write was committed");
         auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
+        size_t entityCount = 0;
         for (Tecs::Entity e : readLock.EntitiesWith<Transform>()) {
             Assert(readLock.Get<Transform>(e).pos[0] == 1, "Expected previous position.x to be 1");
+            entityCount++;
+        }
+        Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
+    }
+    {
+        Timer t("Test lock reference counting");
+        std::unique_ptr<Tecs::Lock<ECS, Tecs::Write<Script>>> outerLock;
+        Tecs::Entity writtenId;
+        {
+            auto transaction = ecs.StartTransaction<Tecs::Write<Script>>();
+            writtenId = transaction.EntitiesWith<Script>()[0];
+            writtenId.Get<Script>(transaction).data[3] = 99;
+
+            outerLock.reset(new Tecs::Lock<ECS, Tecs::Write<Script>>(transaction));
+        }
+        // Transaction should not be commited yet.
+        {
+            // Try reading the written bit to make sure the write transaction is not yet commited.
+            auto transaction = ecs.StartTransaction<Tecs::Read<Script>>();
+            Assert(writtenId.Get<Script>(transaction).data[3] != 99, "Script data should not be set to 99");
+        }
+        outerLock.reset(nullptr);
+        // Transaction should now be commited.
+        {
+            // Try reading the written bit to make sure the write transaction is commited.
+            auto transaction = ecs.StartTransaction<Tecs::Read<Script>>();
+            Assert(writtenId.Get<Script>(transaction).data[3] == 99, "Script data should be set to 99");
         }
     }
     {
@@ -114,7 +145,8 @@ int main(int argc, char **argv) {
             e.Set<Transform>(writeLock, 1.0, 0.0, 0.0, 1);
             Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
         }
-        Assert(writeLock.EntitiesWith<Transform>().size() == prevSize + 100, "Entity list should be updated for later calls.");
+        Assert(writeLock.EntitiesWith<Transform>().size() == prevSize + 100,
+            "Entity list should be updated for later calls.");
     }
     {
         Timer t("Test write priority");

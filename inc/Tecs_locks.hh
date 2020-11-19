@@ -12,7 +12,6 @@ namespace Tecs {
     template<typename, typename...>
     class Transaction {};
 
-
     /**
      * Lock permissions are passed in as template arguments when creating a Transaction or Lock.
      *
@@ -68,8 +67,8 @@ namespace Tecs {
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<Transaction<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
 
-    // Check Lock >= SubLock for component type T
-    template<typename T, typename Lock, typename SubLock>
+    // Check SubLock <= Lock for component type T
+    template<typename T, typename SubLock, typename Lock>
     struct is_lock_subset
         : std::conjunction<
               std::conditional_t<is_write_allowed<T, SubLock>::value, is_write_allowed<T, Lock>, std::true_type>,

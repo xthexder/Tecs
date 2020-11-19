@@ -24,8 +24,8 @@ namespace Tecs {
     class ECS {
     public:
         template<typename... Permissions>
-        inline Transaction<ECS<Tn...>, Permissions...> StartTransaction() {
-            return Transaction<ECS<Tn...>, Permissions...>(*this);
+        inline Lock<ECS<Tn...>, Permissions...> StartTransaction() {
+            return Lock<ECS<Tn...>, Permissions...>(*this);
         }
 
         // TODO: Rewrite me for StartTransaction
