@@ -244,15 +244,26 @@ int main(int argc, char **argv) {
         }
     }
 
+    std::vector<Transform> transforms;
     {
-        Timer t("Validate entities");
+        Timer t("Copy entities to std::vector");
+        auto readLock = ecs.StartTransaction<Read<Transform>>();
+        auto &entityList = readLock.EntitiesWith<Transform>();
+        transforms.resize(entityList.size());
+        for (size_t i = 0; i < entityList.size(); i++) {
+            transforms[i] = entityList[i].Get<Transform>(readLock);
+        }
+    }
+
+    {
+        Timer t("Validate entities Tecs");
         int invalid = 0;
         int valid = 0;
         double commonValue;
         auto readLock = ecs.StartTransaction<Read<Transform>>();
         auto &entityList = readLock.EntitiesWith<Transform>();
         for (auto e : entityList) {
-            auto transform = e.Get<Transform>(readLock);
+            auto &transform = e.Get<Transform>(readLock);
 
             if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                 if (invalid == 0) {
@@ -275,6 +286,36 @@ int main(int argc, char **argv) {
         }
         if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
         std::cout << entityList.size() << " total components (" << valid << " with value " << commonValue << ")"
+                  << std::endl;
+    }
+
+    {
+        Timer t("Validate entities std::vector");
+        int invalid = 0;
+        int valid = 0;
+        double commonValue;
+        for (auto &transform : transforms) {
+            if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
+                if (invalid == 0) {
+                    std::cerr << "Component is not in correct place! " << transform.pos[0] << ", " << transform.pos[1]
+                              << ", " << transform.pos[2] << std::endl;
+                }
+                invalid++;
+            } else {
+                if (valid == 0) {
+                    commonValue = transform.pos[0];
+                } else if (transform.pos[0] != commonValue) {
+                    if (invalid == 0) {
+                        std::cerr << "Component is not in correct place! " << transform.pos[0] << ", "
+                                  << transform.pos[1] << ", " << transform.pos[2] << std::endl;
+                    }
+                    invalid++;
+                }
+                valid++;
+            }
+        }
+        if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
+        std::cout << transforms.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
 
