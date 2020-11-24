@@ -338,7 +338,7 @@ namespace Tecs {
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
                 }
             }
-            return ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
+            return ecs.template Storage<T>().writeComponents[e.id] = T(args...);
         }
 
         template<typename... Tn>
