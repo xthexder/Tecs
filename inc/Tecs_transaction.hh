@@ -130,7 +130,9 @@ namespace Tecs {
      *
      * Permissions... can be any combination of the following:
      * Tecs::Read<Components...>
+     * Tecs::ReadAll
      * Tecs::Write<Components...>
+     * Tecs::WriteAll
      * Tecs::AddRemove
      *
      * // Examples:

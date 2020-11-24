@@ -13,7 +13,7 @@ namespace Tecs {
      * An ECS "world" is created by instantiating this class. Component types must be known at compile-time and are
      * passed in as template arguments.
      *
-     * All operations are done through one of three types of Transactions: Read, WriteComponents, and WriteEntities
+     * All operations are done through Transactions with Read, Write, or AddRemove permissions.
      * These transactions are thread-safe, and can be run simultaniously from multiple threads with no additional
      * external synchronization.
      *
@@ -24,31 +24,25 @@ namespace Tecs {
     class ECS {
     public:
         template<typename... Permissions>
+        /**
+         * Start a new transaction with a specific set of permissions, and return a Lock object.
+         *
+         * Permissions can be any combination of the following:
+         * Tecs::Read<Components...>     - Allow read-only access to a list of Component types
+         * Tecs::ReadAll                 - Allow read-only access to all existing Components
+         * Tecs::Write<Components...>    - Allow write access to a list of Component types (existing Components only)
+         * Tecs::WriteAll                - Allow write access to all existing Components
+         * Tecs::AddRemove               - Allow the creation and deletion of new Entities and Components
+         *
+         * It is recommended to start transactions with the minimum required permissions to prevent unnecessary thread
+         * synchronization. Only a single transaction should be active in a single thread at a time; nesting
+         * transactions is undefined behavior and may result in deadlocks.
+         *
+         * All data access must be done through the returned Lock object, or by passing the lock to an Entity function.
+         */
         inline Lock<ECS<Tn...>, Permissions...> StartTransaction() {
             return Lock<ECS<Tn...>, Permissions...>(*this);
         }
-
-        // TODO: Rewrite me for StartTransaction
-        /**
-         * Lock a set of Component types to allow read-only access.
-         * Multiple read locks can be held at once.
-         *
-         * The lock is held until the returned handle is deconstructed.
-         * Values read through the returned handle will remain constant.
-         */
-        /**
-         * Lock a set of Component types to allow write access. This only allows changes to existing components.
-         * Only a single write lock can be held at once per Component type, but non-overlapping writes can occur
-         * simultaneously.
-         *
-         * The lock is held until the returned handle is deconstructed.
-         */
-        /**
-         * Lock all entities to allow adding / removing of entities and components.
-         * Only a instance of this lock can be held at once.
-         *
-         * The lock is held until the returned handle is deconstructed.
-         */
 
         /**
          * Returns the index of a Component type for use in a bitset.
