@@ -322,7 +322,7 @@ namespace Tecs {
         }
 
         template<typename T, typename... Args>
-        inline T &Set(const Entity &e, Args... args) {
+        inline T &Set(const Entity &e, Args &&... args) {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
 
             auto &validBitset =
@@ -338,7 +338,7 @@ namespace Tecs {
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
                 }
             }
-            return ecs.template Storage<T>().writeComponents[e.id] = T(args...);
+            return ecs.template Storage<T>().writeComponents[e.id] = T(std::forward<Args>(args)...);
         }
 
         template<typename... Tn>
