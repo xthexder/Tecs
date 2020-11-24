@@ -120,6 +120,14 @@ int main(int argc, char **argv) {
         }
     }
     {
+        Timer t("Test read lock reference write transaction can see changes");
+        auto transaction = ecs.StartTransaction<Tecs::Write<Script>>();
+        Tecs::Entity e = transaction.EntitiesWith<Script>()[0];
+        e.Get<Script>(transaction).data[3] = 88;
+        Tecs::Lock<ECS, Tecs::Read<Script>> lock = transaction;
+        Assert(e.Get<Script>(lock).data[3] == 88, "Script data should be set to 88");
+    }
+    {
         Timer t("Test remove while iterating");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();

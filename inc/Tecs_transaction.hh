@@ -5,6 +5,7 @@
 #include "Tecs_template_util.hh"
 #include "nonstd/span.hpp"
 
+#include <bitset>
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
@@ -146,14 +147,26 @@ namespace Tecs {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
 
+        std::bitset<1 + sizeof...(AllComponentTypes)> permissions;
+
+        template<typename T>
+        inline void SetPermissionBit() {
+            permissions[1 + ECS<AllComponentTypes...>::template GetComponentIndex<T>()] =
+                is_write_allowed<T, LockType>();
+        }
+
     public:
         // Start a new transaction
         inline Lock(ECS<AllComponentTypes...> &ecs)
-            : base(new Transaction<ECS<AllComponentTypes...>, Permissions...>(ecs)) {}
+            : ecs(ecs), base(new Transaction<ECS<AllComponentTypes...>, Permissions...>(ecs)) {
+            permissions[0] = is_add_remove_allowed<LockType>();
+            (SetPermissionBit<AllComponentTypes>(), ...);
+        }
 
         // Reference an existing transaction
         template<typename... PermissionsSource>
-        inline Lock(Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source) : base(source.base) {
+        inline Lock(Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
+            : permissions(source.permissions), ecs(source.base->ecs), base(source.base) {
             using SourceLockType = Lock<ECS<AllComponentTypes...>, PermissionsSource...>;
             static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
                 "AddRemove permission is missing.");
@@ -165,29 +178,29 @@ namespace Tecs {
         inline constexpr const nonstd::span<Entity> PreviousEntitiesWith() const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
-            return base->ecs.template Storage<T>().readValidEntities;
+            return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
         inline constexpr const nonstd::span<Entity> EntitiesWith() const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
-            if (is_add_remove_allowed<LockType>()) {
-                return base->ecs.template Storage<T>().writeValidEntities;
+            if (permissions[0]) {
+                return ecs.template Storage<T>().writeValidEntities;
             } else {
-                return base->ecs.template Storage<T>().readValidEntities;
+                return ecs.template Storage<T>().readValidEntities;
             }
         }
 
         inline constexpr const nonstd::span<Entity> PreviousEntities() const {
-            return base->ecs.validIndex.readValidEntities;
+            return ecs.validIndex.readValidEntities;
         }
 
         inline constexpr const nonstd::span<Entity> Entities() const {
-            if (is_add_remove_allowed<LockType>()) {
-                return base->ecs.validIndex.writeValidEntities;
+            if (permissions[0]) {
+                return ecs.validIndex.writeValidEntities;
             } else {
-                return base->ecs.validIndex.readValidEntities;
+                return ecs.validIndex.readValidEntities;
             }
         }
 
@@ -195,26 +208,26 @@ namespace Tecs {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
             Entity entity;
-            if (base->ecs.freeEntities.empty()) {
+            if (ecs.freeEntities.empty()) {
                 // Allocate a new set of entities and components
                 AllocateComponents<AllComponentTypes...>(TECS_ENTITY_ALLOCATION_BATCH_SIZE);
-                entity.id = base->ecs.validIndex.writeComponents.size();
+                entity.id = ecs.validIndex.writeComponents.size();
                 size_t newSize = entity.id + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
-                base->ecs.validIndex.writeComponents.resize(newSize);
-                base->ecs.validIndex.validEntityIndexes.resize(newSize);
+                ecs.validIndex.writeComponents.resize(newSize);
+                ecs.validIndex.validEntityIndexes.resize(newSize);
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t id = 1; id < TECS_ENTITY_ALLOCATION_BATCH_SIZE; id++) {
-                    base->ecs.freeEntities.emplace_back(entity.id + id);
+                    ecs.freeEntities.emplace_back(entity.id + id);
                 }
             } else {
-                entity = base->ecs.freeEntities.front();
-                base->ecs.freeEntities.pop_front();
+                entity = ecs.freeEntities.front();
+                ecs.freeEntities.pop_front();
             }
 
-            base->ecs.validIndex.writeComponents[entity.id][0] = true;
-            auto &validEntities = base->ecs.validIndex.writeValidEntities;
-            base->ecs.validIndex.validEntityIndexes[entity.id] = validEntities.size();
+            ecs.validIndex.writeComponents[entity.id][0] = true;
+            auto &validEntities = ecs.validIndex.writeValidEntities;
+            ecs.validIndex.validEntityIndexes[entity.id] = validEntities.size();
             validEntities.emplace_back(entity);
 
             return entity;
@@ -225,27 +238,27 @@ namespace Tecs {
 
             // Invalidate the entity and all of its Components
             RemoveComponents<AllComponentTypes...>(e);
-            base->ecs.validIndex.writeComponents[e.id][0] = false;
-            size_t validIndex = base->ecs.validIndex.validEntityIndexes[e.id];
-            base->ecs.validIndex.writeValidEntities[validIndex] = Entity();
-            base->ecs.freeEntities.emplace_back(e);
+            ecs.validIndex.writeComponents[e.id][0] = false;
+            size_t validIndex = ecs.validIndex.validEntityIndexes[e.id];
+            ecs.validIndex.writeValidEntities[validIndex] = Entity();
+            ecs.freeEntities.emplace_back(e);
         }
 
         template<typename... Tn>
         inline bool Has(const Entity &e) const {
-            if (is_add_remove_allowed<LockType>()) {
-                const auto &validBitset = base->ecs.validIndex.writeComponents[e.id];
-                return base->ecs.template BitsetHas<Tn...>(validBitset);
+            if (permissions[0]) {
+                const auto &validBitset = ecs.validIndex.writeComponents[e.id];
+                return ecs.template BitsetHas<Tn...>(validBitset);
             } else {
-                const auto &validBitset = base->ecs.validIndex.readComponents[e.id];
-                return base->ecs.template BitsetHas<Tn...>(validBitset);
+                const auto &validBitset = ecs.validIndex.readComponents[e.id];
+                return ecs.template BitsetHas<Tn...>(validBitset);
             }
         }
 
         template<typename... Tn>
         inline bool Had(const Entity &e) const {
-            const auto &validBitset = base->ecs.validIndex.readComponents[e.id];
-            return base->ecs.template BitsetHas<Tn...>(validBitset);
+            const auto &validBitset = ecs.validIndex.readComponents[e.id];
+            return ecs.template BitsetHas<Tn...>(validBitset);
         }
 
         template<typename T, typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
@@ -254,24 +267,24 @@ namespace Tecs {
             static_assert(is_write_allowed<T, LockType>() || std::is_const<ReturnType>(),
                 "Can't get non-const reference of read only Component.");
 
-            auto &validBitset = is_add_remove_allowed<LockType>() ? base->ecs.validIndex.writeComponents[e.id]
-                                                                  : base->ecs.validIndex.readComponents[e.id];
-            if (!base->ecs.template BitsetHas<T>(validBitset)) {
+            auto &validBitset =
+                permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    base->ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
-                    validBitset[1 + base->ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = base->ecs.template Storage<T>().writeValidEntities;
-                    base->ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                    ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
                     validEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
                 }
             }
-            if (is_write_allowed<T, LockType>()) {
-                return base->ecs.template Storage<T>().writeComponents[e.id];
+            if (permissions[1 + ecs.template GetComponentIndex<T>()]) {
+                return ecs.template Storage<T>().writeComponents[e.id];
             } else {
-                return base->ecs.template Storage<T>().readComponents[e.id];
+                return ecs.template Storage<T>().readComponents[e.id];
             }
         }
 
@@ -279,51 +292,51 @@ namespace Tecs {
         inline const T &GetPrevious(const Entity &e) const {
             static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
 
-            const auto &validBitset = base->ecs.validIndex.readComponents[e.id];
-            if (!base->ecs.template BitsetHas<T>(validBitset)) {
+            const auto &validBitset = ecs.validIndex.readComponents[e.id];
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
             }
-            return base->ecs.template Storage<T>().readComponents[e.id];
+            return ecs.template Storage<T>().readComponents[e.id];
         }
 
         template<typename T>
         inline T &Set(const Entity &e, T &value) {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
 
-            auto &validBitset = is_add_remove_allowed<LockType>() ? base->ecs.validIndex.writeComponents[e.id]
-                                                                  : base->ecs.validIndex.readComponents[e.id];
-            if (!base->ecs.template BitsetHas<T>(validBitset)) {
+            auto &validBitset =
+                permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[1 + base->ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = base->ecs.template Storage<T>().writeValidEntities;
-                    base->ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
                     validEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
                 }
             }
-            return base->ecs.template Storage<T>().writeComponents[e.id] = value;
+            return ecs.template Storage<T>().writeComponents[e.id] = value;
         }
 
         template<typename T, typename... Args>
         inline T &Set(const Entity &e, Args... args) {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
 
-            auto &validBitset = is_add_remove_allowed<LockType>() ? base->ecs.validIndex.writeComponents[e.id]
-                                                                  : base->ecs.validIndex.readComponents[e.id];
-            if (!base->ecs.template BitsetHas<T>(validBitset)) {
+            auto &validBitset =
+                permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
+            if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[1 + base->ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = base->ecs.template Storage<T>().writeValidEntities;
-                    base->ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
                     validEntities.emplace_back(e);
                 } else {
                     throw std::runtime_error(
                         std::string("Entity does not have a component of type: ") + typeid(T).name());
                 }
             }
-            return base->ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
+            return ecs.template Storage<T>().writeComponents[e.id] = std::move(T(args...));
         }
 
         template<typename... Tn>
@@ -347,9 +360,9 @@ namespace Tecs {
     private:
         template<typename T>
         inline void AllocateComponents(size_t count) {
-            size_t newSize = base->ecs.template Storage<T>().writeComponents.size() + count;
-            base->ecs.template Storage<T>().writeComponents.resize(newSize);
-            base->ecs.template Storage<T>().validEntityIndexes.resize(newSize);
+            size_t newSize = ecs.template Storage<T>().writeComponents.size() + count;
+            ecs.template Storage<T>().writeComponents.resize(newSize);
+            ecs.template Storage<T>().validEntityIndexes.resize(newSize);
         }
 
         template<typename T, typename T2, typename... Tn>
@@ -360,11 +373,11 @@ namespace Tecs {
 
         template<typename T>
         inline void RemoveComponents(const Entity &e) {
-            auto &validBitset = base->ecs.validIndex.writeComponents[e.id];
-            if (base->ecs.template BitsetHas<T>(validBitset)) {
-                validBitset[1 + base->ecs.template GetComponentIndex<T>()] = false;
-                size_t validIndex = base->ecs.template Storage<T>().validEntityIndexes[e.id];
-                base->ecs.template Storage<T>().writeValidEntities[validIndex] = Entity();
+            auto &validBitset = ecs.validIndex.writeComponents[e.id];
+            if (ecs.template BitsetHas<T>(validBitset)) {
+                validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
+                size_t validIndex = ecs.template Storage<T>().validEntityIndexes[e.id];
+                ecs.template Storage<T>().writeValidEntities[validIndex] = Entity();
             }
         }
 
@@ -374,6 +387,7 @@ namespace Tecs {
             RemoveComponents<T2, Tn...>(e);
         }
 
+        ECS<AllComponentTypes...> &ecs;
         std::shared_ptr<BaseTransaction<ECS<AllComponentTypes...>>> base;
 
         template<typename, typename...>
