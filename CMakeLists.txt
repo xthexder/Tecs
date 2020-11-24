@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-project(Tecs VERSION 0.2)
+project(Tecs VERSION 0.3)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS                 "/MP /EHsc")
     set(CMAKE_CXX_FLAGS_RELEASE         "/MD /O2")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "/MDd")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "/MDd /O2")
     set(CMAKE_CXX_FLAGS_DEBUG           "/MDd /DEBUG /ZI /FC")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS                 "-Wall -Werror")
