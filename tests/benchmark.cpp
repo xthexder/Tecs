@@ -4,6 +4,7 @@
 #include <Tecs.hh>
 #include <chrono>
 #include <cstring>
+#include <future>
 #include <iomanip>
 #include <thread>
 
@@ -15,7 +16,7 @@ static testing::ECS ecs;
 
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_COUNT 100000
-#define THREAD_COUNT 0
+#define SCRIPT_THREAD_COUNT 8
 
 #define TRANSFORM_DIVISOR 2
 #define RENDERABLE_DIVISOR 3
@@ -76,62 +77,51 @@ void renderThread() {
     std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
 }
 
-// static std::atomic_size_t scriptWorkerQueue;
-// static std::atomic<WriteLock<decltype(ecs), Script> *> scriptLock;
-
-void scriptWorkerThread(bool master) {
-    MultiTimer timer1("ScriptWorkerThread StartTransaction", master);
-    MultiTimer timer2("ScriptWorkerThread Run", master);
-    MultiTimer timer3("ScriptWorkerThread Unlock", master);
-    while (running) {
-        auto start = std::chrono::high_resolution_clock::now();
-        /*{
-            Timer t(timer);
-            if (master) {
-                WriteLock<decltype(ecs), Script> writeLock(ecs);
-                scriptWorkerQueue = 0;
-                scriptLock = &writeLock;
-
-                Timer t2(timer2);
-                while (running) {
-                    size_t entIndex = scriptWorkerQueue++;
-                    if (entIndex < validScripts.size()) {
-                        auto &script = scriptComponents[validScripts[entIndex]];
-                        // "Run" script
-                        for (int i = 0; i < script.data.size(); i++) {
-                            script.data[i]++;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                while (running && scriptWorkerQueue < THREAD_COUNT + validScripts.size()) {
-                    std::this_thread::yield();
-                }
-
-                scriptLock = nullptr;
-            } else {
-                auto &validScripts = scriptLock.WriteValidIndexes();
-                auto &scriptComponents = scripts.WriteComponents();
-
-                while (running) {
-                    size_t entIndex = scriptWorkerQueue++;
-                    if (entIndex < validScripts.size()) {
-                        auto &script = scriptComponents[validScripts[entIndex]];
-                        // "Run" script
-                        for (int i = 0; i < script.data.size(); i++) {
-                            script.data[i]++;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }*/
-        std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
+void scriptWorkerThread(
+    MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock, nonstd::span<Entity> entities) {
+    Timer t(*workerTimer);
+    for (auto &e : entities) {
+        auto &script = e.Get<Script>(lock);
+        // "Run" script
+        for (uint8_t &data : script.data) {
+            data++;
+        }
     }
 }
+
+#if SCRIPT_THREAD_COUNT > 0
+void scriptThread() {
+    MultiTimer timer1("ScriptThread StartTransaction");
+    MultiTimer timer2("ScriptThread Run");
+    MultiTimer timer3("ScriptThread Unlock");
+    MultiTimer workerTimer("ScriptWorkerThread Run");
+    std::future<void> workers[SCRIPT_THREAD_COUNT];
+    auto start = std::chrono::high_resolution_clock::now();
+    auto lastFrameEnd = start;
+    while (running) {
+        {
+            Timer t(timer1);
+            auto lock = ecs.StartTransaction<Write<Script>>();
+            t = timer2;
+            auto &entities = lock.PreviousEntitiesWith<Script>();
+            size_t workPerThread = entities.size() / SCRIPT_THREAD_COUNT;
+            size_t workOffset = 0;
+            for (auto &worker : workers) {
+                nonstd::span<Entity> subspan =
+                    entities.subspan(workOffset, std::min(workPerThread, entities.size() - workOffset));
+                worker = std::async(&scriptWorkerThread, &workerTimer, lock, subspan);
+                workOffset += workPerThread;
+            }
+            for (auto &worker : workers) {
+                worker.wait();
+            }
+            t = timer3;
+        }
+        lastFrameEnd += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds(1)) / 60;
+        std::this_thread::sleep_until(lastFrameEnd);
+    }
+}
+#endif
 
 void transformWorkerThread() {
     MultiTimer timer1("TransformWorkerThread StartTransaction");
@@ -226,22 +216,21 @@ int main(int argc, char **argv) {
         Timer t("Run threads");
         running = true;
 
-        std::thread threads[2 + THREAD_COUNT];
-        threads[0] = std::thread(renderThread);
-        threads[1] = std::thread(transformWorkerThread);
-        for (size_t i = 0; i < THREAD_COUNT; i++) {
-            threads[2 + i] = std::thread(scriptWorkerThread, i == 0);
-        }
+        auto render = std::async(&renderThread);
+        auto transform = std::async(&transformWorkerThread);
+#if SCRIPT_THREAD_COUNT > 0
+        auto script = std::async(&scriptThread);
+#endif
 
         std::this_thread::sleep_for(std::chrono::seconds(10));
 
         running = false;
 
-        threads[0].join();
-        threads[1].join();
-        for (size_t i = 0; i < THREAD_COUNT; i++) {
-            threads[2 + i].join();
-        }
+        render.wait();
+        transform.wait();
+#if SCRIPT_THREAD_COUNT > 0
+        script.wait();
+#endif
     }
 
     std::vector<Transform> transforms;
