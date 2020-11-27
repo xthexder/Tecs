@@ -94,8 +94,11 @@ void scriptThread() {
     MultiTimer timer1("ScriptThread StartTransaction");
     MultiTimer timer2("ScriptThread Run");
     MultiTimer timer3("ScriptThread Unlock");
-    MultiTimer workerTimer("ScriptWorkerThread Run");
+    MultiTimer workerTimers[SCRIPT_THREAD_COUNT];
     std::future<void> workers[SCRIPT_THREAD_COUNT];
+    for (size_t i = 0; i < SCRIPT_THREAD_COUNT; i++) {
+        workerTimers[i].Reset("ScriptWorker " + std::to_string(i) + " Run");
+    }
     auto start = std::chrono::high_resolution_clock::now();
     auto lastFrameEnd = start;
     while (running) {
@@ -106,10 +109,10 @@ void scriptThread() {
             auto &entities = lock.PreviousEntitiesWith<Script>();
             size_t workPerThread = entities.size() / SCRIPT_THREAD_COUNT;
             size_t workOffset = 0;
-            for (auto &worker : workers) {
+            for (size_t i = 0; i < SCRIPT_THREAD_COUNT; i++) {
                 nonstd::span<Entity> subspan =
                     entities.subspan(workOffset, std::min(workPerThread, entities.size() - workOffset));
-                worker = std::async(&scriptWorkerThread, &workerTimer, lock, subspan);
+                workers[i] = std::async(&scriptWorkerThread, &workerTimers[i], lock, subspan);
                 workOffset += workPerThread;
             }
             for (auto &worker : workers) {
