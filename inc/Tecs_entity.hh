@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Tecs_locks.hh"
-#include "Tecs_template_util.hh"
 
 #include <cstddef>
 #include <functional>
@@ -36,6 +35,12 @@ namespace Tecs {
 
         inline explicit operator bool() const {
             return id != std::numeric_limits<decltype(id)>::max();
+        }
+
+        // Alias lock.Exists<Tn...>(e) to allow e.Exists<Tn...>(lock)
+        template<typename LockType>
+        inline bool Exists(LockType &lock) const {
+            return lock.template Exists(*this);
         }
 
         // Alias lock.Has<Tn...>(e) to allow e.Has<Tn...>(lock)

@@ -18,6 +18,18 @@ static ECS ecs;
 int main(int argc, char **argv) {
     std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
 
+    Tecs::Observer<Tecs::EntityAdded> entityAddedObserver;
+    Tecs::Observer<Tecs::EntityRemoved> entityRemovedObserver;
+    Tecs::Observer<Tecs::Added<Transform>> transformAddedObserver;
+    Tecs::Observer<Tecs::Removed<Transform>> transformRemovedObserver;
+    {
+        Timer t("Test creating new observers");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        entityAddedObserver = writeLock.Watch<Tecs::EntityAdded>();
+        entityRemovedObserver = writeLock.Watch<Tecs::EntityRemoved>();
+        transformAddedObserver = writeLock.Watch<Tecs::Added<Transform>>();
+        transformRemovedObserver = writeLock.Watch<Tecs::Removed<Transform>>();
+    }
     {
         Timer t("Test adding each component type");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -65,6 +77,17 @@ int main(int argc, char **argv) {
             Assert(script.data[2] == 3, "Script component should have value [1, 2, (3), 4]");
             Assert(script.data[3] == 4, "Script component should have value [1, 2, 3, (4)]");
         }
+    }
+    {
+        Timer t("Test reading observers");
+        auto readLock = ecs.StartTransaction<>();
+        Tecs::EntityAdded event;
+        for (size_t i = 0; i < ENTITY_COUNT; i++) {
+            Assert(entityAddedObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
+            Assert(event.entity.id == i,
+                "Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
+        }
+        Assert(!entityAddedObserver.Poll(readLock, event), "Too many events triggered");
     }
     {
         Timer t("Test reading previous values");

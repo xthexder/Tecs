@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Tecs_storage.hh"
-#include "Tecs_template_util.hh"
 #include "Tecs_transaction.hh"
 
 #include <bitset>
 #include <cstddef>
 #include <deque>
+#include <tuple>
+#include <vector>
 
 namespace Tecs {
     /**
@@ -61,6 +62,8 @@ namespace Tecs {
 
     private:
         using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
+        template<typename Event>
+        using ObserverList = std::vector<std::deque<Event>>;
 
         template<size_t I, typename U>
         inline static constexpr size_t GetComponentIndex() {
@@ -73,14 +76,9 @@ namespace Tecs {
             }
         }
 
-        template<typename U>
+        template<typename... Un>
         inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
-            return validBitset[1 + GetComponentIndex<0, U>()];
-        }
-
-        template<typename U, typename U2, typename... Un>
-        inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
-            return BitsetHas<U>(validBitset) && BitsetHas<U2, Un...>(validBitset);
+            return (validBitset[1 + GetComponentIndex<0, Un>()] && ...);
         }
 
         template<typename T>
@@ -88,9 +86,21 @@ namespace Tecs {
             return std::get<ComponentIndex<T>>(indexes);
         }
 
+        template<typename T>
+        inline constexpr ObserverList<T> &Observers() {
+            return std::get<ObserverList<T>>(eventLists);
+        }
+
         ComponentIndex<ValidBitset> validIndex;
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
+
+        // clang-format off
+        std::tuple<ObserverList<EntityAdded>,
+                   ObserverList<EntityRemoved>,
+                   ObserverList<Added<Tn>>...,
+                   ObserverList<Removed<Tn>>...> eventLists;
+        // clang-format on
 
         template<typename, typename...>
         friend class Lock;

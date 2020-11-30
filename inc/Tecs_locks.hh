@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Tecs_template_util.hh"
-
+#include <tuple>
 #include <type_traits>
 
 namespace Tecs {
@@ -39,6 +38,10 @@ namespace Tecs {
     struct Write {};
     struct WriteAll {};
     struct AddRemove {};
+
+    // contains<T, Un...>::value is true if T is part of the set Un...
+    template<typename T, typename... Un>
+    struct contains : std::disjunction<std::is_same<T, Un>...> {};
 
     /*
      * Compile time helpers for determining lock permissions.

@@ -2,7 +2,7 @@
 
 #include "Tecs_entity.hh"
 #include "Tecs_locks.hh"
-#include "Tecs_template_util.hh"
+#include "Tecs_observer.hh"
 #include "nonstd/span.hpp"
 
 #include <bitset>
@@ -63,13 +63,21 @@ namespace Tecs {
                 auto &newValidList = this->ecs.validIndex.writeValidEntities;
                 auto &newValidIndexes = this->ecs.validIndex.validEntityIndexes;
                 newValidList.clear();
+                auto &oldBitsets = this->ecs.validIndex.readComponents;
                 auto &bitsets = this->ecs.validIndex.writeComponents;
+                auto &observers = this->ecs.template Observers<EntityAdded>();
                 for (size_t id = 0; id < bitsets.size(); id++) {
                     if (bitsets[id][0]) {
                         newValidIndexes[id] = newValidList.size();
                         newValidList.emplace_back(id);
+                        if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
+                            for (auto &observer : observers) {
+                                observer.emplace_back(Entity(id));
+                            }
+                        }
                     }
                 }
+
                 this->ecs.validIndex.template CommitWrite<true>();
             } else {
                 this->ecs.validIndex.RUnlock();
@@ -102,11 +110,19 @@ namespace Tecs {
                     auto &newValidList = this->ecs.template Storage<U>().writeValidEntities;
                     auto &newValidIndexes = this->ecs.template Storage<U>().validEntityIndexes;
                     newValidList.clear();
+                    auto &oldBitsets = this->ecs.validIndex.readComponents;
                     auto &bitsets = this->ecs.validIndex.writeComponents;
+                    auto &observers = this->ecs.template Observers<Added<U>>();
                     for (size_t id = 0; id < bitsets.size(); id++) {
                         if (this->ecs.template BitsetHas<U>(bitsets[id])) {
                             newValidIndexes[id] = newValidList.size();
                             newValidList.emplace_back(id);
+                            if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
+                                for (auto &observer : observers) {
+                                    observer.emplace_back(Entity(id),
+                                        this->ecs.template Storage<U>().writeComponents[id]);
+                                }
+                            }
                         }
                     }
                     this->ecs.template Storage<U>().template CommitWrite<true>();
@@ -178,15 +194,11 @@ namespace Tecs {
 
         template<typename T>
         inline constexpr const nonstd::span<Entity> PreviousEntitiesWith() const {
-            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
-
             return ecs.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
         inline constexpr const nonstd::span<Entity> EntitiesWith() const {
-            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
-
             if (permissions[0]) {
                 return ecs.template Storage<T>().writeValidEntities;
             } else {
@@ -246,6 +258,16 @@ namespace Tecs {
             ecs.freeEntities.emplace_back(e);
         }
 
+        inline bool Exists(const Entity &e) const {
+            if (permissions[0]) {
+                const auto &validBitset = ecs.validIndex.writeComponents[e.id];
+                return validBitset[0];
+            } else {
+                const auto &validBitset = ecs.validIndex.readComponents[e.id];
+                return validBitset[0];
+            }
+        }
+
         template<typename... Tn>
         inline bool Has(const Entity &e) const {
             if (permissions[0]) {
@@ -273,14 +295,18 @@ namespace Tecs {
                 permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
             if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
-                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
-                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
-                    validEntities.emplace_back(e);
+                    if (validBitset[0]) {
+                        ecs.template Storage<T>().writeComponents[e.id] = {}; // Reset value before allowing reading.
+                        validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                        auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                        ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                        validEntities.emplace_back(e);
+                    } else {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(e.id));
+                    }
                 } else {
                     throw std::runtime_error(
-                        std::string("Entity does not have a component of type: ") + typeid(T).name());
+                        "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
             if (permissions[1 + ecs.template GetComponentIndex<T>()]) {
@@ -296,7 +322,7 @@ namespace Tecs {
 
             const auto &validBitset = ecs.validIndex.readComponents[e.id];
             if (!ecs.template BitsetHas<T>(validBitset)) {
-                throw std::runtime_error(std::string("Entity does not have a component of type: ") + typeid(T).name());
+                throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
             }
             return ecs.template Storage<T>().readComponents[e.id];
         }
@@ -309,13 +335,17 @@ namespace Tecs {
                 permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
             if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
-                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
-                    validEntities.emplace_back(e);
+                    if (validBitset[0]) {
+                        validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                        auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                        ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                        validEntities.emplace_back(e);
+                    } else {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(e.id));
+                    }
                 } else {
                     throw std::runtime_error(
-                        std::string("Entity does not have a component of type: ") + typeid(T).name());
+                        "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
             return ecs.template Storage<T>().writeComponents[e.id] = value;
@@ -329,13 +359,17 @@ namespace Tecs {
                 permissions[0] ? ecs.validIndex.writeComponents[e.id] : ecs.validIndex.readComponents[e.id];
             if (!ecs.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
-                    auto &validEntities = ecs.template Storage<T>().writeValidEntities;
-                    ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
-                    validEntities.emplace_back(e);
+                    if (validBitset[0]) {
+                        validBitset[1 + ecs.template GetComponentIndex<T>()] = true;
+                        auto &validEntities = ecs.template Storage<T>().writeValidEntities;
+                        ecs.template Storage<T>().validEntityIndexes[e.id] = validEntities.size();
+                        validEntities.emplace_back(e);
+                    } else {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(e.id));
+                    }
                 } else {
                     throw std::runtime_error(
-                        std::string("Entity does not have a component of type: ") + typeid(T).name());
+                        "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
             return ecs.template Storage<T>().writeComponents[e.id] = T(std::forward<Args>(args)...);
@@ -346,6 +380,14 @@ namespace Tecs {
             static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
 
             RemoveComponents<Tn...>(e);
+        }
+
+        template<typename T>
+        inline Observer<T> Watch() {
+            static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
+
+            auto &eventList = ecs.template Observers<T>().emplace_back();
+            return Observer<T>(&eventList);
         }
 
         template<typename... PermissionsSubset>

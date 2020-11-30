@@ -8,7 +8,7 @@
 #include <string>
 
 namespace testing {
-    static inline void Assert(bool condition, const char *message) {
+    static inline void Assert(bool condition, const std::string message) {
         if (!condition) {
             std::stringstream ss;
             ss << "Assertion failed: " << message << std::endl;
