@@ -59,19 +59,29 @@ namespace Tecs {
         inline ~Transaction() {
             UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
-                // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
+                // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
                 auto &newValidList = this->ecs.validIndex.writeValidEntities;
                 auto &newValidIndexes = this->ecs.validIndex.validEntityIndexes;
+                auto &freeEntities = this->ecs.freeEntities;
                 newValidList.clear();
+                freeEntities.clear();
                 auto &oldBitsets = this->ecs.validIndex.readComponents;
                 auto &bitsets = this->ecs.validIndex.writeComponents;
-                auto &observers = this->ecs.template Observers<EntityAdded>();
+                auto &observersAdded = this->ecs.template Observers<EntityAdded>();
+                auto &observersRemoved = this->ecs.template Observers<EntityRemoved>();
                 for (size_t id = 0; id < bitsets.size(); id++) {
                     if (bitsets[id][0]) {
                         newValidIndexes[id] = newValidList.size();
                         newValidList.emplace_back(id);
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            for (auto &observer : observers) {
+                            for (auto &observer : observersAdded) {
+                                observer.emplace_back(Entity(id));
+                            }
+                        }
+                    } else {
+                        freeEntities.emplace_back(Entity(id));
+                        if (id < oldBitsets.size() && oldBitsets[id][0]) {
+                            for (auto &observer : observersRemoved) {
                                 observer.emplace_back(Entity(id));
                             }
                         }
@@ -112,16 +122,22 @@ namespace Tecs {
                     newValidList.clear();
                     auto &oldBitsets = this->ecs.validIndex.readComponents;
                     auto &bitsets = this->ecs.validIndex.writeComponents;
-                    auto &observers = this->ecs.template Observers<Added<U>>();
+                    auto &observersAdded = this->ecs.template Observers<Added<U>>();
+                    auto &observersRemoved = this->ecs.template Observers<Removed<U>>();
                     for (size_t id = 0; id < bitsets.size(); id++) {
                         if (this->ecs.template BitsetHas<U>(bitsets[id])) {
                             newValidIndexes[id] = newValidList.size();
                             newValidList.emplace_back(id);
                             if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                                for (auto &observer : observers) {
+                                for (auto &observer : observersAdded) {
                                     observer.emplace_back(Entity(id),
                                         this->ecs.template Storage<U>().writeComponents[id]);
                                 }
+                            }
+                        } else if ((id >= bitsets.size() || !this->ecs.template BitsetHas<U>(bitsets[id])) &&
+                                   (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id]))) {
+                            for (auto &observer : observersRemoved) {
+                                observer.emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
                             }
                         }
                     }
@@ -255,14 +271,15 @@ namespace Tecs {
             ecs.validIndex.writeComponents[e.id][0] = false;
             size_t validIndex = ecs.validIndex.validEntityIndexes[e.id];
             ecs.validIndex.writeValidEntities[validIndex] = Entity();
-            ecs.freeEntities.emplace_back(e);
         }
 
         inline bool Exists(const Entity &e) const {
             if (permissions[0]) {
+                if (e.id >= ecs.validIndex.writeComponents.size()) return false;
                 const auto &validBitset = ecs.validIndex.writeComponents[e.id];
                 return validBitset[0];
             } else {
+                if (e.id >= ecs.validIndex.readComponents.size()) return false;
                 const auto &validBitset = ecs.validIndex.readComponents[e.id];
                 return validBitset[0];
             }
@@ -271,9 +288,11 @@ namespace Tecs {
         template<typename... Tn>
         inline bool Has(const Entity &e) const {
             if (permissions[0]) {
+                if (e.id >= ecs.validIndex.writeComponents.size()) return false;
                 const auto &validBitset = ecs.validIndex.writeComponents[e.id];
                 return ecs.template BitsetHas<Tn...>(validBitset);
             } else {
+                if (e.id >= ecs.validIndex.readComponents.size()) return false;
                 const auto &validBitset = ecs.validIndex.readComponents[e.id];
                 return ecs.template BitsetHas<Tn...>(validBitset);
             }
@@ -281,6 +300,7 @@ namespace Tecs {
 
         template<typename... Tn>
         inline bool Had(const Entity &e) const {
+            if (e.id >= ecs.validIndex.readComponents.size()) return false;
             const auto &validBitset = ecs.validIndex.readComponents[e.id];
             return ecs.template BitsetHas<Tn...>(validBitset);
         }

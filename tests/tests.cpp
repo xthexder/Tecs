@@ -35,13 +35,19 @@ int main(int argc, char **argv) {
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
+            Assert(e.id == i, "Expected Nth entity id to be " + std::to_string(i) + ", was " + std::to_string(e.id));
             Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
 
             // Test adding each component type
-            Transform value(0.0, 0.0, 0.0, 1);
+            Transform value(1.0, 0.0, 0.0, 1);
             writeLock.Set<Transform>(e, value);
             Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
             Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+
+            // Test making some changes to ensure values are copied
+            value.pos[0] = 2.0;
+            auto &transform = writeLock.Get<Transform>(e);
+            transform.pos[0] = 0.0;
 
             writeLock.Set<Renderable>(e, "entity" + std::to_string(i));
             Assert(writeLock.Has<Transform, Renderable>(e), "Entity should have a Transform and Renderable component");
@@ -79,18 +85,122 @@ int main(int argc, char **argv) {
         }
     }
     {
-        Timer t("Test reading observers");
-        auto readLock = ecs.StartTransaction<>();
-        Tecs::EntityAdded event;
-        for (size_t i = 0; i < ENTITY_COUNT; i++) {
-            Assert(entityAddedObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
-            Assert(event.entity.id == i,
-                "Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
+        Timer t("Test add remove entities in single transaction");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        for (size_t i = 0; i < 100; i++) {
+            Tecs::Entity e = writeLock.NewEntity();
+            Assert(e.id == ENTITY_COUNT + i,
+                "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e.id));
+            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+
+            writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
+            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
+            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+
+            // Try removing an entity in the same transaction it was created in
+            writeLock.Unset<Transform>(e);
+            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity has extra components");
+            e.Destroy(writeLock);
+            Assert(!writeLock.Exists(e), "Entity still exists");
         }
-        Assert(!entityAddedObserver.Poll(readLock, event), "Too many events triggered");
     }
     {
-        Timer t("Test reading previous values");
+        Timer t("Test add remove entities in two transactions");
+        std::vector<Tecs::Entity> entityList;
+        {
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            for (size_t i = 0; i < 100; i++) {
+                Tecs::Entity e = writeLock.NewEntity();
+                Assert(e.id == ENTITY_COUNT + i,
+                    "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(e.id));
+                Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+
+                entityList.emplace_back(e);
+
+                writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
+                Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
+                Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+
+                // Try setting the value twice in one transaction
+                writeLock.Set<Transform>(e, 3.0, 1.0, 7.0, 3);
+            }
+        }
+        {
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            for (Tecs::Entity &e : entityList) {
+                e.Destroy(writeLock);
+            }
+        }
+    }
+    {
+        Timer t("Test reading observers");
+        auto readLock = ecs.StartTransaction<>();
+        {
+            Tecs::EntityAdded entityAdded;
+            for (size_t i = 0; i < ENTITY_COUNT; i++) {
+                Assert(entityAddedObserver.Poll(readLock, entityAdded), "Expected another event #" + std::to_string(i));
+                Assert(entityAdded.entity.id == i,
+                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(entityAdded.entity.id));
+            }
+            for (size_t i = 0; i < 100; i++) {
+                Assert(entityAddedObserver.Poll(readLock, entityAdded),
+                    "Expected another event #" + std::to_string(ENTITY_COUNT + i));
+                Assert(entityAdded.entity.id == ENTITY_COUNT + i,
+                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(entityAdded.entity.id));
+            }
+            Assert(!entityAddedObserver.Poll(readLock, entityAdded), "Too many events triggered");
+        }
+        {
+            Tecs::Added<Transform> transformAdded;
+            for (size_t i = 0; i < ENTITY_COUNT; i++) {
+                Assert(transformAddedObserver.Poll(readLock, transformAdded),
+                    "Expected another event #" + std::to_string(i));
+                Assert(transformAdded.entity.id == i,
+                    "Expected Entity id to be " + std::to_string(i) + ", was " +
+                        std::to_string(transformAdded.entity.id));
+                Assert(transformAdded.component == Transform(0.0, 0.0, 0.0, 1),
+                    "Expected component to be origin transform");
+            }
+            for (size_t i = 0; i < 100; i++) {
+                Assert(transformAddedObserver.Poll(readLock, transformAdded),
+                    "Expected another event #" + std::to_string(ENTITY_COUNT + i));
+                Assert(transformAdded.entity.id == ENTITY_COUNT + i,
+                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(transformAdded.entity.id));
+                Assert(transformAdded.component == Transform(3.0, 1.0, 7.0, 3),
+                    "Expected component to be initial transform");
+            }
+            Assert(!transformAddedObserver.Poll(readLock, transformAdded), "Too many events triggered");
+        }
+        {
+            Tecs::Removed<Transform> transformRemoved;
+            for (size_t i = 0; i < 100; i++) {
+                Assert(transformRemovedObserver.Poll(readLock, transformRemoved),
+                    "Expected another event #" + std::to_string(i));
+                Assert(transformRemoved.entity.id == ENTITY_COUNT + i,
+                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(transformRemoved.entity.id));
+                Assert(transformRemoved.component == Transform(3.0, 1.0, 7.0, 3),
+                    "Expected renderable name to be updated transform");
+            }
+            Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "Too many events triggered");
+        }
+        {
+            Tecs::EntityRemoved entityRemoved;
+            for (size_t i = 0; i < 100; i++) {
+                Assert(entityRemovedObserver.Poll(readLock, entityRemoved),
+                    "Expected another event #" + std::to_string(ENTITY_COUNT + i));
+                Assert(entityRemoved.entity.id == ENTITY_COUNT + i,
+                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(entityRemoved.entity.id));
+            }
+            Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "Too many events triggered");
+        }
+    }
+    {
+        Timer t("Test read-modify-write values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
         size_t entityCount = 0;
@@ -149,6 +259,18 @@ int main(int argc, char **argv) {
         e.Get<Script>(transaction).data[3] = 88;
         Tecs::Lock<ECS, Tecs::Read<Script>> lock = transaction;
         Assert(e.Get<Script>(lock).data[3] == 88, "Script data should be set to 88");
+    }
+    {
+        Timer t("Test reading observers again");
+        auto readLock = ecs.StartTransaction<>();
+        Tecs::EntityAdded entityAdded;
+        Tecs::EntityRemoved entityRemoved;
+        Tecs::Added<Transform> transformAdded;
+        Tecs::Removed<Transform> transformRemoved;
+        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
+        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
+        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
+        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
     }
     {
         Timer t("Test remove while iterating");
