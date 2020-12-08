@@ -38,7 +38,7 @@ correct permissions.
 | Operation                                        | Required Permissions | Description                                                                |
 |--------------------------------------------------|----------------------|----------------------------------------------------------------------------|
 | `bool Entity::Exists`                            | `Read<Any>`          | Check if an Entity is valid and exists in the ECS instance.                |
-| `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity current has a Component of type T.                      |
+| `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity currently has a Component of type T.                    |
 | `bool Entity::Had<T>`                            | `Read<Any>`          | Check if an Entity had a Component of T at the start of the Transaction.   |
 | `const T &Entity::Get<T>`                        | `Read<T>`            | Read the current value of an Entity's T Component.                         |
 | `T &Entity::Get<T>`                              | `Write<T>`           | Get a mutable reference to the current value of an Entity's T Component.   |
