@@ -1,13 +1,14 @@
 #pragma once
 
 #include "Tecs_entity.hh"
+#include "Tecs_observer.hh"
 #include "Tecs_transaction.hh"
 
 #include <atomic>
 #include <cstddef>
+#include <set>
 #include <thread>
 #include <vector>
-#include <set>
 
 #ifndef TECS_SPINLOCK_RETRY_YIELD
     #define TECS_SPINLOCK_RETRY_YIELD 10
@@ -148,6 +149,8 @@ namespace Tecs {
         std::vector<Entity> writeValidEntities;
         std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
 
+        template<typename...>
+        friend class ECS;
         template<typename, typename...>
         friend class Lock;
         template<typename, typename...>
