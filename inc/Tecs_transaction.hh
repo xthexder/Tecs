@@ -75,14 +75,14 @@ namespace Tecs {
                         newValidList.emplace_back(id);
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
                             for (auto &observer : observersAdded) {
-                                observer.emplace_back(Entity(id));
+                                observer->emplace_back(Entity(id));
                             }
                         }
                     } else {
                         freeEntities.emplace_back(Entity(id));
                         if (id < oldBitsets.size() && oldBitsets[id][0]) {
                             for (auto &observer : observersRemoved) {
-                                observer.emplace_back(Entity(id));
+                                observer->emplace_back(Entity(id));
                             }
                         }
                     }
@@ -130,14 +130,14 @@ namespace Tecs {
                             newValidList.emplace_back(id);
                             if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
                                 for (auto &observer : observersAdded) {
-                                    observer.emplace_back(Entity(id),
+                                    observer->emplace_back(Entity(id),
                                         this->ecs.template Storage<U>().writeComponents[id]);
                                 }
                             }
                         } else if ((id >= bitsets.size() || !this->ecs.template BitsetHas<U>(bitsets[id])) &&
                                    (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id]))) {
                             for (auto &observer : observersRemoved) {
-                                observer.emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
+                                observer->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
                             }
                         }
                     }
@@ -199,7 +199,7 @@ namespace Tecs {
 
         // Reference an existing transaction
         template<typename... PermissionsSource>
-        inline Lock(Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
+        inline Lock(const Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
             : permissions(source.permissions), ecs(source.base->ecs), base(source.base) {
             using SourceLockType = Lock<ECS<AllComponentTypes...>, PermissionsSource...>;
             static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
@@ -234,7 +234,7 @@ namespace Tecs {
             }
         }
 
-        inline Entity NewEntity() {
+        inline Entity NewEntity() const {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
             Entity entity;
@@ -263,7 +263,7 @@ namespace Tecs {
             return entity;
         }
 
-        inline void DestroyEntity(Entity e) {
+        inline void DestroyEntity(Entity e) const {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
             // Invalidate the entity and all of its Components
@@ -348,7 +348,7 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline T &Set(const Entity &e, T &value) {
+        inline T &Set(const Entity &e, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
 
             auto &validBitset =
@@ -372,7 +372,7 @@ namespace Tecs {
         }
 
         template<typename T, typename... Args>
-        inline T &Set(const Entity &e, Args &&... args) {
+        inline T &Set(const Entity &e, Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
 
             auto &validBitset =
@@ -396,22 +396,31 @@ namespace Tecs {
         }
 
         template<typename... Tn>
-        inline void Unset(const Entity &e) {
+        inline void Unset(const Entity &e) const {
             static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
 
             RemoveComponents<Tn...>(e);
         }
 
-        template<typename T>
-        inline Observer<T> Watch() {
+        template<typename Event>
+        inline Observer<ECS<AllComponentTypes...>, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
-            auto &eventList = ecs.template Observers<T>().emplace_back();
-            return Observer<T>(&eventList);
+            auto &eventList = ecs.template Observers<Event>().emplace_back(std::make_shared<std::deque<Event>>());
+            return Observer(ecs, eventList);
+        }
+
+        template<typename Event>
+        inline void StopWatching(Observer<ECS<AllComponentTypes...>, Event> &observer) const {
+            static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
+            auto eventList = observer.eventListWeak.lock();
+            auto &observers = ecs.template Observers<Event>();
+            observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+            observer.eventListWeak.reset();
         }
 
         template<typename... PermissionsSubset>
-        inline Lock<ECS<AllComponentTypes...>, PermissionsSubset...> Subset() {
+        inline Lock<ECS<AllComponentTypes...>, PermissionsSubset...> Subset() const {
             using NewLockType = Lock<ECS<AllComponentTypes...>, PermissionsSubset...>;
             static_assert(is_add_remove_allowed<LockType>() || !is_add_remove_allowed<NewLockType>(),
                 "AddRemove permission is missing.");
@@ -423,20 +432,20 @@ namespace Tecs {
 
     private:
         template<typename T>
-        inline void AllocateComponents(size_t count) {
+        inline void AllocateComponents(size_t count) const {
             size_t newSize = ecs.template Storage<T>().writeComponents.size() + count;
             ecs.template Storage<T>().writeComponents.resize(newSize);
             ecs.template Storage<T>().validEntityIndexes.resize(newSize);
         }
 
         template<typename T, typename T2, typename... Tn>
-        inline void AllocateComponents(size_t count) {
+        inline void AllocateComponents(size_t count) const {
             AllocateComponents<T>(count);
             AllocateComponents<T2, Tn...>(count);
         }
 
         template<typename T>
-        inline void RemoveComponents(const Entity &e) {
+        inline void RemoveComponents(const Entity &e) const {
             auto &validBitset = ecs.validIndex.writeComponents[e.id];
             if (ecs.template BitsetHas<T>(validBitset)) {
                 validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
@@ -446,7 +455,7 @@ namespace Tecs {
         }
 
         template<typename T, typename T2, typename... Tn>
-        inline void RemoveComponents(const Entity &e) {
+        inline void RemoveComponents(const Entity &e) const {
             RemoveComponents<T>(e);
             RemoveComponents<T2, Tn...>(e);
         }

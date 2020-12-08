@@ -63,7 +63,7 @@ namespace Tecs {
     private:
         using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
         template<typename Event>
-        using ObserverList = std::vector<std::deque<Event>>;
+        using ObserverList = std::vector<std::shared_ptr<std::deque<Event>>>;
 
         template<size_t I, typename U>
         inline static constexpr size_t GetComponentIndex() {
@@ -86,9 +86,9 @@ namespace Tecs {
             return std::get<ComponentIndex<T>>(indexes);
         }
 
-        template<typename T>
-        inline constexpr ObserverList<T> &Observers() {
-            return std::get<ObserverList<T>>(eventLists);
+        template<typename Event>
+        inline constexpr ObserverList<Event> &Observers() {
+            return std::get<ObserverList<Event>>(eventLists);
         }
 
         ComponentIndex<ValidBitset> validIndex;

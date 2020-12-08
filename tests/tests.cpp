@@ -18,10 +18,10 @@ static ECS ecs;
 int main(int argc, char **argv) {
     std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
 
-    Tecs::Observer<Tecs::EntityAdded> entityAddedObserver;
-    Tecs::Observer<Tecs::EntityRemoved> entityRemovedObserver;
-    Tecs::Observer<Tecs::Added<Transform>> transformAddedObserver;
-    Tecs::Observer<Tecs::Removed<Transform>> transformRemovedObserver;
+    Tecs::Observer<ECS, Tecs::EntityAdded> entityAddedObserver;
+    Tecs::Observer<ECS, Tecs::EntityRemoved> entityRemovedObserver;
+    Tecs::Observer<ECS, Tecs::Added<Transform>> transformAddedObserver;
+    Tecs::Observer<ECS, Tecs::Removed<Transform>> transformRemovedObserver;
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -273,6 +273,26 @@ int main(int argc, char **argv) {
         Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
     }
     {
+        Timer t("Test stopping observers");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        entityAddedObserver.Stop(writeLock);
+        entityRemovedObserver.Stop(writeLock);
+        transformAddedObserver.Stop(writeLock);
+        transformRemovedObserver.Stop(writeLock);
+    }
+    {
+        Timer t("Test reading observers again");
+        auto readLock = ecs.StartTransaction<>();
+        Tecs::EntityAdded entityAdded;
+        Tecs::EntityRemoved entityRemoved;
+        Tecs::Added<Transform> transformAdded;
+        Tecs::Removed<Transform> transformRemoved;
+        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
+        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
+        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
+        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
+    }
+    {
         Timer t("Test remove while iterating");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -435,6 +455,18 @@ int main(int argc, char **argv) {
         TestReadLock(writeLockAll);
         TestWriteLock(writeLockAll);
         TestAddRemoveLock(writeLockAll);
+    }
+    {
+        Timer t("Test reading observers again");
+        auto readLock = ecs.StartTransaction<>();
+        Tecs::EntityAdded entityAdded;
+        Tecs::EntityRemoved entityRemoved;
+        Tecs::Added<Transform> transformAdded;
+        Tecs::Removed<Transform> transformRemoved;
+        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
+        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
+        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
+        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
     }
 
     return 0;

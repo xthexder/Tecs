@@ -4,6 +4,8 @@
 #include "Tecs_locks.hh"
 
 #include <deque>
+#include <memory>
+#include <thread>
 #include <tuple>
 
 namespace Tecs {
@@ -39,14 +41,16 @@ namespace Tecs {
         EntityRemoved(const Entity &entity) : entity(entity) {}
     };
 
-    template<typename EventType>
+    template<typename ECSType, typename EventType>
     class Observer {
     public:
-        Observer(std::deque<EventType> *eventList = nullptr) : eventList(eventList) {}
+        Observer() : ecs(nullptr) {}
+        Observer(ECSType &ecs, std::shared_ptr<std::deque<EventType>> &eventList)
+            : ecs(&ecs), eventListWeak(eventList) {}
 
-        template<typename ECSType>
-        bool Poll(Lock<ECSType> lock, EventType &eventOut) {
-            if (eventList != nullptr && !eventList->empty()) {
+        bool Poll(Lock<ECSType> lock, EventType &eventOut) const {
+            auto eventList = eventListWeak.lock();
+            if (eventList && !eventList->empty()) {
                 eventOut = eventList->front();
                 eventList->pop_front();
                 return true;
@@ -54,7 +58,20 @@ namespace Tecs {
             return false;
         }
 
+        void Stop(Lock<ECSType, AddRemove> lock) {
+            lock.StopWatching(*this);
+        }
+
+        friend bool operator==(
+            const std::shared_ptr<std::deque<EventType>> &lhs, const Observer<ECSType, EventType> &rhs) {
+            return lhs == rhs.eventListWeak.lock();
+        }
+
     private:
-        std::deque<EventType> *eventList;
+        ECSType *ecs;
+        std::weak_ptr<std::deque<EventType>> eventListWeak;
+
+        template<typename, typename...>
+        friend class Lock;
     };
 }; // namespace Tecs

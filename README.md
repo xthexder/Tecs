@@ -1,4 +1,4 @@
-# Tecs (Transactional, Thread-safe, Templated ECS) [![Build status](https://badge.buildkite.com/48e772bb4b965d2edaa01fb82f13809680c2b060fc7cf3e7ae.svg)](https://buildkite.com/frustra/tecs)
+# Tecs (Thin, Transactional, Thread-safe ECS) [![Build status](https://badge.buildkite.com/48e772bb4b965d2edaa01fb82f13809680c2b060fc7cf3e7ae.svg)](https://buildkite.com/frustra/tecs)
 
 The goal of Tecs is to facilitate data storage and transfer between multiple threads,
 with as little overhead as possible.
