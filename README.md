@@ -55,6 +55,13 @@ correct permissions.
 | `bool Observer::Poll`        | `Read<Any>`          | Read the next observered event. |
 | `void Observer::Stop`        | `AddRemove`          | Stop watching for an event.     |
 
+### Event Types
+
+ - `EntityAdded`
+ - `EntityRemoved`
+ - `Added<ComponentType>`
+ - `Removed<ComponentType>`
+
 ## Examples
 
 example.hh
