@@ -15,6 +15,7 @@ compiled output.
  - Context-switch free lock aquisision
  - Minimal read/write overhead for existing components
  - Efficient memory layout for maximum cache usage
+ - Observer pattern for watching creations and deletions
 
 ### Theory of Operation
 
@@ -36,6 +37,7 @@ correct permissions.
 
 | Operation                                        | Required Permissions | Description                                                                |
 |--------------------------------------------------|----------------------|----------------------------------------------------------------------------|
+| `bool Entity::Exists`                            | `Read<Any>`          | Check if an Entity is valid and exists in the ECS instance.                |
 | `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity current has a Component of type T.                      |
 | `bool Entity::Had<T>`                            | `Read<Any>`          | Check if an Entity had a Component of T at the start of the Transaction.   |
 | `const T &Entity::Get<T>`                        | `Read<T>`            | Read the current value of an Entity's T Component.                         |
@@ -45,6 +47,13 @@ correct permissions.
 | `// New Component` <br> `T &Entity::Set<T>`      | `AddRemove`          | Add a new Component of type T to an Entity, or replace the current value.  |
 | `void Entity::Unset<T>`                          | `AddRemove`          | Remove the T Component from an Entity.                                     |
 
+### Event Operations
+
+| Operation                    | Required Permissions | Description                     |
+|------------------------------|----------------------|---------------------------------|
+| `Observer<E> Lock::Watch<E>` | `AddRemove`          | Start watching for an event E.  |
+| `bool Observer::Poll`        | `Read<Any>`          | Read the next observered event. |
+| `void Observer::Stop`        | `AddRemove`          | Stop watching for an event.     |
 
 ## Examples
 

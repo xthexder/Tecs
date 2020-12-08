@@ -41,6 +41,13 @@ namespace Tecs {
         EntityRemoved(const Entity &entity) : entity(entity) {}
     };
 
+    /**
+     * An Observer is a handle to an event queue. The queue can be consumed from within any transaction. Observer
+     * handles should be local to a thread, and not shared.
+     *
+     * An Observer will persist until the ECS instance is decontructed, unless Observer::Stop() is called from within an
+     * AddRemove Transaction.
+     */
     template<typename ECSType, typename EventType>
     class Observer {
     public:
@@ -48,6 +55,10 @@ namespace Tecs {
         Observer(ECSType &ecs, std::shared_ptr<std::deque<EventType>> &eventList)
             : ecs(&ecs), eventListWeak(eventList) {}
 
+        /**
+         * Poll for the next event that occured. Returns false if there are no more events.
+         * Events will be returned in the order they occured, up until the start of the current transaction.
+         */
         bool Poll(Lock<ECSType> lock, EventType &eventOut) const {
             auto eventList = eventListWeak.lock();
             if (eventList && !eventList->empty()) {
