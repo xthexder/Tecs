@@ -468,6 +468,48 @@ int main(int argc, char **argv) {
         Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
         Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
     }
+    {
+        Timer t("Test cross-component write commit");
+        std::thread blockingThread;
+        { // WriteAll Transaction will commit to all components while another transaction is blocking
+            auto writeLock = ecs.StartTransaction<Tecs::WriteAll>();
+
+            for (Tecs::Entity e : writeLock.EntitiesWith<Transform>()) {
+                auto &transform = e.Get<Transform>(writeLock);
+                transform.pos[1] = transform.pos[0] + 1;
+            }
+            for (Tecs::Entity e : writeLock.EntitiesWith<Renderable>()) {
+                auto &renderable = e.Get<Renderable>(writeLock);
+                renderable.name = "foo" + std::to_string(e.id);
+            }
+            for (Tecs::Entity e : writeLock.EntitiesWith<Script>()) {
+                auto &script = e.Get<Script>(writeLock);
+                script.data[1] = script.data[0] + 1;
+            }
+
+            // Start another write transaction while this one is active to ensure it blocks.
+            blockingThread = std::thread([] {
+                // Script is the last component in the ECS, and is the first to be commited / unlocked.
+                auto lock = ecs.StartTransaction<Tecs::ReadAll, Tecs::Write<Script>>();
+
+                for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+                    Assert(e.Get<Transform>(lock).pos[1] == 2, "Expected position.y to be 2");
+                }
+                for (Tecs::Entity e : lock.EntitiesWith<Renderable>()) {
+                    Assert(e.Get<Renderable>(lock).name == ("foo" + std::to_string(e.id)),
+                        "Expected renderable.name to be foo" + std::to_string(e.id));
+                }
+                for (Tecs::Entity e : lock.EntitiesWith<Script>()) {
+                    Assert(e.Get<Script>(lock).data[1] == 2, "Expected script[1] to be 2");
+                }
+            });
+
+            // Ensure the blockingThread has time to start before we commit.
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        blockingThread.join();
+    }
 
     return 0;
 }
