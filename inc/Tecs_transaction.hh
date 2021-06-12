@@ -48,105 +48,185 @@ namespace Tecs {
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &ecs) : BaseTransaction<ECS<AllComponentTypes...>>(ecs) {
-            if (is_add_remove_allowed<LockType>()) {
-                ecs.validIndex.StartWrite();
-            } else {
-                ecs.validIndex.RLock();
+            std::bitset<1 + sizeof...(AllComponentTypes)> acquired;
+            // Templated lambda functions for Lock/Unlock so they can be looped over at runtime.
+            std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
+                [&ecs](bool block) {
+                    if (is_add_remove_allowed<LockType>()) {
+                        return ecs.validIndex.WriteLock(block);
+                    } else {
+                        return ecs.validIndex.ReadLock(block);
+                    }
+                },
+                [&ecs](bool block) {
+                    if (is_write_allowed<AllComponentTypes, LockType>()) {
+                        return ecs.template Storage<AllComponentTypes>().WriteLock(block);
+                    } else if (is_read_allowed<AllComponentTypes, LockType>()) {
+                        return ecs.template Storage<AllComponentTypes>().ReadLock(block);
+                    }
+                    // This component type isn't part of the lock, skip.
+                    return true;
+                }...};
+            std::array<std::function<void()>, acquired.size()> unlockFuncs = {
+                [&ecs]() {
+                    if (is_add_remove_allowed<LockType>()) {
+                        return ecs.validIndex.WriteUnlock();
+                    } else {
+                        return ecs.validIndex.ReadUnlock();
+                    }
+                },
+                [&ecs]() {
+                    if (is_write_allowed<AllComponentTypes, LockType>()) {
+                        ecs.template Storage<AllComponentTypes>().WriteUnlock();
+                    } else if (is_read_allowed<AllComponentTypes, LockType>()) {
+                        ecs.template Storage<AllComponentTypes>().ReadUnlock();
+                    }
+                    // This component type isn't part of the lock, skip.
+                }...};
+
+            // Attempt to lock all applicable components and rollback if not all locks can be immediately acquired.
+            // This should only block while no locks are held to prevent deadlocks.
+            bool rollback = false;
+            for (size_t i = 0; !acquired.all(); i = (i + 1) % acquired.size()) {
+                if (rollback) {
+                    if (acquired[i]) {
+                        unlockFuncs[i]();
+                        acquired[i] = false;
+                        continue;
+                    } else if (acquired.none()) {
+                        rollback = false;
+                    }
+                }
+                if (!rollback) {
+                    if (lockFuncs[i](acquired.none())) {
+                        acquired[i] = true;
+                    } else {
+                        rollback = true;
+                    }
+                }
             }
-            LockInOrder<AllComponentTypes...>();
         }
 
         inline ~Transaction() {
-            UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
-                auto &newValidList = this->ecs.validIndex.writeValidEntities;
-                auto &newValidIndexes = this->ecs.validIndex.validEntityIndexes;
-                auto &freeEntities = this->ecs.freeEntities;
-                newValidList.clear();
-                freeEntities.clear();
+                this->ecs.validIndex.writeValidEntities.clear();
+                ClearValidEntities<AllComponentTypes...>();
+                this->ecs.freeEntities.clear();
+                auto &bitsets = this->ecs.validIndex.writeComponents;
+                for (size_t id = 0; id < bitsets.size(); id++) {
+                    UpdateValidEntity<AllComponentTypes...>(id);
+                    if (bitsets[id][0]) {
+                        this->ecs.validIndex.validEntityIndexes[id] = this->ecs.validIndex.writeValidEntities.size();
+                        this->ecs.validIndex.writeValidEntities.emplace_back(id);
+                    } else {
+                        this->ecs.freeEntities.emplace_back(Entity(id));
+                    }
+                }
+            }
+            CommitLockInOrder<AllComponentTypes...>();
+            if (is_add_remove_allowed<LockType>()) {
                 auto &oldBitsets = this->ecs.validIndex.readComponents;
                 auto &bitsets = this->ecs.validIndex.writeComponents;
-                auto &observersAdded = this->ecs.template Observers<EntityAdded>();
-                auto &observersRemoved = this->ecs.template Observers<EntityRemoved>();
                 for (size_t id = 0; id < bitsets.size(); id++) {
+                    NotifyObservers<AllComponentTypes...>(id);
                     if (bitsets[id][0]) {
-                        newValidIndexes[id] = newValidList.size();
-                        newValidList.emplace_back(id);
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            for (auto &observer : observersAdded) {
+                            for (auto &observer : this->ecs.template Observers<EntityAdded>()) {
                                 observer->emplace_back(Entity(id));
                             }
                         }
-                    } else {
-                        freeEntities.emplace_back(Entity(id));
-                        if (id < oldBitsets.size() && oldBitsets[id][0]) {
-                            for (auto &observer : observersRemoved) {
-                                observer->emplace_back(Entity(id));
-                            }
+                    } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
+                        for (auto &observer : this->ecs.template Observers<EntityRemoved>()) {
+                            observer->emplace_back(Entity(id));
                         }
                     }
                 }
-
-                this->ecs.validIndex.template CommitWrite<true>();
+            }
+            UnlockInOrder<AllComponentTypes...>();
+            if (is_add_remove_allowed<LockType>()) {
+                this->ecs.validIndex.template CommitEntities<true>();
+                this->ecs.validIndex.WriteUnlock();
             } else {
-                this->ecs.validIndex.RUnlock();
+                this->ecs.validIndex.ReadUnlock();
             }
         }
 
     private:
-        // Call lock operations on LockedTypes in the same order they are defined in AllComponentTypes
-        // This is accomplished by filtering AllComponentTypes by LockedTypes
+        // Call lock operations on Permissions in the same order they are defined in AllComponentTypes
+        // This is accomplished by filtering AllComponentTypes by Permissions
         template<typename U>
-        inline void LockInOrder() const {
-            if (is_write_allowed<U, LockType>()) {
-                this->ecs.template Storage<U>().StartWrite();
-            } else if (is_read_allowed<U, LockType>()) {
-                this->ecs.template Storage<U>().RLock();
+        inline void CommitLockInOrder() const {
+            if (is_write_allowed<U, LockType>()) { this->ecs.template Storage<U>().CommitLock(); }
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void CommitLockInOrder() const {
+            CommitLockInOrder<U>();
+            CommitLockInOrder<U2, Un...>();
+        }
+
+        template<typename U>
+        inline void ClearValidEntities() const {
+            this->ecs.template Storage<U>().writeValidEntities.clear();
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void ClearValidEntities() const {
+            ClearValidEntities<U>();
+            ClearValidEntities<U2, Un...>();
+        }
+
+        template<typename U>
+        inline void UpdateValidEntity(size_t id) const {
+            auto &bitsets = this->ecs.validIndex.writeComponents;
+            if (this->ecs.template BitsetHas<U>(bitsets[id])) {
+                this->ecs.template Storage<U>().validEntityIndexes[id] =
+                    this->ecs.template Storage<U>().writeValidEntities.size();
+                this->ecs.template Storage<U>().writeValidEntities.emplace_back(id);
             }
         }
 
         template<typename U, typename U2, typename... Un>
-        inline void LockInOrder() const {
-            LockInOrder<U>();
-            LockInOrder<U2, Un...>();
+        inline void UpdateValidEntity(size_t id) const {
+            UpdateValidEntity<U>(id);
+            UpdateValidEntity<U2, Un...>(id);
+        }
+
+        template<typename U>
+        inline void NotifyObservers(size_t id) const {
+            auto &oldBitsets = this->ecs.validIndex.readComponents;
+            auto &bitsets = this->ecs.validIndex.writeComponents;
+            if (this->ecs.template BitsetHas<U>(bitsets[id])) {
+                if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
+                    for (auto &observer : this->ecs.template Observers<Added<U>>()) {
+                        observer->emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
+                    }
+                }
+            } else if (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id])) {
+                for (auto &observer : this->ecs.template Observers<Removed<U>>()) {
+                    observer->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
+                }
+            }
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void NotifyObservers(size_t id) const {
+            NotifyObservers<U>(id);
+            NotifyObservers<U2, Un...>(id);
         }
 
         template<typename U>
         inline void UnlockInOrder() const {
             if (is_write_allowed<U, LockType>()) {
                 if (is_add_remove_allowed<LockType>()) {
-                    // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
-                    auto &newValidList = this->ecs.template Storage<U>().writeValidEntities;
-                    auto &newValidIndexes = this->ecs.template Storage<U>().validEntityIndexes;
-                    newValidList.clear();
-                    auto &oldBitsets = this->ecs.validIndex.readComponents;
-                    auto &bitsets = this->ecs.validIndex.writeComponents;
-                    auto &observersAdded = this->ecs.template Observers<Added<U>>();
-                    auto &observersRemoved = this->ecs.template Observers<Removed<U>>();
-                    for (size_t id = 0; id < bitsets.size(); id++) {
-                        if (this->ecs.template BitsetHas<U>(bitsets[id])) {
-                            newValidIndexes[id] = newValidList.size();
-                            newValidList.emplace_back(id);
-                            if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                                for (auto &observer : observersAdded) {
-                                    observer->emplace_back(Entity(id),
-                                        this->ecs.template Storage<U>().writeComponents[id]);
-                                }
-                            }
-                        } else if ((id >= bitsets.size() || !this->ecs.template BitsetHas<U>(bitsets[id])) &&
-                                   (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id]))) {
-                            for (auto &observer : observersRemoved) {
-                                observer->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
-                            }
-                        }
-                    }
-                    this->ecs.template Storage<U>().template CommitWrite<true>();
+                    this->ecs.template Storage<U>().template CommitEntities<true>();
                 } else {
-                    this->ecs.template Storage<U>().template CommitWrite<false>();
+                    this->ecs.template Storage<U>().template CommitEntities<false>();
                 }
+                this->ecs.template Storage<U>().WriteUnlock();
             } else if (is_read_allowed<U, LockType>()) {
-                this->ecs.template Storage<U>().RUnlock();
+                this->ecs.template Storage<U>().ReadUnlock();
             }
         }
 

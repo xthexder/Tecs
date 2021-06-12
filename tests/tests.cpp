@@ -16,7 +16,8 @@ static ECS ecs;
 #define ENTITY_COUNT 10000
 
 int main(int argc, char **argv) {
-    std::cout << "Running with " << ecs.GetComponentCount() << " component types" << std::endl;
+    std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
+              << std::endl;
 
     Tecs::Observer<ECS, Tecs::EntityAdded> entityAddedObserver;
     Tecs::Observer<ECS, Tecs::EntityRemoved> entityRemovedObserver;
@@ -487,11 +488,13 @@ int main(int argc, char **argv) {
                 script.data[1] = script.data[0] + 1;
             }
 
-            // Start another write transaction while this one is active to ensure it blocks.
+            // Start another write transaction while this one is active to ensure it occurs as soon as possible after
+            // the above transaction.
             blockingThread = std::thread([] {
                 // Script is the last component in the ECS, and is the first to be commited / unlocked.
                 auto lock = ecs.StartTransaction<Tecs::ReadAll, Tecs::Write<Script>>();
 
+                // At this point all components should be commited from the above transaction.
                 for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
                     Assert(e.Get<Transform>(lock).pos[1] == 2, "Expected position.y to be 2");
                 }
@@ -509,6 +512,13 @@ int main(int argc, char **argv) {
         }
 
         blockingThread.join();
+    }
+    {
+        Timer t("Test count entities");
+        {
+            auto readLock = ecs.StartTransaction<>();
+            Assert(readLock.Entities().size() == ENTITY_COUNT, "Expected entity count not to change");
+        }
     }
 
     return 0;
