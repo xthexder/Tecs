@@ -54,7 +54,7 @@ namespace testing {
                        << " usec, Avg: " << (total.count() / values.size() / 1000.0)
                        << " usec, P95: " << (values[(size_t)((double)values.size() * 0.95) - 1].count() / 1000.0)
                        << " usec, P99: " << (values[(size_t)((double)values.size() * 0.99) - 1].count() / 1000.0)
-                       << " usec" << std::endl;
+                       << " usec, Total: " << (total.count() / 1000000.0) << " ms" << std::endl;
                 } else if (values.size() == 1) {
                     ss << "[" << name << "] End: " << (values[0].count() / 1000000.0) << " ms" << std::endl;
                 } else {

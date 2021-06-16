@@ -15,7 +15,8 @@ std::atomic_bool running;
 static testing::ECS ecs;
 
 #define ENTITY_COUNT 1000000
-#define ADD_REMOVE_COUNT 100000
+#define ADD_REMOVE_ITERATIONS 100
+#define ADD_REMOVE_PER_LOOP 1000
 #define SCRIPT_THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
@@ -77,8 +78,8 @@ void renderThread() {
     std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
 }
 
-void scriptWorkerThread(
-    MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock, nonstd::span<Entity> entities) {
+void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock,
+    nonstd::span<Entity> entities) {
     Timer t(*workerTimer);
     for (auto &e : entities) {
         auto &script = e.Get<Script>(lock);
@@ -170,27 +171,33 @@ int main(int argc, char **argv) {
     };
     std::vector<RemovedEntity> removedList;
     {
-        MultiTimer timer1("Remove the first " + std::to_string(ADD_REMOVE_COUNT) + " entities Start");
-        MultiTimer timer2("Remove the first " + std::to_string(ADD_REMOVE_COUNT) + " entities Run");
-        MultiTimer timer3("Remove the first " + std::to_string(ADD_REMOVE_COUNT) + " entities Commit");
-        Timer t(timer1);
-        auto writeLock = ecs.StartTransaction<AddRemove>();
-        t = timer2;
-        auto &entities = writeLock.Entities();
-        for (size_t i = 0; i < ADD_REMOVE_COUNT; i++) {
-            Entity e = entities[i];
+        MultiTimer timer1("Remove the first " + std::to_string(ADD_REMOVE_PER_LOOP) + " entities x" +
+                          std::to_string(ADD_REMOVE_ITERATIONS) + " Start");
+        MultiTimer timer2("Remove the first " + std::to_string(ADD_REMOVE_PER_LOOP) + " entities x" +
+                          std::to_string(ADD_REMOVE_ITERATIONS) + " Run");
+        MultiTimer timer3("Remove the first " + std::to_string(ADD_REMOVE_PER_LOOP) + " entities x" +
+                          std::to_string(ADD_REMOVE_ITERATIONS) + " Commit");
+        for (size_t i = 0; i < ADD_REMOVE_ITERATIONS; i++) {
+            Timer t(timer1);
+            auto writeLock = ecs.StartTransaction<AddRemove>();
+            t = timer2;
+            auto &entities = writeLock.Entities();
+            for (size_t j = 0; j < ADD_REMOVE_PER_LOOP; j++) {
+                Entity e = entities[j];
 
-            auto &removedEntity = removedList.emplace_back();
-            removedEntity.components[0] = e.Has<Transform>(writeLock);
-            if (e.Has<Renderable>(writeLock)) {
-                removedEntity.name = e.Get<Renderable>(writeLock).name;
-                removedEntity.components[1] = true;
+                auto &removedEntity = removedList.emplace_back();
+                removedEntity.components[0] = e.Has<Transform>(writeLock);
+                if (e.Has<Renderable>(writeLock)) {
+                    removedEntity.name = e.Get<Renderable>(writeLock).name;
+                    removedEntity.components[1] = true;
+                }
+                removedEntity.components[2] = e.Has<Script>(writeLock);
+                e.Destroy(writeLock);
             }
-            removedEntity.components[2] = e.Has<Script>(writeLock);
-            e.Destroy(writeLock);
+            t = timer3;
         }
-        t = timer3;
     }
+
     {
         MultiTimer timer1("Recreate removed entities Start");
         MultiTimer timer2("Recreate removed entities Run");
