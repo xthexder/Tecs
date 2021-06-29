@@ -126,6 +126,7 @@ namespace Tecs {
             }
             CommitLockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
+                this->ecs.validIndex.CommitLock();
                 auto &oldBitsets = this->ecs.validIndex.readComponents;
                 auto &bitsets = this->ecs.validIndex.writeComponents;
                 for (size_t id = 0; id < bitsets.size(); id++) {

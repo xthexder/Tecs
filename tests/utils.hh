@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace testing {
     static inline void Assert(bool condition, const std::string message) {
