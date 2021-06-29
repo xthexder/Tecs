@@ -40,7 +40,7 @@ namespace Tecs {
         // Alias lock.Exists<Tn...>(e) to allow e.Exists<Tn...>(lock)
         template<typename LockType>
         inline bool Exists(LockType &lock) const {
-            return lock.template Exists(*this);
+            return lock.Exists(*this);
         }
 
         // Alias lock.Has<Tn...>(e) to allow e.Has<Tn...>(lock)

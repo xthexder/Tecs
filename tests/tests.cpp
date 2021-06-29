@@ -344,6 +344,54 @@ int main(int argc, char **argv) {
         }
     }
     {
+        Timer t("Test add/remove entity priority");
+        Tecs::Entity e;
+        {
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            e = writeLock.NewEntity();
+            e.Set<Transform>(writeLock, 42.0, 1.0, 64.0, 99.0);
+        }
+        std::atomic_bool commited = false;
+        std::vector<std::thread> readThreads;
+        readThreads.emplace_back([&e]() {
+            auto readLock = ecs.StartTransaction<>();
+            Assert(e.Exists(readLock), "The entity should exist for all transactions started before AddRemove.");
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            Assert(e.Exists(readLock), "The entity should exist for all transactions started before AddRemove.");
+        });
+        for (int i = 0; i < 100; i++) {
+            readThreads.emplace_back([&commited, &e, i]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(i));
+                auto readLock = ecs.StartTransaction<>();
+                if (commited) {
+                    Assert(!e.Exists(readLock), "The entity should already be removed at this point.");
+                } else {
+                    Assert(e.Exists(readLock), "The entity shouldn't be removed yet.");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    Assert(e.Exists(readLock), "The entity shouldn't be removed until after existing reads complete.");
+                }
+            });
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        {
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            e.Destroy(writeLock);
+            Assert(!e.Exists(writeLock), "Entity should not exist after it is destroyed.");
+        }
+        commited = true;
+        {
+            auto lock = ecs.StartTransaction<>();
+            Assert(!e.Exists(lock), "Entity should not exist after test.");
+        }
+        for (auto &thread : readThreads) {
+            thread.join();
+        }
+        {
+            auto lock = ecs.StartTransaction<>();
+            Assert(!e.Exists(lock), "Entity should not exist after test.");
+        }
+    }
+    {
         Timer t("Test read lock typecasting");
         auto readLockAll = ecs.StartTransaction<Tecs::Read<Transform, Renderable, Script>>();
         { // Test Subset() method
