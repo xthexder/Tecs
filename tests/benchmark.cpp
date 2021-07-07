@@ -216,6 +216,8 @@ int main(int argc, char **argv) {
         t = timer3;
     }
 
+    return 0;
+
     {
         {
             auto readLock = ecs.StartTransaction<>();

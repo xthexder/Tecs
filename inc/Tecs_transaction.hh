@@ -113,6 +113,7 @@ namespace Tecs {
                 this->ecs.validIndex.writeValidEntities.clear();
                 ClearValidEntities<AllComponentTypes...>();
                 this->ecs.freeEntities.clear();
+                auto &oldBitsets = this->ecs.validIndex.readComponents;
                 auto &bitsets = this->ecs.validIndex.writeComponents;
                 for (size_t id = 0; id < bitsets.size(); id++) {
                     UpdateValidEntity<AllComponentTypes...>(id);
@@ -122,30 +123,31 @@ namespace Tecs {
                     } else {
                         this->ecs.freeEntities.emplace_back(Entity(id));
                     }
+
+                    // Compare new and old bitsets to notifiy observers
+                    NotifyObservers<AllComponentTypes...>(id);
+                    if (bitsets[id][0]) {
+                        if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
+                            auto &observerList = this->ecs.template Observers<EntityAdded>();
+                            observerList.eventQueue.emplace_back(Entity(id));
+                        }
+                    } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
+                        auto &observerList = this->ecs.template Observers<EntityRemoved>();
+                        observerList.eventQueue.emplace_back(Entity(id));
+                    }
                 }
+                NotifyGlobalObservers<AllComponentTypes...>();
             }
             CommitLockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
                 this->ecs.validIndex.CommitLock();
-                auto &oldBitsets = this->ecs.validIndex.readComponents;
-                auto &bitsets = this->ecs.validIndex.writeComponents;
-                for (size_t id = 0; id < bitsets.size(); id++) {
-                    NotifyObservers<AllComponentTypes...>(id);
-                    if (bitsets[id][0]) {
-                        if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            for (auto &observer : this->ecs.template Observers<EntityAdded>()) {
-                                observer->emplace_back(Entity(id));
-                            }
-                        }
-                    } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
-                        for (auto &observer : this->ecs.template Observers<EntityRemoved>()) {
-                            observer->emplace_back(Entity(id));
-                        }
-                    }
-                }
-                NotifyGlobalObservers<AllComponentTypes...>();
                 this->ecs.readValidGlobals = this->ecs.writeValidGlobals;
                 this->ecs.validIndex.template CommitEntities<true>();
+                
+                CommitObservers<EntityAdded>();
+                CommitObservers<EntityRemoved>();
+                CommitObservers<Added<AllComponentTypes>...>();
+                CommitObservers<Removed<AllComponentTypes>...>();
             }
             UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
@@ -171,7 +173,9 @@ namespace Tecs {
 
         template<typename U>
         inline void ClearValidEntities() const {
-            this->ecs.template Storage<U>().writeValidEntities.clear();
+            if constexpr (!is_global_component<U>()) {
+                this->ecs.template Storage<U>().writeValidEntities.clear();
+            }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -182,11 +186,13 @@ namespace Tecs {
 
         template<typename U>
         inline void UpdateValidEntity(size_t id) const {
-            auto &bitsets = this->ecs.validIndex.writeComponents;
-            if (this->ecs.template BitsetHas<U>(bitsets[id])) {
-                this->ecs.template Storage<U>().validEntityIndexes[id] =
-                    this->ecs.template Storage<U>().writeValidEntities.size();
-                this->ecs.template Storage<U>().writeValidEntities.emplace_back(id);
+            if constexpr (!is_global_component<U>()) {
+                auto &bitsets = this->ecs.validIndex.writeComponents;
+                if (this->ecs.template BitsetHas<U>(bitsets[id])) {
+                    this->ecs.template Storage<U>().validEntityIndexes[id] =
+                        this->ecs.template Storage<U>().writeValidEntities.size();
+                    this->ecs.template Storage<U>().writeValidEntities.emplace_back(id);
+                }
             }
         }
 
@@ -203,14 +209,12 @@ namespace Tecs {
                 auto &bitsets = this->ecs.validIndex.writeComponents;
                 if (this->ecs.template BitsetHas<U>(bitsets[id])) {
                     if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                        for (auto &observer : this->ecs.template Observers<Added<U>>()) {
-                            observer->emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
-                        }
+                        auto &observerList = this->ecs.template Observers<Added<U>>();
+                        observerList.eventQueue.emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
                     }
                 } else if (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                    for (auto &observer : this->ecs.template Observers<Removed<U>>()) {
-                        observer->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
-                    }
+                    auto &observerList = this->ecs.template Observers<Removed<U>>();
+                    observerList.eventQueue.emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
                 }
             }
         }
@@ -228,14 +232,12 @@ namespace Tecs {
                 auto &bitset = this->ecs.writeValidGlobals;
                 if (this->ecs.template BitsetHas<U>(bitset)) {
                     if (!this->ecs.template BitsetHas<U>(oldBitset)) {
-                        for (auto &observer : this->ecs.template Observers<Added<U>>()) {
-                            observer->emplace_back(Entity(), this->ecs.template Storage<U>().writeComponents[0]);
-                        }
+                        auto &observerList = this->ecs.template Observers<Added<U>>();
+                        observerList.eventQueue.emplace_back(Entity(), this->ecs.template Storage<U>().writeComponents[0]);
                     }
                 } else if (this->ecs.template BitsetHas<U>(oldBitset)) {
-                    for (auto &observer : this->ecs.template Observers<Removed<U>>()) {
-                        observer->emplace_back(Entity(), this->ecs.template Storage<U>().readComponents[0]);
-                    }
+                    auto &observerList = this->ecs.template Observers<Removed<U>>();
+                    observerList.eventQueue.emplace_back(Entity(), this->ecs.template Storage<U>().readComponents[0]);
                 }
             }
         }
@@ -244,6 +246,21 @@ namespace Tecs {
         inline void NotifyGlobalObservers() const {
             NotifyGlobalObservers<U>();
             NotifyGlobalObservers<U2, Un...>();
+        }
+
+        template<typename U>
+        inline void CommitObservers() const {
+            auto &observerList = this->ecs.template Observers<U>();
+            for (auto &observer : observerList.observers) {
+                observer->insert(observer->end(), observerList.eventQueue.begin(), observerList.eventQueue.end());
+            }
+            observerList.eventQueue.clear();
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void CommitObservers() const {
+            CommitObservers<U>();
+            CommitObservers<U2, Un...>();
         }
 
         template<typename U>
@@ -624,7 +641,8 @@ namespace Tecs {
         inline Observer<ECS<AllComponentTypes...>, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
-            auto &eventList = ecs.template Observers<Event>().emplace_back(std::make_shared<std::deque<Event>>());
+            auto &observerList = ecs.template Observers<Event>();
+            auto &eventList = observerList.observers.emplace_back(std::make_shared<std::deque<Event>>());
             return Observer(ecs, eventList);
         }
 
@@ -632,7 +650,7 @@ namespace Tecs {
         inline void StopWatching(Observer<ECS<AllComponentTypes...>, Event> &observer) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
-            auto &observers = ecs.template Observers<Event>();
+            auto &observers = ecs.template Observers<Event>().observers;
             observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
             observer.eventListWeak.reset();
         }
