@@ -23,6 +23,8 @@ int main(int argc, char **argv) {
     Tecs::Observer<ECS, Tecs::EntityRemoved> entityRemovedObserver;
     Tecs::Observer<ECS, Tecs::Added<Transform>> transformAddedObserver;
     Tecs::Observer<ECS, Tecs::Removed<Transform>> transformRemovedObserver;
+    Tecs::Observer<ECS, Tecs::Added<GlobalComponent>> globalCompAddedObserver;
+    Tecs::Observer<ECS, Tecs::Removed<GlobalComponent>> globalCompRemovedObserver;
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -30,6 +32,62 @@ int main(int argc, char **argv) {
         entityRemovedObserver = writeLock.Watch<Tecs::EntityRemoved>();
         transformAddedObserver = writeLock.Watch<Tecs::Added<Transform>>();
         transformRemovedObserver = writeLock.Watch<Tecs::Removed<Transform>>();
+        globalCompAddedObserver = writeLock.Watch<Tecs::Added<GlobalComponent>>();
+        globalCompRemovedObserver = writeLock.Watch<Tecs::Removed<GlobalComponent>>();
+    }
+    {
+        Timer t("Test initializing global components");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
+        auto &gc = writeLock.Init<GlobalComponent>(0);
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+        Assert(gc.globalCounter == 0, "Global counter should be initialized to zero");
+        gc.globalCounter++;
+
+        auto &gc2 = writeLock.Get<GlobalComponent>();
+        Assert(gc2.globalCounter == 1, "Global counter should be read back as 1");
+    }
+    {
+        Timer t("Test update global counter");
+        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 1, "Global counter should be read back as 1");
+        gc.globalCounter++;
+    }
+    {
+        Timer t("Test read global counter");
+        auto readLock = ecs.StartTransaction<Tecs::Read<GlobalComponent>>();
+        Assert(readLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = readLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 2, "Global counter should be read back as 2");
+    }
+    {
+        Timer t("Test remove global component");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 2, "Global counter should be read back as 2");
+
+        writeLock.Unset<GlobalComponent>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+        Assert(writeLock.Had<GlobalComponent>(), "ECS should still know previous state");
+    }
+    {
+        Timer t("Test add remove global component in single transaction");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(writeLock.Has<GlobalComponent>(), "Get call should have initialized global component");
+        Assert(gc.globalCounter == 10, "Global counter should be default initialized to 10");
+
+        // Try removing the component in the same transaction it was created
+        writeLock.Unset<GlobalComponent>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
     }
     {
         Timer t("Test adding each component type");
@@ -92,17 +150,21 @@ int main(int argc, char **argv) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.id == ENTITY_COUNT + i,
                 "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e.id));
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+            AssertHas<>(writeLock, e);
 
             writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
-            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Transform>(writeLock, e);
+
+            writeLock.Set<Renderable>(e, "foo");
+            AssertHas<Transform, Renderable>(writeLock, e);
 
             // Try removing an entity in the same transaction it was created in
             writeLock.Unset<Transform>(e);
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Renderable>(writeLock, e);
+
             e.Destroy(writeLock);
             Assert(!writeLock.Exists(e), "Entity still exists");
+            AssertHas<>(writeLock, e);
         }
     }
     {
@@ -198,6 +260,24 @@ int main(int argc, char **argv) {
                         std::to_string(entityRemoved.entity.id));
             }
             Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "Too many events triggered");
+        }
+        {
+            Tecs::Added<GlobalComponent> compAdded;
+            Assert(globalCompAddedObserver.Poll(readLock, compAdded), "Expected a GlobalComponent created event");
+            Assert(!compAdded.entity, "Global component events should not have a valid entity");
+            Assert(compAdded.component.globalCounter == 1,
+                "Global component should have been created with globalCounter = 1");
+
+            Assert(!globalCompAddedObserver.Poll(readLock, compAdded), "Too many events triggered");
+        }
+        {
+            Tecs::Removed<GlobalComponent> compRemoved;
+            Assert(globalCompRemovedObserver.Poll(readLock, compRemoved), "Expected a GlobalComponent removed event");
+            Assert(!compRemoved.entity, "Global component events should not have a valid entity");
+            Assert(compRemoved.component.globalCounter == 2,
+                "Global component should have been removed with globalCounter = 2");
+
+            Assert(!globalCompRemovedObserver.Poll(readLock, compRemoved), "Too many events triggered");
         }
     }
     {

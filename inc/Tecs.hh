@@ -92,6 +92,8 @@ namespace Tecs {
         }
 
         ComponentIndex<ValidBitset> validIndex;
+        ValidBitset readValidGlobals;
+        ValidBitset writeValidGlobals;
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
 

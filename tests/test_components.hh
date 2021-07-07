@@ -48,4 +48,11 @@ namespace testing {
         Renderable() {}
         Renderable(std::string name) : name(name) {}
     };
+
+    struct GlobalComponent {
+        size_t globalCounter;
+
+        GlobalComponent() : globalCounter(10) {}
+        GlobalComponent(size_t initial_value) : globalCounter(initial_value) {}
+    };
 }; // namespace testing

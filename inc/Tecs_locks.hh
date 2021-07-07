@@ -39,9 +39,26 @@ namespace Tecs {
     struct WriteAll {};
     struct AddRemove {};
 
+    /**
+     * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
+     * Only a single instance of the component will be stored.
+     * 
+     * This type trait can be set using the below pattern:
+     * 
+     * template<>
+     * struct Tecs::is_global_component<ComponentType> : std::true_type {};
+     */
+    template<typename T>
+    struct is_global_component : std::false_type {};
+
     // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>
     struct contains : std::disjunction<std::is_same<T, Un>...> {};
+
+    template<typename... Tn>
+    struct contains_global_components : std::disjunction<is_global_component<Tn>...> {};
+    template<typename... Tn>
+    struct all_global_components : std::conjunction<is_global_component<Tn>...> {};
 
     /*
      * Compile time helpers for determining lock permissions.
