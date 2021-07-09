@@ -720,8 +720,10 @@ namespace Tecs {
                 auto &validBitset = ecs.validIndex.writeComponents[e.id];
                 if (ecs.template BitsetHas<T>(validBitset)) {
                     validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
-                    size_t validIndex = ecs.template Storage<T>().validEntityIndexes[e.id];
-                    ecs.template Storage<T>().writeValidEntities[validIndex] = Entity();
+                    auto &compIndex = ecs.template Storage<T>();
+                    compIndex.writeComponents[e.id] = {};
+                    size_t validIndex = compIndex.validEntityIndexes[e.id];
+                    compIndex.writeValidEntities[validIndex] = Entity();
                 }
             }
         }
@@ -733,6 +735,7 @@ namespace Tecs {
             auto &validBitset = ecs.writeValidGlobals;
             if (ecs.template BitsetHas<T>(validBitset)) {
                 validBitset[1 + ecs.template GetComponentIndex<T>()] = false;
+                ecs.template Storage<T>().writeComponents[0] = {};
             }
         }
 

@@ -51,6 +51,7 @@ namespace testing {
 
     struct GlobalComponent {
         size_t globalCounter;
+        std::shared_ptr<bool> test;
 
         GlobalComponent() : globalCounter(10) {}
         GlobalComponent(size_t initial_value) : globalCounter(initial_value) {}

@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
         globalCompAddedObserver = writeLock.Watch<Tecs::Added<GlobalComponent>>();
         globalCompRemovedObserver = writeLock.Watch<Tecs::Removed<GlobalComponent>>();
     }
+    bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -44,8 +45,14 @@ int main(int argc, char **argv) {
         Assert(gc.globalCounter == 0, "Global counter should be initialized to zero");
         gc.globalCounter++;
 
+        globalComponentInitialized = true;
+        gc.test = std::shared_ptr<bool>(&globalComponentInitialized, [](bool *b) {
+            *b = false;
+        });
+
         auto &gc2 = writeLock.Get<GlobalComponent>();
         Assert(gc2.globalCounter == 1, "Global counter should be read back as 1");
+        Assert(globalComponentInitialized, "Global component should be initialized");
     }
     {
         Timer t("Test update global counter");
@@ -55,6 +62,8 @@ int main(int argc, char **argv) {
         auto &gc = writeLock.Get<GlobalComponent>();
         Assert(gc.globalCounter == 1, "Global counter should be read back as 1");
         gc.globalCounter++;
+        
+        Assert(globalComponentInitialized, "Global component should be initialized");
     }
     {
         Timer t("Test read global counter");
@@ -75,7 +84,9 @@ int main(int argc, char **argv) {
         writeLock.Unset<GlobalComponent>();
         Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
         Assert(writeLock.Had<GlobalComponent>(), "ECS should still know previous state");
+        Assert(globalComponentInitialized, "Global component should still be initialized (kept by read pointer)");
     }
+    Assert(globalComponentInitialized, "Global component should still be initialized (kept by observer)");
     {
         Timer t("Test add remove global component in single transaction");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -84,10 +95,17 @@ int main(int argc, char **argv) {
         auto &gc = writeLock.Get<GlobalComponent>();
         Assert(writeLock.Has<GlobalComponent>(), "Get call should have initialized global component");
         Assert(gc.globalCounter == 10, "Global counter should be default initialized to 10");
+        
+        bool compInitialized = true;
+        gc.test = std::shared_ptr<bool>(&compInitialized, [](bool *b) {
+            *b = false;
+        });
 
         // Try removing the component in the same transaction it was created
         writeLock.Unset<GlobalComponent>();
         Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+        
+        Assert(!compInitialized, "Global component should be deconstructed immediately");
     }
     {
         Timer t("Test adding each component type");
@@ -279,6 +297,7 @@ int main(int argc, char **argv) {
 
             Assert(!globalCompRemovedObserver.Poll(readLock, compRemoved), "Too many events triggered");
         }
+        Assert(!globalComponentInitialized, "Global component should be deconstructed");
     }
     {
         Timer t("Test read-modify-write values");
