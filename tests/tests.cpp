@@ -661,6 +661,53 @@ int main(int argc, char **argv) {
         blockingThread.join();
     }
     {
+        Timer t("Test continuous overlapping reads");
+        std::thread blockingThread;
+        std::vector<std::thread> readThreads;
+        {
+            for (size_t i = 0; i < 10; i++) {
+                // Start 10 overlapping read transaction threads
+                readThreads.emplace_back([i] {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10 * i));
+                    auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                });
+            }
+
+            std::atomic_bool commitCompleted = false;
+            blockingThread = std::thread([&commitCompleted] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                Tecs::Entity e;
+                { // Try to complete an add/remove transaction while continous reads are happening
+                    auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+                    e = lock.NewEntity();
+                    e.Set<Transform>(lock, 1, 2, 3);
+                }
+                { // Remove the entity we just created
+                    auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+                    e.Destroy(lock);
+                }
+                commitCompleted = true;
+            });
+
+            while (!commitCompleted) {
+                // Cycle through each transaction and restart the thread when it completes
+                for (auto &t : readThreads) {
+                    t.join();
+                    t = std::thread([] {
+                        auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    });
+                }
+            }
+        }
+
+        blockingThread.join();
+        for (auto &t : readThreads) {
+            t.join();
+        }
+    }
+    {
         Timer t("Test count entities");
         {
             auto readLock = ecs.StartTransaction<>();
