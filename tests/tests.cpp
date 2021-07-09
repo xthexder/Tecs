@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
         auto &gc = writeLock.Get<GlobalComponent>();
         Assert(gc.globalCounter == 1, "Global counter should be read back as 1");
         gc.globalCounter++;
-        
+
         Assert(globalComponentInitialized, "Global component should be initialized");
     }
     {
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
         auto &gc = writeLock.Get<GlobalComponent>();
         Assert(writeLock.Has<GlobalComponent>(), "Get call should have initialized global component");
         Assert(gc.globalCounter == 10, "Global counter should be default initialized to 10");
-        
+
         bool compInitialized = true;
         gc.test = std::shared_ptr<bool>(&compInitialized, [](bool *b) {
             *b = false;
@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
         // Try removing the component in the same transaction it was created
         writeLock.Unset<GlobalComponent>();
         Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
-        
+
         Assert(!compInitialized, "Global component should be deconstructed immediately");
     }
     {
