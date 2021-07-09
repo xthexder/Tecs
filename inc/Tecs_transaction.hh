@@ -105,6 +105,19 @@ namespace Tecs {
                     }
                 }
             }
+
+            if (is_add_remove_allowed<LockType>()) {
+                auto &addedObserverList = this->ecs.template Observers<EntityAdded>();
+                if (!addedObserverList.eventQueue) {
+                    addedObserverList.eventQueue = std::make_shared<std::deque<EntityAdded>>();
+                }
+
+                auto &removedObserverList = this->ecs.template Observers<EntityRemoved>();
+                if (!removedObserverList.eventQueue) {
+                    removedObserverList.eventQueue = std::make_shared<std::deque<EntityRemoved>>();
+                }
+                InitObserverEventQueues<AllComponentTypes...>();
+            }
         }
 
         inline ~Transaction() {
@@ -129,11 +142,11 @@ namespace Tecs {
                     if (bitsets[id][0]) {
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
                             auto &observerList = this->ecs.template Observers<EntityAdded>();
-                            observerList.eventQueue.emplace_back(Entity(id));
+                            observerList.eventQueue->emplace_back(Entity(id));
                         }
                     } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
                         auto &observerList = this->ecs.template Observers<EntityRemoved>();
-                        observerList.eventQueue.emplace_back(Entity(id));
+                        observerList.eventQueue->emplace_back(Entity(id));
                     }
                 }
                 NotifyGlobalObservers<AllComponentTypes...>();
@@ -203,6 +216,25 @@ namespace Tecs {
         }
 
         template<typename U>
+        inline void InitObserverEventQueues() const {
+            auto &addedObserverList = this->ecs.template Observers<Added<U>>();
+            if (!addedObserverList.eventQueue) {
+                addedObserverList.eventQueue = std::make_shared<std::deque<Added<U>>>();
+            }
+
+            auto &removedObserverList = this->ecs.template Observers<Removed<U>>();
+            if (!removedObserverList.eventQueue) {
+                removedObserverList.eventQueue = std::make_shared<std::deque<Removed<U>>>();
+            }
+        }
+
+        template<typename U, typename U2, typename... Un>
+        inline void InitObserverEventQueues() const {
+            InitObserverEventQueues<U>();
+            InitObserverEventQueues<U2, Un...>();
+        }
+
+        template<typename U>
         inline void NotifyObservers(size_t id) const {
             if constexpr (!is_global_component<U>()) {
                 auto &oldBitsets = this->ecs.validIndex.readComponents;
@@ -210,11 +242,11 @@ namespace Tecs {
                 if (this->ecs.template BitsetHas<U>(bitsets[id])) {
                     if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
                         auto &observerList = this->ecs.template Observers<Added<U>>();
-                        observerList.eventQueue.emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
+                        observerList.eventQueue->emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
                     }
                 } else if (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id])) {
                     auto &observerList = this->ecs.template Observers<Removed<U>>();
-                    observerList.eventQueue.emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
+                    observerList.eventQueue->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
                 }
             }
         }
@@ -233,11 +265,11 @@ namespace Tecs {
                 if (this->ecs.template BitsetHas<U>(bitset)) {
                     if (!this->ecs.template BitsetHas<U>(oldBitset)) {
                         auto &observerList = this->ecs.template Observers<Added<U>>();
-                        observerList.eventQueue.emplace_back(Entity(), this->ecs.template Storage<U>().writeComponents[0]);
+                        observerList.eventQueue->emplace_back(Entity(), this->ecs.template Storage<U>().writeComponents[0]);
                     }
                 } else if (this->ecs.template BitsetHas<U>(oldBitset)) {
                     auto &observerList = this->ecs.template Observers<Removed<U>>();
-                    observerList.eventQueue.emplace_back(Entity(), this->ecs.template Storage<U>().readComponents[0]);
+                    observerList.eventQueue->emplace_back(Entity(), this->ecs.template Storage<U>().readComponents[0]);
                 }
             }
         }
@@ -252,9 +284,9 @@ namespace Tecs {
         inline void CommitObservers() const {
             auto &observerList = this->ecs.template Observers<U>();
             for (auto &observer : observerList.observers) {
-                observer->insert(observer->end(), observerList.eventQueue.begin(), observerList.eventQueue.end());
+                observer->insert(observer->end(), observerList.eventQueue->begin(), observerList.eventQueue->end());
             }
-            observerList.eventQueue.clear();
+            observerList.eventQueue->clear();
         }
 
         template<typename U, typename U2, typename... Un>

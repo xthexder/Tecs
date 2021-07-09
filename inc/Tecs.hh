@@ -65,7 +65,7 @@ namespace Tecs {
         template<typename Event>
         struct ObserverList {
             std::vector<std::shared_ptr<std::deque<Event>>> observers;
-            std::deque<Event> eventQueue;
+            std::shared_ptr<std::deque<Event>> eventQueue;
         };
 
         template<size_t I, typename U>
