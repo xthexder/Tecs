@@ -23,6 +23,8 @@ int main(int argc, char **argv) {
     Tecs::Observer<ECS, Tecs::EntityRemoved> entityRemovedObserver;
     Tecs::Observer<ECS, Tecs::Added<Transform>> transformAddedObserver;
     Tecs::Observer<ECS, Tecs::Removed<Transform>> transformRemovedObserver;
+    Tecs::Observer<ECS, Tecs::Added<GlobalComponent>> globalCompAddedObserver;
+    Tecs::Observer<ECS, Tecs::Removed<GlobalComponent>> globalCompRemovedObserver;
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
@@ -30,6 +32,80 @@ int main(int argc, char **argv) {
         entityRemovedObserver = writeLock.Watch<Tecs::EntityRemoved>();
         transformAddedObserver = writeLock.Watch<Tecs::Added<Transform>>();
         transformRemovedObserver = writeLock.Watch<Tecs::Removed<Transform>>();
+        globalCompAddedObserver = writeLock.Watch<Tecs::Added<GlobalComponent>>();
+        globalCompRemovedObserver = writeLock.Watch<Tecs::Removed<GlobalComponent>>();
+    }
+    bool globalComponentInitialized = false;
+    {
+        Timer t("Test initializing global components");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
+        auto &gc = writeLock.Set<GlobalComponent>(0);
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+        Assert(gc.globalCounter == 0, "Global counter should be initialized to zero");
+        gc.globalCounter++;
+
+        globalComponentInitialized = true;
+        gc.test = std::shared_ptr<bool>(&globalComponentInitialized, [](bool *b) {
+            *b = false;
+        });
+
+        auto &gc2 = writeLock.Get<GlobalComponent>();
+        Assert(gc2.globalCounter == 1, "Global counter should be read back as 1");
+        Assert(globalComponentInitialized, "Global component should be initialized");
+    }
+    {
+        Timer t("Test update global counter");
+        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 1, "Global counter should be read back as 1");
+        gc.globalCounter++;
+
+        Assert(globalComponentInitialized, "Global component should be initialized");
+    }
+    {
+        Timer t("Test read global counter");
+        auto readLock = ecs.StartTransaction<Tecs::Read<GlobalComponent>>();
+        Assert(readLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = readLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 2, "Global counter should be read back as 2");
+    }
+    {
+        Timer t("Test remove global component");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(gc.globalCounter == 2, "Global counter should be read back as 2");
+
+        writeLock.Unset<GlobalComponent>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+        Assert(writeLock.Had<GlobalComponent>(), "ECS should still know previous state");
+        Assert(globalComponentInitialized, "Global component should still be initialized (kept by read pointer)");
+    }
+    Assert(globalComponentInitialized, "Global component should still be initialized (kept by observer)");
+    {
+        Timer t("Test add remove global component in single transaction");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+
+        auto &gc = writeLock.Get<GlobalComponent>();
+        Assert(writeLock.Has<GlobalComponent>(), "Get call should have initialized global component");
+        Assert(gc.globalCounter == 10, "Global counter should be default initialized to 10");
+
+        bool compInitialized = true;
+        gc.test = std::shared_ptr<bool>(&compInitialized, [](bool *b) {
+            *b = false;
+        });
+
+        // Try removing the component in the same transaction it was created
+        writeLock.Unset<GlobalComponent>();
+        Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
+
+        Assert(!compInitialized, "Global component should be deconstructed immediately");
     }
     {
         Timer t("Test adding each component type");
@@ -37,13 +113,12 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.id == i, "Expected Nth entity id to be " + std::to_string(i) + ", was " + std::to_string(e.id));
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+            AssertHas<>(writeLock, e);
 
             // Test adding each component type
             Transform value(1.0, 0.0, 0.0, 1);
             writeLock.Set<Transform>(e, value);
-            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Transform>(writeLock, e);
 
             // Test making some changes to ensure values are copied
             value.pos[0] = 2.0;
@@ -51,16 +126,14 @@ int main(int argc, char **argv) {
             transform.pos[0] = 0.0;
 
             writeLock.Set<Renderable>(e, "entity" + std::to_string(i));
-            Assert(writeLock.Has<Transform, Renderable>(e), "Entity should have a Transform and Renderable component");
-            Assert(!writeLock.Has<Script>(e), "Entity has extra components");
+            AssertHas<Transform, Renderable>(writeLock, e);
 
             writeLock.Set<Script>(e, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
-            Assert(writeLock.Has<Transform, Renderable, Script>(e), "Entity should have all components");
+            AssertHas<Transform, Renderable, Script>(writeLock, e);
 
             // Test removing a component
             writeLock.Unset<Renderable>(e);
-            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
+            AssertHas<Transform, Script>(writeLock, e);
 
             // Test references work after Set()
             auto &script = writeLock.Get<Script>(e);
@@ -75,8 +148,7 @@ int main(int argc, char **argv) {
             Assert(script.data[7] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, 0, (0)]");
 
             writeLock.Set<Script>(e, std::initializer_list<uint8_t>({1, 2, 3, 4}));
-            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
+            AssertHas<Transform, Script>(writeLock, e);
 
             Assert(script.data.size() == 4, "Script component should have size 4");
             Assert(script.data[0] == 1, "Script component should have value [(1), 2, 3, 4]");
@@ -92,17 +164,21 @@ int main(int argc, char **argv) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.id == ENTITY_COUNT + i,
                 "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e.id));
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+            AssertHas<>(writeLock, e);
 
             writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
-            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Transform>(writeLock, e);
+
+            writeLock.Set<Renderable>(e, "foo");
+            AssertHas<Transform, Renderable>(writeLock, e);
 
             // Try removing an entity in the same transaction it was created in
             writeLock.Unset<Transform>(e);
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Renderable>(writeLock, e);
+
             e.Destroy(writeLock);
             Assert(!writeLock.Exists(e), "Entity still exists");
+            AssertHas<>(writeLock, e);
         }
     }
     {
@@ -115,13 +191,12 @@ int main(int argc, char **argv) {
                 Assert(e.id == ENTITY_COUNT + i,
                     "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(e.id));
-                Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+                AssertHas<>(writeLock, e);
 
                 entityList.emplace_back(e);
 
                 writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
-                Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-                Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+                AssertHas<Transform>(writeLock, e);
 
                 // Try setting the value twice in one transaction
                 writeLock.Set<Transform>(e, 3.0, 1.0, 7.0, 3);
@@ -199,6 +274,25 @@ int main(int argc, char **argv) {
             }
             Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "Too many events triggered");
         }
+        {
+            Tecs::Added<GlobalComponent> compAdded;
+            Assert(globalCompAddedObserver.Poll(readLock, compAdded), "Expected a GlobalComponent created event");
+            Assert(!compAdded.entity, "Global component events should not have a valid entity");
+            Assert(compAdded.component.globalCounter == 1,
+                "Global component should have been created with globalCounter = 1");
+
+            Assert(!globalCompAddedObserver.Poll(readLock, compAdded), "Too many events triggered");
+        }
+        {
+            Tecs::Removed<GlobalComponent> compRemoved;
+            Assert(globalCompRemovedObserver.Poll(readLock, compRemoved), "Expected a GlobalComponent removed event");
+            Assert(!compRemoved.entity, "Global component events should not have a valid entity");
+            Assert(compRemoved.component.globalCounter == 2,
+                "Global component should have been removed with globalCounter = 2");
+
+            Assert(!globalCompRemovedObserver.Poll(readLock, compRemoved), "Too many events triggered");
+        }
+        Assert(!globalComponentInitialized, "Global component should be deconstructed");
     }
     {
         Timer t("Test read-modify-write values");
@@ -560,6 +654,53 @@ int main(int argc, char **argv) {
         }
 
         blockingThread.join();
+    }
+    {
+        Timer t("Test continuous overlapping reads");
+        std::thread blockingThread;
+        std::vector<std::thread> readThreads;
+        {
+            for (size_t i = 0; i < 10; i++) {
+                // Start 10 overlapping read transaction threads
+                readThreads.emplace_back([i] {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10 * i));
+                    auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                });
+            }
+
+            std::atomic_bool commitCompleted = false;
+            blockingThread = std::thread([&commitCompleted] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                Tecs::Entity e;
+                { // Try to complete an add/remove transaction while continous reads are happening
+                    auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+                    e = lock.NewEntity();
+                    e.Set<Transform>(lock, 1, 2, 3);
+                }
+                { // Remove the entity we just created
+                    auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+                    e.Destroy(lock);
+                }
+                commitCompleted = true;
+            });
+
+            while (!commitCompleted) {
+                // Cycle through each transaction and restart the thread when it completes
+                for (auto &t : readThreads) {
+                    t.join();
+                    t = std::thread([] {
+                        auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    });
+                }
+            }
+        }
+
+        blockingThread.join();
+        for (auto &t : readThreads) {
+            t.join();
+        }
     }
     {
         Timer t("Test count entities");

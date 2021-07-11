@@ -7,6 +7,7 @@
 #include <memory>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 
 namespace Tecs {
     template<typename T>

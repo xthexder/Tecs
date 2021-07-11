@@ -30,7 +30,7 @@ namespace Tecs {
             int retry = 0;
             while (true) {
                 uint32_t current = readers;
-                if (current != READER_LOCKED) {
+                if (current != READER_LOCKED && writer != WRITER_COMMIT) {
                     uint32_t next = current + 1;
                     if (readers.compare_exchange_weak(current, next)) {
                         // Lock aquired
@@ -48,9 +48,13 @@ namespace Tecs {
         }
 
         /**
-         * Unlock this Component type from a read lock. Behavior is undefined if RLock() is not called first.
+         * Unlock this Component type from a read lock. Behavior is undefined if ReadLock() is not called first.
          */
         inline void ReadUnlock() {
+            uint32_t current = readers;
+            if (current == READER_FREE || current == READER_LOCKED) {
+                throw std::runtime_error("ReadUnlock called outside of ReadLock");
+            }
             readers--;
         }
 
@@ -91,6 +95,15 @@ namespace Tecs {
          * Behavior is undefined if WriteLock() is not called first.
          */
         inline void CommitLock() {
+            uint32_t current = writer;
+            if (current != WRITER_LOCKED) {
+                throw std::runtime_error("CommitLock called outside of WriteLock");
+            } else {
+                if (!writer.compare_exchange_strong(current, WRITER_COMMIT)) {
+                    throw std::runtime_error("CommitLock writer changed unexpectedly");
+                }
+            }
+
             int retry = 0;
             while (true) {
                 uint32_t current = readers;
@@ -132,14 +145,27 @@ namespace Tecs {
 
         inline void WriteUnlock() {
             // Unlock read and write copies
-            readers = READER_FREE;
-            writer = WRITER_FREE;
+            uint32_t current = readers;
+            if (current == READER_LOCKED) {
+                if (!readers.compare_exchange_strong(current, READER_FREE)) {
+                    throw std::runtime_error("WriteUnlock readers changed unexpectedly");
+                }
+            }
+    
+            current = writer;
+            if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
+                throw std::runtime_error("WriteUnlock called outside of WriteLock");
+            }
+            if (!writer.compare_exchange_strong(current, WRITER_FREE)) {
+                throw std::runtime_error("WriteUnlock writer changed unexpectedly");
+            }
         }
 
     private:
         // Lock states
         static const uint32_t WRITER_FREE = 0;
         static const uint32_t WRITER_LOCKED = 1;
+        static const uint32_t WRITER_COMMIT = 2;
         static const uint32_t READER_FREE = 0;
         static const uint32_t READER_LOCKED = UINT32_MAX;
 
