@@ -113,13 +113,12 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.id == i, "Expected Nth entity id to be " + std::to_string(i) + ", was " + std::to_string(e.id));
-            Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+            AssertHas<>(writeLock, e);
 
             // Test adding each component type
             Transform value(1.0, 0.0, 0.0, 1);
             writeLock.Set<Transform>(e, value);
-            Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-            Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+            AssertHas<Transform>(writeLock, e);
 
             // Test making some changes to ensure values are copied
             value.pos[0] = 2.0;
@@ -127,16 +126,14 @@ int main(int argc, char **argv) {
             transform.pos[0] = 0.0;
 
             writeLock.Set<Renderable>(e, "entity" + std::to_string(i));
-            Assert(writeLock.Has<Transform, Renderable>(e), "Entity should have a Transform and Renderable component");
-            Assert(!writeLock.Has<Script>(e), "Entity has extra components");
+            AssertHas<Transform, Renderable>(writeLock, e);
 
             writeLock.Set<Script>(e, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
-            Assert(writeLock.Has<Transform, Renderable, Script>(e), "Entity should have all components");
+            AssertHas<Transform, Renderable, Script>(writeLock, e);
 
             // Test removing a component
             writeLock.Unset<Renderable>(e);
-            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
+            AssertHas<Transform, Script>(writeLock, e);
 
             // Test references work after Set()
             auto &script = writeLock.Get<Script>(e);
@@ -151,8 +148,7 @@ int main(int argc, char **argv) {
             Assert(script.data[7] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, 0, (0)]");
 
             writeLock.Set<Script>(e, std::initializer_list<uint8_t>({1, 2, 3, 4}));
-            Assert(writeLock.Has<Transform, Script>(e), "Entity should have a Transform and Script component");
-            Assert(!writeLock.Has<Renderable>(e), "Entity should not have a Renderable component");
+            AssertHas<Transform, Script>(writeLock, e);
 
             Assert(script.data.size() == 4, "Script component should have size 4");
             Assert(script.data[0] == 1, "Script component should have value [(1), 2, 3, 4]");
@@ -195,13 +191,12 @@ int main(int argc, char **argv) {
                 Assert(e.id == ENTITY_COUNT + i,
                     "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(e.id));
-                Assert(!writeLock.Has<Transform, Renderable, Script>(e), "Entity must start with no components");
+                AssertHas<>(writeLock, e);
 
                 entityList.emplace_back(e);
 
                 writeLock.Set<Transform>(e, 1.0, 3.0, 3.0, 7);
-                Assert(writeLock.Has<Transform>(e), "Entity should have a Transform component");
-                Assert(!writeLock.Has<Renderable, Script>(e), "Entity has extra components");
+                AssertHas<Transform>(writeLock, e);
 
                 // Try setting the value twice in one transaction
                 writeLock.Set<Transform>(e, 3.0, 1.0, 7.0, 3);
