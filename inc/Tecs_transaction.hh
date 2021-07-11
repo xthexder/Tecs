@@ -594,7 +594,7 @@ namespace Tecs {
             return ecs.template Storage<T>().writeComponents[e.id] = value;
         }
 
-        template<typename T, typename... Args>
+        template<typename T, std::enable_if_t<!is_global_component<T>::value, bool> = true, typename... Args>
         inline T &Set(const Entity &e, Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed without an Entity");
@@ -636,8 +636,8 @@ namespace Tecs {
             return ecs.template Storage<T>().writeComponents[0] = value;
         }
 
-        template<typename T, typename... Args>
-        inline T &Init(Args &&...args) const {
+        template<typename T, std::enable_if_t<is_global_component<T>::value, bool> = true, typename... Args>
+        inline T &Set(Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
 

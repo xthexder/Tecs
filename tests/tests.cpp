@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
         Timer t("Test initializing global components");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
-        auto &gc = writeLock.Init<GlobalComponent>(0);
+        auto &gc = writeLock.Set<GlobalComponent>(0);
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
         Assert(gc.globalCounter == 0, "Global counter should be initialized to zero");
         gc.globalCounter++;
