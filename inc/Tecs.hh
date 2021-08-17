@@ -24,6 +24,8 @@ namespace Tecs {
     template<typename... Tn>
     class ECS {
     public:
+        ECS() {}
+
         template<typename... Permissions>
         /**
          * Start a new transaction with a specific set of permissions, and return a Lock object.

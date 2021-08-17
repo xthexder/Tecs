@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-project(Tecs VERSION 0.5)
+project(Tecs VERSION 0.5.1)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
