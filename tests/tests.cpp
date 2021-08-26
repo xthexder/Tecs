@@ -445,21 +445,22 @@ int main(int argc, char **argv) {
             e = writeLock.NewEntity();
             e.Set<Transform>(writeLock, 42.0, 1.0, 64.0, 99.0);
         }
+        std::atomic_bool commitStart = false;
         std::atomic_bool commited = false;
         std::vector<std::thread> readThreads;
         readThreads.emplace_back([&e]() {
             auto readLock = ecs.StartTransaction<>();
             Assert(e.Exists(readLock), "The entity should exist for all transactions started before AddRemove.");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            Assert(e.Exists(readLock), "The entity should exist for all transactions started before AddRemove.");
+            Assert(e.Exists(readLock), "The entity should still exist for all transactions started before AddRemove.");
         });
         for (int i = 0; i < 100; i++) {
-            readThreads.emplace_back([&commited, &e, i]() {
+            readThreads.emplace_back([&commitStart, &commited, &e, i]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(i));
                 auto readLock = ecs.StartTransaction<>();
                 if (commited) {
                     Assert(!e.Exists(readLock), "The entity should already be removed at this point.");
-                } else {
+                } else if (!commitStart) {
                     Assert(e.Exists(readLock), "The entity shouldn't be removed yet.");
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     Assert(e.Exists(readLock), "The entity shouldn't be removed until after existing reads complete.");
@@ -471,6 +472,7 @@ int main(int argc, char **argv) {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
             e.Destroy(writeLock);
             Assert(!e.Exists(writeLock), "Entity should not exist after it is destroyed.");
+            commitStart = true;
         }
         commited = true;
         {

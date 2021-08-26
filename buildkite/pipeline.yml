@@ -1,5 +1,0 @@
-steps:
-  - command:
-    - "./ci-build.sh"
-    label: "Run Tests"
-
