@@ -334,11 +334,12 @@ int main(int argc, char **argv) {
             outerLock.reset(new Tecs::Lock<ECS, Tecs::Write<Script>>(transaction));
         }
         // Transaction should not be commited yet.
-        {
+        std::thread readThread([writtenId] {
             // Try reading the written bit to make sure the write transaction is not yet commited.
             auto transaction = ecs.StartTransaction<Tecs::Read<Script>>();
             Assert(writtenId.Get<Script>(transaction).data[3] != 99, "Script data should not be set to 99");
-        }
+        });
+        readThread.join();
         outerLock.reset(nullptr);
         // Transaction should now be commited.
         {
@@ -702,6 +703,17 @@ int main(int argc, char **argv) {
         blockingThread.join();
         for (auto &t : readThreads) {
             t.join();
+        }
+    }
+    {
+        Timer t("Test nested transactions");
+        try {
+            auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
+            auto lockB = ecs.StartTransaction<Tecs::Read<Renderable>, Tecs::Write<Script>>();
+            Assert(false, "Nested transactions should not succeed.");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Nested transactions are not allowed", "Received wrong runtime_error: " + msg);
         }
     }
     {

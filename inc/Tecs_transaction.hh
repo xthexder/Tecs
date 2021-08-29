@@ -5,6 +5,7 @@
 #include "Tecs_observer.hh"
 #include "nonstd/span.hpp"
 
+#include <array>
 #include <bitset>
 #include <cstddef>
 #include <memory>
@@ -20,6 +21,9 @@
 static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
 
 namespace Tecs {
+    // Used for detecting nested transactions
+    static thread_local bool transactionActive = false;
+
     /**
      * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.
      * The permissions can then be referenced by passing around Lock objects.
@@ -30,9 +34,15 @@ namespace Tecs {
     template<typename ECSType>
     class BaseTransaction {
     public:
-        BaseTransaction(ECSType &ecs) : ecs(ecs) {}
+        BaseTransaction(ECSType &ecs) : ecs(ecs) {
+            if (transactionActive) throw std::runtime_error("Nested transactions are not allowed");
+            transactionActive = true;
+        }
         // Delete copy constructor
         BaseTransaction(const BaseTransaction &) = delete;
+        virtual ~BaseTransaction() {
+            transactionActive = false;
+        }
 
     protected:
         ECSType &ecs;
@@ -156,7 +166,7 @@ namespace Tecs {
                 this->ecs.validIndex.CommitLock();
                 this->ecs.readValidGlobals = this->ecs.writeValidGlobals;
                 this->ecs.validIndex.template CommitEntities<true>();
-                
+
                 CommitObservers<EntityAdded>();
                 CommitObservers<EntityRemoved>();
                 CommitObservers<Added<AllComponentTypes>...>();
@@ -186,9 +196,7 @@ namespace Tecs {
 
         template<typename U>
         inline void ClearValidEntities() const {
-            if constexpr (!is_global_component<U>()) {
-                this->ecs.template Storage<U>().writeValidEntities.clear();
-            }
+            if constexpr (!is_global_component<U>()) { this->ecs.template Storage<U>().writeValidEntities.clear(); }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -242,11 +250,13 @@ namespace Tecs {
                 if (this->ecs.template BitsetHas<U>(bitsets[id])) {
                     if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
                         auto &observerList = this->ecs.template Observers<Added<U>>();
-                        observerList.eventQueue->emplace_back(Entity(id), this->ecs.template Storage<U>().writeComponents[id]);
+                        observerList.eventQueue->emplace_back(Entity(id),
+                            this->ecs.template Storage<U>().writeComponents[id]);
                     }
                 } else if (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id])) {
                     auto &observerList = this->ecs.template Observers<Removed<U>>();
-                    observerList.eventQueue->emplace_back(Entity(id), this->ecs.template Storage<U>().readComponents[id]);
+                    observerList.eventQueue->emplace_back(Entity(id),
+                        this->ecs.template Storage<U>().readComponents[id]);
                 }
             }
         }
@@ -265,7 +275,8 @@ namespace Tecs {
                 if (this->ecs.template BitsetHas<U>(bitset)) {
                     if (!this->ecs.template BitsetHas<U>(oldBitset)) {
                         auto &observerList = this->ecs.template Observers<Added<U>>();
-                        observerList.eventQueue->emplace_back(Entity(), this->ecs.template Storage<U>().writeComponents[0]);
+                        observerList.eventQueue->emplace_back(Entity(),
+                            this->ecs.template Storage<U>().writeComponents[0]);
                     }
                 } else if (this->ecs.template BitsetHas<U>(oldBitset)) {
                     auto &observerList = this->ecs.template Observers<Removed<U>>();
