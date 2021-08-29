@@ -6,6 +6,7 @@
 #include "nonstd/span.hpp"
 
 #include <array>
+#include <atomic>
 #include <bitset>
 #include <cstddef>
 #include <memory>
@@ -22,7 +23,8 @@ static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to
 
 namespace Tecs {
     // Used for detecting nested transactions
-    static thread_local bool transactionActive = false;
+    static thread_local std::vector<size_t> activeTransactions;
+    static std::atomic_size_t nextEcsId(0);
 
     /**
      * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.
@@ -35,13 +37,15 @@ namespace Tecs {
     class BaseTransaction {
     public:
         BaseTransaction(ECSType &ecs) : ecs(ecs) {
-            if (transactionActive) throw std::runtime_error("Nested transactions are not allowed");
-            transactionActive = true;
+            for (auto &id : activeTransactions) {
+                if (id == ecs.ecsId) throw std::runtime_error("Nested transactions are not allowed");
+            }
+            activeTransactions.push_back(ecs.ecsId);
         }
         // Delete copy constructor
         BaseTransaction(const BaseTransaction &) = delete;
         virtual ~BaseTransaction() {
-            transactionActive = false;
+            activeTransactions.erase(std::remove(activeTransactions.begin(), activeTransactions.end(), ecs.ecsId));
         }
 
     protected:

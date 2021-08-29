@@ -717,6 +717,12 @@ int main(int argc, char **argv) {
         }
     }
     {
+        Timer t("Test nested transactions across ecs instances");
+        testing::ECS ecs2;
+        auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
+        auto lockB = ecs2.StartTransaction<Tecs::Read<Renderable>, Tecs::Write<Script>>();
+    }
+    {
         Timer t("Test count entities");
         {
             auto readLock = ecs.StartTransaction<>();

@@ -24,7 +24,7 @@ namespace Tecs {
     template<typename... Tn>
     class ECS {
     public:
-        ECS() {}
+        ECS() : ecsId(nextEcsId++) {}
 
         template<typename... Permissions>
         /**
@@ -109,9 +109,13 @@ namespace Tecs {
                    ObserverList<Removed<Tn>>...> eventLists;
         // clang-format on
 
+        size_t ecsId;
+
         template<typename, typename...>
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
+        template<typename>
+        friend class BaseTransaction;
     };
 } // namespace Tecs
