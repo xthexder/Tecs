@@ -23,8 +23,8 @@ static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to
 
 namespace Tecs {
     // Used for detecting nested transactions
-    static thread_local std::vector<size_t> activeTransactions;
-    static std::atomic_size_t nextEcsId(0);
+    extern thread_local std::vector<size_t> activeTransactions;
+    extern std::atomic_size_t nextEcsId;
 
     /**
      * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.

@@ -30,10 +30,10 @@ endif()
 
 include(GNUInstallDirs)
 
-add_library(${PROJECT_NAME} INTERFACE)
+add_library(${PROJECT_NAME} STATIC src/Tecs.cc)
 target_include_directories(
     ${PROJECT_NAME}
-    INTERFACE
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
 )
@@ -41,12 +41,12 @@ target_include_directories(
 if(UNIX)
     target_link_libraries(
         ${PROJECT_NAME}
-        INTERFACE
+        PUBLIC
             pthread
     )
 endif()
 
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc
