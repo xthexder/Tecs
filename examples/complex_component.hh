@@ -6,8 +6,8 @@ namespace example {
             return value;
         }
 
-        void Set(int value) {
-            this->value = value;
+        void Set(int newValue) {
+            this->value = newValue;
             changed = true;
         }
 

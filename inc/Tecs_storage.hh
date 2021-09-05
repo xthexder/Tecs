@@ -106,7 +106,7 @@ namespace Tecs {
 
             int retry = 0;
             while (true) {
-                uint32_t current = readers;
+                current = readers;
                 if (current == READER_FREE) {
                     if (readers.compare_exchange_weak(current, READER_LOCKED)) {
                         // Lock aquired
@@ -151,7 +151,7 @@ namespace Tecs {
                     throw std::runtime_error("WriteUnlock readers changed unexpectedly");
                 }
             }
-    
+
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");

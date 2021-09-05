@@ -24,7 +24,11 @@ namespace Tecs {
     template<typename... Tn>
     class ECS {
     public:
-        ECS() : ecsId(nextEcsId++) {}
+        ECS() {
+#ifndef TECS_HEADER_ONLY
+            ecsId = ++nextEcsId;
+#endif
+        }
 
         template<typename... Permissions>
         /**
@@ -109,7 +113,9 @@ namespace Tecs {
                    ObserverList<Removed<Tn>>...> eventLists;
         // clang-format on
 
+#ifndef TECS_HEADER_ONLY
         size_t ecsId;
+#endif
 
         template<typename, typename...>
         friend class Lock;

@@ -15,7 +15,7 @@ static ECS ecs;
 
 #define ENTITY_COUNT 10000
 
-int main(int argc, char **argv) {
+int main(int /* argc */, char ** /* argv */) {
     std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
               << std::endl;
 
@@ -444,7 +444,7 @@ int main(int argc, char **argv) {
         {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
             e = writeLock.NewEntity();
-            e.Set<Transform>(writeLock, 42.0, 1.0, 64.0, 99.0);
+            e.Set<Transform>(writeLock, 42.0, 1.0, 64.0, 99);
         }
         std::atomic_bool commitStart = false;
         std::atomic_bool commited = false;
@@ -690,9 +690,9 @@ int main(int argc, char **argv) {
 
             while (!commitCompleted) {
                 // Cycle through each transaction and restart the thread when it completes
-                for (auto &t : readThreads) {
-                    t.join();
-                    t = std::thread([] {
+                for (auto &thread : readThreads) {
+                    thread.join();
+                    thread = std::thread([] {
                         auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     });
@@ -701,8 +701,8 @@ int main(int argc, char **argv) {
         }
 
         blockingThread.join();
-        for (auto &t : readThreads) {
-            t.join();
+        for (auto &thread : readThreads) {
+            thread.join();
         }
     }
     {
