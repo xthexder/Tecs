@@ -22,9 +22,11 @@
 static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
 
 namespace Tecs {
+#ifndef TECS_HEADER_ONLY
     // Used for detecting nested transactions
     extern thread_local std::vector<size_t> activeTransactions;
     extern std::atomic_size_t nextEcsId;
+#endif
 
     /**
      * When a Transaction is started, the relevant parts of the ECS are locked based on the Transactions Permissons.
@@ -37,15 +39,19 @@ namespace Tecs {
     class BaseTransaction {
     public:
         BaseTransaction(ECSType &ecs) : ecs(ecs) {
+#ifndef TECS_HEADER_ONLY
             for (auto &id : activeTransactions) {
                 if (id == ecs.ecsId) throw std::runtime_error("Nested transactions are not allowed");
             }
             activeTransactions.push_back(ecs.ecsId);
+#endif
         }
         // Delete copy constructor
         BaseTransaction(const BaseTransaction &) = delete;
         virtual ~BaseTransaction() {
+#ifndef TECS_HEADER_ONLY
             activeTransactions.erase(std::remove(activeTransactions.begin(), activeTransactions.end(), ecs.ecsId));
+#endif
         }
 
     protected:
@@ -218,6 +224,8 @@ namespace Tecs {
                         this->ecs.template Storage<U>().writeValidEntities.size();
                     this->ecs.template Storage<U>().writeValidEntities.emplace_back(id);
                 }
+            } else {
+                (void)id; // Unreferenced parameter warning on MSVC
             }
         }
 
@@ -262,6 +270,8 @@ namespace Tecs {
                     observerList.eventQueue->emplace_back(Entity(id),
                         this->ecs.template Storage<U>().readComponents[id]);
                 }
+            } else {
+                (void)id; // Unreferenced parameter warning on MSVC
             }
         }
 
@@ -720,6 +730,8 @@ namespace Tecs {
                 size_t newSize = ecs.template Storage<T>().writeComponents.size() + count;
                 ecs.template Storage<T>().writeComponents.resize(newSize);
                 ecs.template Storage<T>().validEntityIndexes.resize(newSize);
+            } else {
+                (void)count; // Unreferenced parameter warning on MSVC
             }
         }
 

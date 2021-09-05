@@ -68,7 +68,7 @@ void renderThread() {
         std::this_thread::sleep_until(lastFrameEnd);
     }
     auto delta = std::chrono::high_resolution_clock::now() - start;
-    double durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+    size_t durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
     double avgFrameRate = readCount * 1000 / (double)durationMs;
     double avgUpdateRate = currentValue * 1000 / (double)durationMs;
     if (badCount != 0) {
@@ -151,7 +151,7 @@ void transformWorkerThread() {
     }
 }
 
-int main(int argc, char **argv) {
+int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Create entities");
         auto writeLock = ecs.StartTransaction<AddRemove>();
@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
         Timer t("Validate entities Tecs");
         int invalid = 0;
         int valid = 0;
-        double commonValue;
+        double commonValue = 0.0;
         auto readLock = ecs.StartTransaction<Read<Transform>>();
         auto &entityList = readLock.EntitiesWith<Transform>();
         for (auto e : entityList) {
@@ -292,7 +292,7 @@ int main(int argc, char **argv) {
         Timer t("Validate entities std::vector");
         int invalid = 0;
         int valid = 0;
-        double commonValue;
+        double commonValue = 0.0;
         for (auto &transform : transforms) {
             if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                 if (invalid == 0) {

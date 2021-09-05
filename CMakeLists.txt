@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(Tecs VERSION 0.5.1)
 
+option(TECS_HEADER_ONLY "Use Tecs in header-only library mode" OFF)
+
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -10,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## Setup compiler flags for various build types
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(CMAKE_CXX_FLAGS                 "/MP /EHsc")
+    set(CMAKE_CXX_FLAGS                 "/MP /EHsc /W4 /WX")
     set(CMAKE_CXX_FLAGS_RELEASE         "/MD /O2")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "/MDd /O2")
     set(CMAKE_CXX_FLAGS_DEBUG           "/MDd /DEBUG /ZI /FC")
@@ -30,18 +32,28 @@ endif()
 
 include(GNUInstallDirs)
 
-add_library(${PROJECT_NAME} STATIC src/Tecs.cc)
-target_include_directories(
-    ${PROJECT_NAME}
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
-)
+if(TECS_HEADER_ONLY)
+    add_library(${PROJECT_NAME} INTERFACE)
+    target_include_directories(
+        ${PROJECT_NAME}
+        INTERFACE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
+    )
+else()
+    add_library(${PROJECT_NAME} STATIC src/Tecs.cc)
+    target_include_directories(
+        ${PROJECT_NAME}
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
+    )
+endif()
 
 if(UNIX)
     target_link_libraries(
         ${PROJECT_NAME}
-        PUBLIC
+        INTERFACE
             pthread
     )
 endif()
@@ -56,8 +68,6 @@ install(
 
 # Build tests and examples if we are the root project
 if("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
-    # set(GOOGLETEST_DIR ${EXT_PATH}/googletest/googletest)
-    # add_subdirectory(${EXT_PATH}/googletest)
     add_subdirectory(tests)
     add_subdirectory(examples)
 ENDIF ()

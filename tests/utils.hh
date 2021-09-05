@@ -23,13 +23,7 @@ namespace testing {
         MultiTimer(const MultiTimer &) = delete;
 
         MultiTimer() : name(), print(false) {}
-        MultiTimer(std::string name, bool print = true) {
-            Reset(name, print);
-        }
-
-        void Reset(std::string name, bool print = true) {
-            this->name = name;
-            this->print = print;
+        MultiTimer(std::string name, bool print = true) : name(name), print(print) {
             if (print) {
                 std::stringstream ss;
                 ss << "[" << name << "] Start" << std::endl;

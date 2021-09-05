@@ -10,7 +10,7 @@ using namespace Tecs;
 // Instantiate an ECS using our defined World
 static World ecs;
 
-int main(int argc, char **argv) {
+int main(int /* argc */, char ** /* argv */) {
     { // Start a new transaction with AddRemove permissions to create new entities and components
         auto transaction = ecs.StartTransaction<AddRemove>();
 
