@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(Tecs VERSION 0.5.1)
 
-option(TECS_HEADER_ONLY "Use Tecs in header-only library mode" OFF)
+option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested transaction detection)" OFF)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
