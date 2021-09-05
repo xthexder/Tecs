@@ -71,7 +71,7 @@ namespace Tecs {
         template<typename Event>
         struct ObserverList {
             std::vector<std::shared_ptr<std::deque<Event>>> observers;
-            std::shared_ptr<std::deque<Event>> eventQueue;
+            std::shared_ptr<std::deque<Event>> writeQueue;
         };
 
         template<size_t I, typename U>
@@ -121,7 +121,7 @@ namespace Tecs {
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
-        template<typename>
+        template<template<typename...> typename, typename...>
         friend class BaseTransaction;
     };
 } // namespace Tecs

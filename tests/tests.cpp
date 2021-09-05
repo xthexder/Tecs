@@ -489,6 +489,67 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
+        Timer t("Test noop write transaction does not commit lock");
+        {
+            auto readLock = ecs.StartTransaction<Tecs::Read<Script>>();
+            Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
+            auto previousValue = readId.Get<Script>(readLock).data[3];
+
+            std::thread readThread([readId, previousValue] {
+                // Try starting a write transaction while another read transaction is active.
+                auto writeLock = ecs.StartTransaction<Tecs::Write<Script>>();
+                Assert(readId.GetPrevious<Script>(writeLock).data[3] == previousValue,
+                    "Script data should match out read transaction");
+
+                // Commit should not occur since no write operations were done.
+                // Test would otherwise block on commit due to active read transaction.
+            });
+            readThread.join();
+        }
+    }
+    {
+        Timer t("Test write transaction does not commit untouched components");
+        {
+            auto readLock = ecs.StartTransaction<Tecs::Read<Script>>();
+            Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
+            auto previousValue = readId.Get<Script>(readLock).data[3];
+
+            std::thread readThread([readId, previousValue] {
+                // Try starting a write transaction while another read transaction is active.
+                auto writeLock = ecs.StartTransaction<Tecs::Write<Transform, Script>>();
+                Tecs::Entity writeId = writeLock.EntitiesWith<Transform>()[0];
+                writeId.Get<Transform>(writeLock).pos[2]++;
+
+                Assert(readId.GetPrevious<Script>(writeLock).data[3] == previousValue,
+                    "Script data should match out read transaction");
+
+                // Commit should only occur on Transform component
+                // Test would otherwise block on Transform commit due to active read transaction.
+            });
+            readThread.join();
+        }
+    }
+    {
+        Timer t("Test noop add/remove transaction does not commit");
+        {
+            auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+            Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
+            auto previousValue = readId.Get<Script>(readLock).data[3];
+
+            std::thread readThread([readId, previousValue] {
+                // Try starting a write transaction while another read transaction is active.
+                auto addRemoveLock = ecs.StartTransaction<Tecs::AddRemove>();
+
+                Assert(readId.GetPrevious<Script>(addRemoveLock).data[3] == previousValue,
+                    "Script data should match out read transaction");
+
+                // Commit should not occur since no write operations were done.
+                // Test would otherwise block on commit due to active read transaction.
+            });
+            readThread.join();
+        }
+    }
+    {
         Timer t("Test read lock typecasting");
         auto readLockAll = ecs.StartTransaction<Tecs::Read<Transform, Renderable, Script>>();
         { // Test Subset() method
