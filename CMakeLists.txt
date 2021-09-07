@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-project(Tecs VERSION 0.5.1)
+project(Tecs VERSION 0.6.0)
 
 option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested transaction detection)" OFF)
 
@@ -40,6 +40,7 @@ if(TECS_HEADER_ONLY)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>
     )
+    target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_HEADER_ONLY)
 else()
     add_library(${PROJECT_NAME} STATIC src/Tecs.cc)
     target_include_directories(
@@ -58,7 +59,7 @@ if(UNIX)
     )
 endif()
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc
