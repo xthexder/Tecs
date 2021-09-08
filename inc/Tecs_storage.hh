@@ -29,10 +29,11 @@ namespace Tecs {
         inline bool ReadLock(bool block = true) {
             int retry = 0;
             while (true) {
-                uint32_t current = readers;
-                if (current != READER_LOCKED && writer != WRITER_COMMIT) {
-                    uint32_t next = current + 1;
-                    if (readers.compare_exchange_weak(current, next)) {
+                uint32_t currentReaders = readers;
+                uint32_t currentWriter = writer;
+                if (currentReaders != READER_LOCKED && currentWriter != WRITER_COMMIT) {
+                    uint32_t next = currentReaders + 1;
+                    if (readers.compare_exchange_weak(currentReaders, next)) {
                         // Lock aquired
                         return true;
                     }
@@ -42,7 +43,15 @@ namespace Tecs {
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
+#if __cpp_lib_atomic_wait
+                    if (currentWriter == WRITER_COMMIT) {
+                        writer.wait(currentWriter);
+                    } else if (currentReaders == READER_LOCKED) {
+                        readers.wait(currentReaders);
+                    }
+#else
                     std::this_thread::yield();
+#endif
                 }
             }
         }
@@ -56,6 +65,9 @@ namespace Tecs {
                 throw std::runtime_error("ReadUnlock called outside of ReadLock");
             }
             readers--;
+#if __cpp_lib_atomic_wait
+            readers.notify_all();
+#endif
         }
 
         /**
@@ -80,7 +92,11 @@ namespace Tecs {
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
+#if __cpp_lib_atomic_wait
+                    if (current != WRITER_FREE) writer.wait(current);
+#else
                     std::this_thread::yield();
+#endif
                 }
             }
         }
@@ -116,7 +132,11 @@ namespace Tecs {
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
+#if __cpp_lib_atomic_wait
+                    if (current != READER_FREE) readers.wait(current);
+#else
                     std::this_thread::yield();
+#endif
                 }
             }
         }
@@ -151,6 +171,9 @@ namespace Tecs {
                     throw std::runtime_error("WriteUnlock readers changed unexpectedly");
                 }
             }
+#if __cpp_lib_atomic_wait
+            readers.notify_all();
+#endif
 
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
@@ -159,6 +182,9 @@ namespace Tecs {
             if (!writer.compare_exchange_strong(current, WRITER_FREE)) {
                 throw std::runtime_error("WriteUnlock writer changed unexpectedly");
             }
+#if __cpp_lib_atomic_wait
+            writer.notify_all();
+#endif
         }
 
     private:

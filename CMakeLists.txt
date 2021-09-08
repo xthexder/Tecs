@@ -6,9 +6,11 @@ option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested t
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-# Tell cmake we need C++17
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# A minimum of C++17 is required, but try and use C++20 if available
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+endif()
 
 ## Setup compiler flags for various build types
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -58,8 +60,6 @@ if(UNIX)
             pthread
     )
 endif()
-
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc

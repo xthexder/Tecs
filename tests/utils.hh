@@ -23,10 +23,16 @@ namespace testing {
         MultiTimer(const MultiTimer &) = delete;
 
         MultiTimer() : name(), print(false) {}
-        MultiTimer(std::string name, bool print = true) : name(name), print(print) {
-            if (print) {
+        MultiTimer(std::string name, bool print = true) {
+            Reset(name, print);
+        }
+
+        void Reset(std::string _name, bool _print = true) {
+            this->name = _name;
+            this->print = _print;
+            if (_print) {
                 std::stringstream ss;
-                ss << "[" << name << "] Start" << std::endl;
+                ss << "[" << _name << "] Start" << std::endl;
                 std::cout << ss.str();
             }
         }
@@ -86,7 +92,7 @@ namespace testing {
             } else if (!name.empty()) {
                 std::stringstream ss;
                 ss << "[" << name << "] End: " << ((end - start).count() / 1000000.0) << " ms" << std::endl;
-                std::cout << ss.str();
+                std::cout << ss.str() << std::flush;
             }
         }
 

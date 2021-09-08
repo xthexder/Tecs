@@ -38,12 +38,12 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class BaseTransaction {
     public:
-        BaseTransaction(ECSType<AllComponentTypes...> &ecs) : ecs(ecs) {
+        BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
 #ifndef TECS_HEADER_ONLY
             for (auto &id : activeTransactions) {
-                if (id == ecs.ecsId) throw std::runtime_error("Nested transactions are not allowed");
+                if (id == instance.ecsId) throw std::runtime_error("Nested transactions are not allowed");
             }
-            activeTransactions.push_back(ecs.ecsId);
+            activeTransactions.push_back(instance.ecsId);
 #endif
         }
         // Delete copy constructor
@@ -51,12 +51,12 @@ namespace Tecs {
 
         virtual ~BaseTransaction() {
 #ifndef TECS_HEADER_ONLY
-            activeTransactions.erase(std::remove(activeTransactions.begin(), activeTransactions.end(), ecs.ecsId));
+            activeTransactions.erase(std::remove(activeTransactions.begin(), activeTransactions.end(), instance.ecsId));
 #endif
         }
 
     protected:
-        ECSType<AllComponentTypes...> &ecs;
+        ECSType<AllComponentTypes...> &instance;
 
         std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 
@@ -70,39 +70,39 @@ namespace Tecs {
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
 
     public:
-        inline Transaction(ECS<AllComponentTypes...> &ecs) : BaseTransaction<ECS, AllComponentTypes...>(ecs) {
+        inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
             std::bitset<1 + sizeof...(AllComponentTypes)> acquired;
             // Templated lambda functions for Lock/Unlock so they can be looped over at runtime.
             std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
-                [&ecs](bool block) {
+                [&instance](bool block) {
                     if (is_add_remove_allowed<LockType>()) {
-                        return ecs.validIndex.WriteLock(block);
+                        return instance.validIndex.WriteLock(block);
                     } else {
-                        return ecs.validIndex.ReadLock(block);
+                        return instance.validIndex.ReadLock(block);
                     }
                 },
-                [&ecs](bool block) {
+                [&instance](bool block) {
                     if (is_write_allowed<AllComponentTypes, LockType>()) {
-                        return ecs.template Storage<AllComponentTypes>().WriteLock(block);
+                        return instance.template Storage<AllComponentTypes>().WriteLock(block);
                     } else if (is_read_allowed<AllComponentTypes, LockType>()) {
-                        return ecs.template Storage<AllComponentTypes>().ReadLock(block);
+                        return instance.template Storage<AllComponentTypes>().ReadLock(block);
                     }
                     // This component type isn't part of the lock, skip.
                     return true;
                 }...};
             std::array<std::function<void()>, acquired.size()> unlockFuncs = {
-                [&ecs]() {
+                [&instance]() {
                     if (is_add_remove_allowed<LockType>()) {
-                        return ecs.validIndex.WriteUnlock();
+                        return instance.validIndex.WriteUnlock();
                     } else {
-                        return ecs.validIndex.ReadUnlock();
+                        return instance.validIndex.ReadUnlock();
                     }
                 },
-                [&ecs]() {
+                [&instance]() {
                     if (is_write_allowed<AllComponentTypes, LockType>()) {
-                        ecs.template Storage<AllComponentTypes>().WriteUnlock();
+                        instance.template Storage<AllComponentTypes>().WriteUnlock();
                     } else if (is_read_allowed<AllComponentTypes, LockType>()) {
-                        ecs.template Storage<AllComponentTypes>().ReadUnlock();
+                        instance.template Storage<AllComponentTypes>().ReadUnlock();
                     }
                     // This component type isn't part of the lock, skip.
                 }...};
@@ -130,12 +130,12 @@ namespace Tecs {
             }
 
             if (is_add_remove_allowed<LockType>()) {
-                auto &addedObserverList = this->ecs.template Observers<EntityAdded>();
+                auto &addedObserverList = this->instance.template Observers<EntityAdded>();
                 if (!addedObserverList.writeQueue) {
                     addedObserverList.writeQueue = std::make_shared<std::deque<EntityAdded>>();
                 }
 
-                auto &removedObserverList = this->ecs.template Observers<EntityRemoved>();
+                auto &removedObserverList = this->instance.template Observers<EntityRemoved>();
                 if (!removedObserverList.writeQueue) {
                     removedObserverList.writeQueue = std::make_shared<std::deque<EntityRemoved>>();
                 }
@@ -146,29 +146,30 @@ namespace Tecs {
         inline ~Transaction() {
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
-                this->ecs.validIndex.writeValidEntities.clear();
+                this->instance.validIndex.writeValidEntities.clear();
                 ClearValidEntities<AllComponentTypes...>();
-                this->ecs.freeEntities.clear();
-                auto &oldBitsets = this->ecs.validIndex.readComponents;
-                auto &bitsets = this->ecs.validIndex.writeComponents;
+                this->instance.freeEntities.clear();
+                auto &oldBitsets = this->instance.validIndex.readComponents;
+                auto &bitsets = this->instance.validIndex.writeComponents;
                 for (size_t id = 0; id < bitsets.size(); id++) {
                     UpdateValidEntity<AllComponentTypes...>(id);
                     if (bitsets[id][0]) {
-                        this->ecs.validIndex.validEntityIndexes[id] = this->ecs.validIndex.writeValidEntities.size();
-                        this->ecs.validIndex.writeValidEntities.emplace_back(id);
+                        this->instance.validIndex.validEntityIndexes[id] =
+                            this->instance.validIndex.writeValidEntities.size();
+                        this->instance.validIndex.writeValidEntities.emplace_back(id);
                     } else {
-                        this->ecs.freeEntities.emplace_back(Entity(id));
+                        this->instance.freeEntities.emplace_back(Entity(id));
                     }
 
                     // Compare new and old bitsets to notifiy observers
                     NotifyObservers<AllComponentTypes...>(id);
                     if (bitsets[id][0]) {
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            auto &observerList = this->ecs.template Observers<EntityAdded>();
+                            auto &observerList = this->instance.template Observers<EntityAdded>();
                             observerList.writeQueue->emplace_back(Entity(id));
                         }
                     } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
-                        auto &observerList = this->ecs.template Observers<EntityRemoved>();
+                        auto &observerList = this->instance.template Observers<EntityRemoved>();
                         observerList.writeQueue->emplace_back(Entity(id));
                     }
                 }
@@ -176,9 +177,9 @@ namespace Tecs {
             }
             CommitLockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->ecs.validIndex.CommitLock();
-                this->ecs.readValidGlobals = this->ecs.writeValidGlobals;
-                this->ecs.validIndex.template CommitEntities<true>();
+                this->instance.validIndex.CommitLock();
+                this->instance.readValidGlobals = this->instance.writeValidGlobals;
+                this->instance.validIndex.template CommitEntities<true>();
 
                 CommitObservers<EntityAdded>();
                 CommitObservers<EntityRemoved>();
@@ -187,9 +188,9 @@ namespace Tecs {
             }
             UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
-                this->ecs.validIndex.WriteUnlock();
+                this->instance.validIndex.WriteUnlock();
             } else {
-                this->ecs.validIndex.ReadUnlock();
+                this->instance.validIndex.ReadUnlock();
             }
         }
 
@@ -198,8 +199,8 @@ namespace Tecs {
         // This is accomplished by filtering AllComponentTypes by Permissions
         template<typename U>
         inline void CommitLockInOrder() const {
-            if (is_write_allowed<U, LockType>() && this->ecs.template BitsetHas<U>(this->writeAccessedFlags)) {
-                this->ecs.template Storage<U>().CommitLock();
+            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
+                this->instance.template Storage<U>().CommitLock();
             }
         }
 
@@ -211,7 +212,9 @@ namespace Tecs {
 
         template<typename U>
         inline void ClearValidEntities() const {
-            if constexpr (!is_global_component<U>()) { this->ecs.template Storage<U>().writeValidEntities.clear(); }
+            if constexpr (!is_global_component<U>()) {
+                this->instance.template Storage<U>().writeValidEntities.clear();
+            }
         }
 
         template<typename U, typename U2, typename... Un>
@@ -223,11 +226,11 @@ namespace Tecs {
         template<typename U>
         inline void UpdateValidEntity(size_t id) const {
             if constexpr (!is_global_component<U>()) {
-                auto &bitsets = this->ecs.validIndex.writeComponents;
-                if (this->ecs.template BitsetHas<U>(bitsets[id])) {
-                    this->ecs.template Storage<U>().validEntityIndexes[id] =
-                        this->ecs.template Storage<U>().writeValidEntities.size();
-                    this->ecs.template Storage<U>().writeValidEntities.emplace_back(id);
+                auto &bitsets = this->instance.validIndex.writeComponents;
+                if (this->instance.template BitsetHas<U>(bitsets[id])) {
+                    this->instance.template Storage<U>().validEntityIndexes[id] =
+                        this->instance.template Storage<U>().writeValidEntities.size();
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(id);
                 }
             } else {
                 (void)id; // Unreferenced parameter warning on MSVC
@@ -242,12 +245,12 @@ namespace Tecs {
 
         template<typename U>
         inline void InitObserverEventQueues() const {
-            auto &addedObserverList = this->ecs.template Observers<Added<U>>();
+            auto &addedObserverList = this->instance.template Observers<Added<U>>();
             if (!addedObserverList.writeQueue) {
                 addedObserverList.writeQueue = std::make_shared<std::deque<Added<U>>>();
             }
 
-            auto &removedObserverList = this->ecs.template Observers<Removed<U>>();
+            auto &removedObserverList = this->instance.template Observers<Removed<U>>();
             if (!removedObserverList.writeQueue) {
                 removedObserverList.writeQueue = std::make_shared<std::deque<Removed<U>>>();
             }
@@ -262,18 +265,18 @@ namespace Tecs {
         template<typename U>
         inline void NotifyObservers(size_t id) const {
             if constexpr (!is_global_component<U>()) {
-                auto &oldBitsets = this->ecs.validIndex.readComponents;
-                auto &bitsets = this->ecs.validIndex.writeComponents;
-                if (this->ecs.template BitsetHas<U>(bitsets[id])) {
-                    if (id >= oldBitsets.size() || !this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                        auto &observerList = this->ecs.template Observers<Added<U>>();
+                auto &oldBitsets = this->instance.validIndex.readComponents;
+                auto &bitsets = this->instance.validIndex.writeComponents;
+                if (this->instance.template BitsetHas<U>(bitsets[id])) {
+                    if (id >= oldBitsets.size() || !this->instance.template BitsetHas<U>(oldBitsets[id])) {
+                        auto &observerList = this->instance.template Observers<Added<U>>();
                         observerList.writeQueue->emplace_back(Entity(id),
-                            this->ecs.template Storage<U>().writeComponents[id]);
+                            this->instance.template Storage<U>().writeComponents[id]);
                     }
-                } else if (id < oldBitsets.size() && this->ecs.template BitsetHas<U>(oldBitsets[id])) {
-                    auto &observerList = this->ecs.template Observers<Removed<U>>();
+                } else if (id < oldBitsets.size() && this->instance.template BitsetHas<U>(oldBitsets[id])) {
+                    auto &observerList = this->instance.template Observers<Removed<U>>();
                     observerList.writeQueue->emplace_back(Entity(id),
-                        this->ecs.template Storage<U>().readComponents[id]);
+                        this->instance.template Storage<U>().readComponents[id]);
                 }
             } else {
                 (void)id; // Unreferenced parameter warning on MSVC
@@ -289,17 +292,18 @@ namespace Tecs {
         template<typename U>
         inline void NotifyGlobalObservers() const {
             if constexpr (is_global_component<U>()) {
-                auto &oldBitset = this->ecs.readValidGlobals;
-                auto &bitset = this->ecs.writeValidGlobals;
-                if (this->ecs.template BitsetHas<U>(bitset)) {
-                    if (!this->ecs.template BitsetHas<U>(oldBitset)) {
-                        auto &observerList = this->ecs.template Observers<Added<U>>();
+                auto &oldBitset = this->instance.readValidGlobals;
+                auto &bitset = this->instance.writeValidGlobals;
+                if (this->instance.template BitsetHas<U>(bitset)) {
+                    if (!this->instance.template BitsetHas<U>(oldBitset)) {
+                        auto &observerList = this->instance.template Observers<Added<U>>();
                         observerList.writeQueue->emplace_back(Entity(),
-                            this->ecs.template Storage<U>().writeComponents[0]);
+                            this->instance.template Storage<U>().writeComponents[0]);
                     }
-                } else if (this->ecs.template BitsetHas<U>(oldBitset)) {
-                    auto &observerList = this->ecs.template Observers<Removed<U>>();
-                    observerList.writeQueue->emplace_back(Entity(), this->ecs.template Storage<U>().readComponents[0]);
+                } else if (this->instance.template BitsetHas<U>(oldBitset)) {
+                    auto &observerList = this->instance.template Observers<Removed<U>>();
+                    observerList.writeQueue->emplace_back(Entity(),
+                        this->instance.template Storage<U>().readComponents[0]);
                 }
             }
         }
@@ -312,7 +316,7 @@ namespace Tecs {
 
         template<typename U>
         inline void CommitObservers() const {
-            auto &observerList = this->ecs.template Observers<U>();
+            auto &observerList = this->instance.template Observers<U>();
             for (auto &observer : observerList.observers) {
                 observer->insert(observer->end(), observerList.writeQueue->begin(), observerList.writeQueue->end());
             }
@@ -328,16 +332,16 @@ namespace Tecs {
         template<typename U>
         inline void UnlockInOrder() const {
             if (is_write_allowed<U, LockType>()) {
-                if (this->ecs.template BitsetHas<U>(this->writeAccessedFlags)) {
+                if (this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
                     if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                        this->ecs.template Storage<U>().template CommitEntities<true>();
+                        this->instance.template Storage<U>().template CommitEntities<true>();
                     } else {
-                        this->ecs.template Storage<U>().template CommitEntities<is_global_component<U>::value>();
+                        this->instance.template Storage<U>().template CommitEntities<is_global_component<U>::value>();
                     }
                 }
-                this->ecs.template Storage<U>().WriteUnlock();
+                this->instance.template Storage<U>().WriteUnlock();
             } else if (is_read_allowed<U, LockType>()) {
-                this->ecs.template Storage<U>().ReadUnlock();
+                this->instance.template Storage<U>().ReadUnlock();
             }
         }
 

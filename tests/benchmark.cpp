@@ -152,6 +152,9 @@ void transformWorkerThread() {
 }
 
 int main(int /* argc */, char ** /* argv */) {
+#if __cpp_lib_atomic_wait
+    std::cout << "Compiled with C++20 atomic.wait()" << std::endl;
+#endif
     {
         Timer t("Create entities");
         auto writeLock = ecs.StartTransaction<AddRemove>();
