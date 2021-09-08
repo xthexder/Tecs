@@ -47,4 +47,3 @@ if [ $format_valid -ne 0 ]; then
     echo -e "Run clang-format with ./extra/validate_format.py --fix"
     exit $format_valid
 fi
-
