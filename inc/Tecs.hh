@@ -51,6 +51,20 @@ namespace Tecs {
             return Lock<ECS<Tn...>, Permissions...>(*this);
         }
 
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+        inline void StartTrace() {
+            validIndex.traceInfo.StartTrace();
+            (Storage<Tn>().traceInfo.StartTrace(), ...);
+        }
+
+        using TraceData = std::pair<std::string, nonstd::span<TraceEvent>>;
+
+        inline std::vector<TraceData> StopTrace() {
+            return std::vector<TraceData>{{"AddRemove", validIndex.traceInfo.StopTrace()},
+                {typeid(Tn).name(), Storage<Tn>().traceInfo.StopTrace()}...};
+        }
+#endif
+
         /**
          * Returns the index of a Component type for use in a bitset.
          */
