@@ -2,6 +2,9 @@
 
 #include "Tecs_storage.hh"
 #include "Tecs_transaction.hh"
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    #include "Tecs_tracing.hh"
+#endif
 
 #include <bitset>
 #include <cstddef>
@@ -53,15 +56,17 @@ namespace Tecs {
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         inline void StartTrace() {
+            transactionTrace.StartTrace();
             validIndex.traceInfo.StartTrace();
             (Storage<Tn>().traceInfo.StartTrace(), ...);
         }
 
-        using TraceData = std::pair<std::string, nonstd::span<TraceEvent>>;
-
-        inline std::vector<TraceData> StopTrace() {
-            return std::vector<TraceData>{{"AddRemove", validIndex.traceInfo.StopTrace()},
-                {typeid(Tn).name(), Storage<Tn>().traceInfo.StopTrace()}...};
+        inline PerformanceTrace StopTrace() {
+            return PerformanceTrace{
+                transactionTrace.StopTrace(),             // transactionEvents
+                validIndex.traceInfo.StopTrace(),         // validIndexEvents
+                {Storage<Tn>().traceInfo.StopTrace()...}, // componentEvents
+            };
         }
 #endif
 
@@ -126,6 +131,10 @@ namespace Tecs {
                    ObserverList<Added<Tn>>...,
                    ObserverList<Removed<Tn>>...> eventLists;
         // clang-format on
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+        TraceInfo transactionTrace;
+#endif
 
 #ifndef TECS_HEADER_ONLY
         size_t ecsId;

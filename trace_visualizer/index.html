@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+        <script>
+            let data = {};
+            let components = [];
+
+            const margin = {
+                left: 60,
+                top: 30,
+                right: 30,
+                bottom: 30
+            };
+
+            let x = d3.scaleLinear();
+            let y = d3.scaleBand().padding(0.2);
+
+            function updateTransaction(d) {
+                const element = d3.select(this);
+
+                element.style("cursor", "pointer")
+                    .append("rect")
+                    .attr("x", x(d.start) - margin.left)
+                    .attr("height", y.bandwidth())
+                    .attr("width", Math.max(1, x(d.end) - x(d.start)))
+                    .attr("fill", "#aaaa00");
+                
+                element.on("mouseover", function(event, d) {
+                    d3.select(this).select("rect").attr("fill", "#333300");
+
+                    d3.select("#tooltip").style("display", "block").html(function() {
+                        return `<b>${d.threadId}</b>
+                        <br/>
+                        ${d.start} - ${d.end}`
+                    });
+                });
+
+                element.on("mouseleave", function(event, d) {
+                    d3.select(this).select("rect").attr("fill", "#aaaa00");
+                    d3.select("#tooltip").style("display", "none");
+                });
+            }
+
+            function updateViewer() {
+                const boundingBox = viewerDiv.node().getBoundingClientRect();
+
+                let threadList = Object.entries(data);
+
+                let minX = d3.min(threadList, d => d3.min(d[1], d2 => d2.start));
+                let maxX = d3.max(threadList, d => d3.max(d[1], d2 => d2.end));
+
+                x.domain([minX, maxX])
+                    .range([margin.left + 5, boundingBox.width - margin.left - margin.right - 10]);
+
+                y.domain(Object.keys(data))
+                    .range([margin.top, boundingBox.height - margin.top - margin.bottom]);
+
+                let tooltip = d3.select("#tooltip");
+                if (!tooltip.node()) {
+                    tooltip = viewerDiv.append("div")
+                        .attr("id", "tooltip")
+                        .style("position", "absolute")
+                        .style("pointer-events", "none")
+                        .style("top", 0)
+                        .style("display", "none")
+                        .style("background", "white")
+                        .style("border-radius", "5px")
+                        .style("box-shadow", "0 0 10px rgba(0,0,0,.25)")
+                        .style("padding", "10px")
+                        .style("line-height", "1.3")
+                        .style("font", "11px sans-serif");
+                }
+
+                let svg = viewerDiv.select("svg");
+                if (!svg.node()) {
+                    svg = viewerDiv.append("svg")
+                        .attr("width", boundingBox.width)
+                        .attr("height", boundingBox.height);
+                }
+                
+                let xAxis = svg.select("#x-axis");
+                if (!xAxis.node()) {
+                    xAxis = svg.append("g")
+                        .attr("id", "x-axis");
+                }
+                xAxis.attr("transform", `translate(0, ${margin.top})`)
+                    .call(d3.axisTop(x));
+
+                let yAxis = svg.select("#y-axis");
+                if (!yAxis.node()) {
+                    yAxis = svg.append("g")
+                        .attr("id", "y-axis");
+                }
+                yAxis.attr("transform", `translate(${margin.left}, 0)`)
+                    .call(d3.axisLeft(y));
+
+                let plot = svg.select("#plot");
+                if (!plot.node()) {
+                    plot = svg.append("g")
+                        .attr("id", "plot")
+                        .attr("transform", (d, i) => `translate(${margin.left}, ${margin.top})`);
+                }
+
+                let line = svg.select("#cursor-line");
+                if (!line.node()) {
+                    line = svg.append("line")
+                        .attr("id", "cursor-line")
+                        .attr("y1", margin.top)
+                        .attr("y2", boundingBox.height - margin.bottom)
+                        .attr("stroke", "rgba(0,0,0,0.2)")
+                        .style("pointer-events","none");
+                }
+
+                plot.selectAll("g").remove();
+
+                let threads = plot.selectAll("g.thread")
+                    .data(threadList)
+                    .enter()
+                    .append("g")
+                    .attr("class", "thread")
+                    .attr("transform", d => `translate(0, ${y(d[0])})`);
+
+                threads.selectAll("g")
+                    .data((d, i) => threadList[i][1])
+                    .enter()
+                    .append("g")
+                    .attr("class", "transaction")
+                    .each(updateTransaction);
+
+                svg.on("mousemove", function(event, d) {
+                    let [x,y] = d3.pointer(event);
+                    line.attr("transform", `translate(${x}, 0)`);
+                    y += 20;
+                    if (x > boundingBox.width/2) x -= 100;
+
+                    tooltip
+                        .style("left", x + "px")
+                        .style("top", y + "px");
+                });
+            }
+
+            function openFile(file) {
+                console.log(file.name + " " + file.size + " bytes");
+                file.text().then(text => {
+                    data = [];
+                    components = [];
+
+                    var csvData = d3.csvParse(text);
+                    for (var i = 6; i < csvData.columns.length; i += 3) {
+                        if (csvData.columns[i].endsWith(" Event")) {
+                            components.push(csvData.columns[i].slice(0, -6));
+                        } else {
+                            console.log("Expected column to end with ' Event':", csvData.columns[i])
+                        }
+                    }
+
+                    csvData.forEach(row => {
+                        let threadId = row["Transaction Thread Id"];
+                        if (row["Transaction Event"] == "TransactionStart") {
+                            data[threadId] ||= [];
+                            data[threadId].push({
+                                start: parseInt(row["Transaction TimeNs"], 10),
+                                end: 0,
+                                threadId: threadId,
+                                locks: {
+                                    validIndex: [],
+                                    components: {}
+                                }
+                            });
+                        } else if (row["Transaction Event"] == "TransactionEnd") {
+                            let i = data[threadId].findIndex(transaction => {
+                                return transaction.end == 0;
+                            });
+                            if (i >= 0) {
+                                data[threadId][i].end = parseInt(row["Transaction TimeNs"], 10);
+                            } else {
+                                console.log("Skipped Transaction event: ", row);
+                            }
+                        }
+                    });
+                    csvData.forEach(row => {
+                        if (row["ValidIndex Event"]) {
+                            let threadId = row["ValidIndex Thread Id"];
+                            let eventTimeNs = parseInt(row["ValidIndex TimeNs"], 10);
+                            let i = data[threadId].findIndex(transaction => {
+                                return transaction.start <= eventTimeNs && transaction.end >= eventTimeNs;
+                            });
+                            if (i >= 0) {
+                                data[threadId][i].locks.validIndex.push({
+                                    event: row["ValidIndex Event"],
+                                    time: eventTimeNs
+                                });
+                            } else {
+                                console.log("Skipped ValidIndex event: ", row);
+                            }
+                        }
+                        components.forEach(component => {
+                            if (row[component + " Event"]) {
+                                let threadId = row[component + " Thread Id"];
+                                let eventTimeNs = parseInt(row[component + " TimeNs"], 10);
+                                let i = data[threadId].findIndex(transaction => {
+                                    return transaction.start <= eventTimeNs && transaction.end >= eventTimeNs;
+                                });
+                                if (i >= 0) {
+                                    data[threadId][i].locks.components[component] ||= [];
+                                    data[threadId][i].locks.components[component].push({
+                                        event: row[component + " Event"],
+                                        time: eventTimeNs
+                                    });
+                                } else {
+                                    console.log("Skipped ", component, " event: ", row);
+                                }
+                            }
+                        });
+                    });
+
+                    updateViewer();
+                });
+            }
+
+            function dropHandler(event) {
+                event.preventDefault();
+
+                if (event.dataTransfer.items) {
+                    for (var i = 0; i < event.dataTransfer.items.length; i++) {
+                        if (event.dataTransfer.items[i].kind === 'file') {
+                            var file = event.dataTransfer.items[i].getAsFile();
+                            if (file.name.endsWith(".csv")) {
+                                openFile(file);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    for (var i = 0; i < event.dataTransfer.files.length; i++) {
+                        var file = event.dataTransfer.files[i];
+                        if (file.name.endsWith(".csv")) {
+                            openFile(file);
+                            break;
+                        }
+                    }
+                }
+            }
+        </script>
+        <style>
+            html, body {
+                height: 100%;
+                padding: 0px;
+                margin: 0px;
+            }
+
+            #viewer {
+                width:  100%;
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="viewer" ondrop="dropHandler(event);" ondragover="event.preventDefault();">
+        </div>
+        <script>
+            const viewerDiv = d3.select("#viewer");
+        </script>
+    </body>
+</html>

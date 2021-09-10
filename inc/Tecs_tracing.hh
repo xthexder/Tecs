@@ -5,7 +5,9 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <ostream>
 #include <thread>
+#include <vector>
 
 #ifndef TECS_PERFORMANCE_TRACING_MAX_EVENTS
     #define TECS_PERFORMANCE_TRACING_MAX_EVENTS 10000
@@ -14,7 +16,9 @@
 namespace Tecs {
     struct TraceEvent {
         enum class Type {
-            Invalid,
+            Invalid = 0,
+            TransactionStart,
+            TransactionEnd,
             ReadLockWait,
             ReadLock,
             ReadUnlock,
@@ -22,12 +26,80 @@ namespace Tecs {
             WriteLock,
             CommitLockWait,
             CommitLock,
-            WriteUnlock
+            WriteUnlock,
         };
 
         Type type = Type::Invalid;
         std::thread::id thread;
         std::chrono::steady_clock::time_point time;
+    };
+
+    static inline std::ostream &operator<<(std::ostream &out, const TraceEvent::Type &t) {
+        static const std::array eventTypeNames = {
+            "Invalid",
+            "TransactionStart",
+            "TransactionEnd",
+            "ReadLockWait",
+            "ReadLock",
+            "ReadUnlock",
+            "WriteLockWait",
+            "WriteLock",
+            "CommitLockWait",
+            "CommitLock",
+            "WriteUnlock",
+        };
+        return out << eventTypeNames[(size_t)t];
+    }
+
+    struct PerformanceTrace {
+        nonstd::span<TraceEvent> transactionEvents;
+        nonstd::span<TraceEvent> validIndexEvents;
+        std::vector<nonstd::span<TraceEvent>> componentEvents;
+
+        void SaveToCSV(std::ostream &out) {
+            out << "Transaction Event,Transaction Thread Id,Transaction TimeNs";
+            out << ",ValidIndex Event,ValidIndex Thread Id,ValidIndex TimeNs";
+            for (size_t i = 0; i < componentEvents.size(); i++) {
+                out << ",Component" << i << " Event,Component" << i << " Thread Id,Component" << i << " TimeNs";
+            }
+            out << std::endl;
+
+            bool done = false;
+            for (size_t row = 0; !done; row++) {
+                done = true;
+
+                if (row < transactionEvents.size()) {
+                    auto &event = transactionEvents[row];
+                    out << event.type << "," << event.thread << ",";
+                    out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch()).count();
+                    done = false;
+                } else {
+                    out << ",,";
+                }
+
+                if (row < validIndexEvents.size()) {
+                    auto &event = validIndexEvents[row];
+                    out << "," << event.type << "," << event.thread << ",";
+                    out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch()).count();
+                    done = false;
+                } else {
+                    out << ",,,";
+                }
+
+                for (auto &events : componentEvents) {
+                    if (row < events.size()) {
+                        auto &event = events[row];
+                        out << "," << event.type << "," << event.thread << ",";
+                        out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch())
+                                   .count();
+                        done = false;
+                    } else {
+                        out << ",,,";
+                    }
+                }
+                out << std::endl;
+            }
+        }
     };
 
     class TraceInfo {

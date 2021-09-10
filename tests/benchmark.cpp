@@ -252,7 +252,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-    auto trace = ecs.StopTrace();
+    ecs.StopTrace();
 #endif
 
     std::vector<Transform> transforms;
@@ -329,73 +329,6 @@ int main(int /* argc */, char ** /* argv */) {
         std::cout << transforms.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
-
-#ifdef TECS_ENABLE_PERFORMANCE_TRACING
-    {
-        Timer t("Saving performance trace to CSV");
-
-        static const std::array eventTypeNames = {"Invalid",
-            "ReadLockWait",
-            "ReadLock",
-            "ReadUnlock",
-            "WriteLockWait",
-            "WriteLock",
-            "CommitLockWait",
-            "CommitLock",
-            "WriteUnlock"};
-
-        std::ofstream traceFile("benchmark-trace.csv");
-        auto start = std::chrono::steady_clock::now();
-        bool first = true;
-        for (auto &[component, events] : trace) {
-            if (first) {
-                first = false;
-            } else {
-                traceFile << ",";
-            }
-            traceFile << component << " Event," << component << " Thread Id," << component << " TimeUs";
-            if (events.size() > 0 && events[0].time < start) start = events[0].time;
-        }
-        traceFile << std::endl;
-
-        bool done = false;
-        std::vector<int> indexes(trace.size());
-        while (!done) {
-            done = true;
-            auto minTimestamp = std::chrono::steady_clock::now();
-            for (size_t i = 0; i < trace.size(); i++) {
-                if (indexes[i] < trace[i].second.size()) {
-                    auto &event = trace[i].second[indexes[i]];
-                    if (event.time < minTimestamp) minTimestamp = event.time;
-                }
-            }
-
-            first = true;
-            for (size_t i = 0; i < trace.size(); i++) {
-                if (first) {
-                    first = false;
-                } else {
-                    traceFile << ",";
-                }
-
-                if (indexes[i] < trace[i].second.size()) {
-                    auto &event = trace[i].second[indexes[i]];
-                    if (std::abs(std::chrono::nanoseconds(event.time - minTimestamp).count()) < 1000) {
-                        traceFile << eventTypeNames[(int)event.type] << "," << event.thread << ","
-                                  << std::chrono::duration_cast<std::chrono::microseconds>(event.time - start).count();
-                        indexes[i]++;
-                    } else {
-                        traceFile << ",,";
-                    }
-                    done = false;
-                } else {
-                    traceFile << ",,";
-                }
-            }
-            traceFile << std::endl;
-        }
-    }
-#endif
 
     return 0;
 }
