@@ -29,3 +29,9 @@ namespace example {
         return out << stateNames[(size_t)t];
     }
 } // namespace example
+
+// Name the components so they show up nicely in performance traces
+TECS_NAME_COMPONENT(example::Position, "Position");
+TECS_NAME_COMPONENT(example::State, "State");
+TECS_NAME_COMPONENT(example::Name, "Name");
+TECS_NAME_COMPONENT(example::ComplexComponent, "ComplexComponent");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_locks.hh"
 #include "Tecs_storage.hh"
 #include "Tecs_transaction.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -10,6 +11,7 @@
 #include <cstddef>
 #include <deque>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 namespace Tecs {
@@ -33,7 +35,6 @@ namespace Tecs {
 #endif
         }
 
-        template<typename... Permissions>
         /**
          * Start a new transaction with a specific set of permissions, and return a Lock object.
          *
@@ -50,6 +51,7 @@ namespace Tecs {
          *
          * All data access must be done through the returned Lock object, or by passing the lock to an Entity function.
          */
+        template<typename... Permissions>
         inline Lock<ECS<Tn...>, Permissions...> StartTransaction() {
             return Lock<ECS<Tn...>, Permissions...>(*this);
         }
@@ -66,9 +68,22 @@ namespace Tecs {
                 transactionTrace.StopTrace(),             // transactionEvents
                 validIndex.traceInfo.StopTrace(),         // validIndexEvents
                 {Storage<Tn>().traceInfo.StopTrace()...}, // componentEvents
+                {GetComponentName<Tn>()...},              // componentNames
             };
         }
 #endif
+
+        /**
+         * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
+         */
+        template<typename U>
+        inline static constexpr std::string GetComponentName() {
+            if constexpr (std::extent<decltype(component_name<U>::value)>::value > 1) {
+                return component_name<U>::value;
+            } else {
+                return "Component" + std::to_string(GetComponentIndex<U>());
+            }
+        }
 
         /**
          * Returns the index of a Component type for use in a bitset.

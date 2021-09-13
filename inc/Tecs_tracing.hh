@@ -55,12 +55,17 @@ namespace Tecs {
         nonstd::span<TraceEvent> transactionEvents;
         nonstd::span<TraceEvent> validIndexEvents;
         std::vector<nonstd::span<TraceEvent>> componentEvents;
+        std::vector<std::string> componentNames;
 
         void SaveToCSV(std::ostream &out) {
             out << "Transaction Event,Transaction Thread Id,Transaction TimeNs";
             out << ",ValidIndex Event,ValidIndex Thread Id,ValidIndex TimeNs";
+            if (componentEvents.size() != componentNames.size()) {
+                throw std::runtime_error("Trying to save a trace with mismatched array sizes");
+            }
             for (size_t i = 0; i < componentEvents.size(); i++) {
-                out << ",Component" << i << " Event,Component" << i << " Thread Id,Component" << i << " TimeNs";
+                auto &name = componentNames[i];
+                out << "," << name << " Event," << name << " Thread Id," << name << " TimeNs";
             }
             out << std::endl;
 

@@ -13,5 +13,4 @@ namespace testing {
     using ECS = Tecs::ECS<Transform, Renderable, Script, GlobalComponent>;
 }; // namespace testing
 
-template<>
-struct Tecs::is_global_component<testing::GlobalComponent> : std::true_type {};
+TECS_GLOBAL_COMPONENT(testing::GlobalComponent);
