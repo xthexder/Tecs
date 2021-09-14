@@ -30,7 +30,8 @@ int main(int /* argc */, char ** /* argv */) {
     // Start 3 threads with overlapping transaction permissions
     std::atomic_bool running = true;
     std::vector<std::thread> threads;
-    threads.emplace_back([&running] {
+    std::map<std::thread::id, std::string> threadNames;
+    auto &t1 = threads.emplace_back([&running] {
         while (running) {
             { // Print positions and increment ComplexComponent
                 auto lock = ecs.StartTransaction<Read<Name, Position>, Write<ComplexComponent>>();
@@ -53,7 +54,8 @@ int main(int /* argc */, char ** /* argv */) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     });
-    threads.emplace_back([&running] {
+    threadNames[t1.get_id()] = "Print";
+    auto &t2 = threads.emplace_back([&running] {
         while (running) {
             { // Read State and update Position accordingly
                 auto lock = ecs.StartTransaction<Read<State>, Write<Position>>();
@@ -85,7 +87,8 @@ int main(int /* argc */, char ** /* argv */) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
-    threads.emplace_back([&running] {
+    threadNames[t2.get_id()] = "PositionUpdate";
+    auto &t3 = threads.emplace_back([&running] {
         while (running) {
             { // Check if ComplexComponent has changed and update State
                 auto lock = ecs.StartTransaction<Write<ComplexComponent, State>>();
@@ -108,6 +111,7 @@ int main(int /* argc */, char ** /* argv */) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
+    threadNames[t3.get_id()] = "StateUpdate";
 
     std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     running = false;
@@ -116,8 +120,13 @@ int main(int /* argc */, char ** /* argv */) {
     }
 
     auto trace = ecs.StopTrace();
+    trace.SetThreadName("Main");
+    for (auto &[id, name] : threadNames) {
+        trace.SetThreadName(name, id);
+    }
     std::ofstream traceFile("example-trace.csv");
     trace.SaveToCSV(traceFile);
+    traceFile.close();
 
     return 0;
 }

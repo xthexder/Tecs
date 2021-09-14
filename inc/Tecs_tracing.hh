@@ -5,7 +5,9 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <ostream>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -56,6 +58,19 @@ namespace Tecs {
         nonstd::span<TraceEvent> validIndexEvents;
         std::vector<nonstd::span<TraceEvent>> componentEvents;
         std::vector<std::string> componentNames;
+        std::map<std::thread::id, std::string> threadNames;
+
+        void SetThreadName(std::string name, std::thread::id threadId = std::this_thread::get_id()) {
+            threadNames[threadId] = name;
+        }
+
+        std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
+            auto it = threadNames.find(threadId);
+            if (it != threadNames.end()) { return it->second; }
+            std::stringstream ss;
+            ss << threadId;
+            return ss.str();
+        }
 
         void SaveToCSV(std::ostream &out) {
             out << "Transaction Event,Transaction Thread Id,Transaction TimeNs";
@@ -75,7 +90,7 @@ namespace Tecs {
 
                 if (row < transactionEvents.size()) {
                     auto &event = transactionEvents[row];
-                    out << event.type << "," << event.thread << ",";
+                    out << event.type << "," << GetThreadName(event.thread) << ",";
                     out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch()).count();
                     done = false;
                 } else {
@@ -84,7 +99,7 @@ namespace Tecs {
 
                 if (row < validIndexEvents.size()) {
                     auto &event = validIndexEvents[row];
-                    out << "," << event.type << "," << event.thread << ",";
+                    out << "," << event.type << "," << GetThreadName(event.thread) << ",";
                     out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch()).count();
                     done = false;
                 } else {
@@ -94,7 +109,7 @@ namespace Tecs {
                 for (auto &events : componentEvents) {
                     if (row < events.size()) {
                         auto &event = events[row];
-                        out << "," << event.type << "," << event.thread << ",";
+                        out << "," << event.type << "," << GetThreadName(event.thread) << ",";
                         out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch())
                                    .count();
                         done = false;

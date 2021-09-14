@@ -69,6 +69,7 @@ namespace Tecs {
                 validIndex.traceInfo.StopTrace(),         // validIndexEvents
                 {Storage<Tn>().traceInfo.StopTrace()...}, // componentEvents
                 {GetComponentName<Tn>()...},              // componentNames
+                {},                                       // threadNames
             };
         }
 #endif
