@@ -42,9 +42,9 @@ namespace Tecs {
     /**
      * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
      * Only a single instance of the component will be stored.
-     * 
+     *
      * This type trait can be set using the below pattern:
-     * 
+     *
      * template<>
      * struct Tecs::is_global_component<ComponentType> : std::true_type {};
      */
@@ -71,13 +71,22 @@ namespace Tecs {
     struct is_add_remove_allowed : std::false_type {};
 
     // Lock<Permissions...> specializations
+    // clang-format off
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {
-    };
+    struct is_read_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    // clang-format on
 
     // Check SubLock <= Lock for component type T
     template<typename T, typename SubLock, typename Lock>

@@ -550,6 +550,32 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
+        Timer t("Test read with const lock");
+        const auto lock = ecs.StartTransaction<Tecs::Read<Transform>>();
+        for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+            Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
+            Assert(lock.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
+        }
+    }
+    {
+        Timer t("Test write with const lock");
+        const auto lock = ecs.StartTransaction<Tecs::Write<Transform>>();
+        for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+            auto &t1 = lock.Get<Transform>(e);
+            Assert(t1.pos[0] == 1, "Expected position.x to be 1");
+            auto &t2 = e.Get<Transform>(lock);
+            Assert(t2.pos[0] == 1, "Expected position.x to be 1");
+        }
+    }
+    {
+        Timer t("Test add/remove with const lock");
+        const auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+        for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+            Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
+            Assert(lock.Get<Transform>(e).pos[0] == 1, "Expected position.x to be 1");
+        }
+    }
+    {
         Timer t("Test read lock typecasting");
         auto readLockAll = ecs.StartTransaction<Tecs::Read<Transform, Renderable, Script>>();
         { // Test Subset() method
