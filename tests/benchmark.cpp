@@ -4,6 +4,7 @@
 #include <Tecs.hh>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <future>
 #include <iomanip>
 #include <thread>
@@ -219,6 +220,10 @@ int main(int /* argc */, char ** /* argv */) {
         t = timer3;
     }
 
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    ecs.StartTrace();
+#endif
+
     {
         {
             auto readLock = ecs.StartTransaction<>();
@@ -245,6 +250,10 @@ int main(int /* argc */, char ** /* argv */) {
         script.wait();
 #endif
     }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    ecs.StopTrace();
+#endif
 
     std::vector<Transform> transforms;
     {

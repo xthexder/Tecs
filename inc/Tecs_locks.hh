@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <tuple>
 #include <type_traits>
 
@@ -43,13 +44,49 @@ namespace Tecs {
      * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
      * Only a single instance of the component will be stored.
      *
-     * This type trait can be set using the below pattern:
+     * This type trait can be set using the following pattern:
      *
      * template<>
      * struct Tecs::is_global_component<ComponentType> : std::true_type {};
+     *
+     * Or alternatively with the helper macro:
+     *
+     * TECS_GLOBAL_COMPONENT(ComponentType);
+     *
+     * Note: This must be defined in the root namespace only.
      */
     template<typename T>
     struct is_global_component : std::false_type {};
+
+#define TECS_GLOBAL_COMPONENT(ComponentType)                                                                           \
+    template<>                                                                                                         \
+    struct Tecs::is_global_component<ComponentType> : std::true_type {};
+
+    /**
+     * Components can be named so they appear with the correct name in performance traces.
+     * The component name type trait can be set using the following pattern:
+     *
+     * template<>
+     * struct Tecs::component_name<ComponentType> {
+     *     static constexpr char value[] = "ComponentName";
+     * };
+     *
+     * Or alternatively with the helper macro:
+     *
+     * TECS_NAME_COMPONENT(ComponentType, "ComponentName");
+     *
+     * Note: This must be defined in the root namespace only.
+     */
+    template<typename T>
+    struct component_name {
+        static constexpr char value[] = "";
+    };
+
+#define TECS_NAME_COMPONENT(ComponentType, ComponentName)                                                              \
+    template<>                                                                                                         \
+    struct Tecs::component_name<ComponentType> {                                                                       \
+        static constexpr char value[] = (ComponentName);                                                               \
+    };
 
     // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>

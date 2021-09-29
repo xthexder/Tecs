@@ -3,6 +3,9 @@
 #include "Tecs_entity.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_transaction.hh"
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    #include "Tecs_tracing.hh"
+#endif
 
 #include <atomic>
 #include <cstddef>
@@ -27,6 +30,10 @@ namespace Tecs {
          * ReadUnlock() must be called exactly once after reading has completed.
          */
         inline bool ReadLock(bool block = true) {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            bool tracedWait = false;
+#endif
+
             int retry = 0;
             while (true) {
                 uint32_t currentReaders = readers;
@@ -35,11 +42,21 @@ namespace Tecs {
                     uint32_t next = currentReaders + 1;
                     if (readers.compare_exchange_weak(currentReaders, next)) {
                         // Lock aquired
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                        traceInfo.Trace(TraceEvent::Type::ReadLock);
+#endif
                         return true;
                     }
                 }
 
                 if (!block) return false;
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                if (!tracedWait) {
+                    traceInfo.Trace(TraceEvent::Type::ReadLockWait);
+                    tracedWait = true;
+                }
+#endif
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
@@ -60,6 +77,10 @@ namespace Tecs {
          * Unlock this Component type from a read lock. Behavior is undefined if ReadLock() is not called first.
          */
         inline void ReadUnlock() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            traceInfo.Trace(TraceEvent::Type::ReadUnlock);
+#endif
+
             uint32_t current = readers;
             if (current == READER_FREE || current == READER_LOCKED) {
                 throw std::runtime_error("ReadUnlock called outside of ReadLock");
@@ -78,17 +99,31 @@ namespace Tecs {
          * Once writing has completed CommitLock() must be called exactly once, followed by WriteUnlock().
          */
         inline bool WriteLock(bool block = true) {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            bool tracedWait = false;
+#endif
+
             int retry = 0;
             while (true) {
                 uint32_t current = writer;
                 if (current == WRITER_FREE) {
                     if (writer.compare_exchange_weak(current, WRITER_LOCKED)) {
                         // Lock aquired
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                        traceInfo.Trace(TraceEvent::Type::WriteLock);
+#endif
                         return true;
                     }
                 }
 
                 if (!block) return false;
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                if (!tracedWait) {
+                    traceInfo.Trace(TraceEvent::Type::WriteLockWait);
+                    tracedWait = true;
+                }
+#endif
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
@@ -111,6 +146,10 @@ namespace Tecs {
          * Behavior is undefined if WriteLock() is not called first.
          */
         inline void CommitLock() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            bool tracedWait = false;
+#endif
+
             uint32_t current = writer;
             if (current != WRITER_LOCKED) {
                 throw std::runtime_error("CommitLock called outside of WriteLock");
@@ -126,9 +165,19 @@ namespace Tecs {
                 if (current == READER_FREE) {
                     if (readers.compare_exchange_weak(current, READER_LOCKED)) {
                         // Lock aquired
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                        traceInfo.Trace(TraceEvent::Type::CommitLock);
+#endif
                         return;
                     }
                 }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+                if (!tracedWait) {
+                    traceInfo.Trace(TraceEvent::Type::CommitLockWait);
+                    tracedWait = true;
+                }
+#endif
 
                 if (retry++ > TECS_SPINLOCK_RETRY_YIELD) {
                     retry = 0;
@@ -164,6 +213,10 @@ namespace Tecs {
         }
 
         inline void WriteUnlock() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            traceInfo.Trace(TraceEvent::Type::WriteUnlock);
+#endif
+
             // Unlock read and write copies
             uint32_t current = readers;
             if (current == READER_LOCKED) {
@@ -186,6 +239,10 @@ namespace Tecs {
             writer.notify_all();
 #endif
         }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+        TraceInfo traceInfo;
+#endif
 
     private:
         // Lock states

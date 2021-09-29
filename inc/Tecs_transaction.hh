@@ -3,13 +3,18 @@
 #include "Tecs_entity.hh"
 #include "Tecs_locks.hh"
 #include "Tecs_observer.hh"
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    #include "Tecs_tracing.hh"
+#endif
 #include "nonstd/span.hpp"
 
 #include <array>
 #include <atomic>
 #include <bitset>
 #include <cstddef>
+#include <iostream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -71,6 +76,10 @@ namespace Tecs {
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
+#endif
+
             std::bitset<1 + sizeof...(AllComponentTypes)> acquired;
             // Templated lambda functions for Lock/Unlock so they can be looped over at runtime.
             std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
@@ -192,6 +201,10 @@ namespace Tecs {
             } else {
                 this->instance.validIndex.ReadUnlock();
             }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            this->instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
+#endif
         }
 
     private:
