@@ -78,7 +78,7 @@ namespace Tecs {
          * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
          */
         template<typename U>
-        inline static constexpr std::string GetComponentName() {
+        inline static std::string GetComponentName() {
             if constexpr (std::extent<decltype(component_name<U>::value)>::value > 1) {
                 return component_name<U>::value;
             } else {

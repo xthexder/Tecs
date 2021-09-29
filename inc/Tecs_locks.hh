@@ -44,11 +44,7 @@ namespace Tecs {
      * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
      * Only a single instance of the component will be stored.
      *
-<<<<<<< HEAD
-     * This type trait can be set using the below pattern:
-=======
      * This type trait can be set using the following pattern:
->>>>>>> Add named components, and helper macros
      *
      * template<>
      * struct Tecs::is_global_component<ComponentType> : std::true_type {};
