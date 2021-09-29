@@ -28,7 +28,7 @@ namespace testing {
 
         bool HasParent(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);
 
-        inline bool operator==(const Transform &other) {
+        inline bool operator==(const Transform &other) const {
             return pos[0] == other.pos[0] && pos[1] == other.pos[1] && pos[2] == other.pos[2] && parent == other.parent;
         }
     };

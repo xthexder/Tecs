@@ -78,8 +78,8 @@ namespace Tecs {
             return ecs != nullptr && !eventListWeak.expired();
         }
 
-        friend bool operator==(
-            const std::shared_ptr<std::deque<EventType>> &lhs, const Observer<ECSType, EventType> &rhs) {
+        friend bool operator==(const std::shared_ptr<std::deque<EventType>> &lhs,
+            const Observer<ECSType, EventType> &rhs) {
             return lhs == rhs.eventListWeak.lock();
         }
 
