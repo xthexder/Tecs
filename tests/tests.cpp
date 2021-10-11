@@ -19,21 +19,15 @@ int main(int /* argc */, char ** /* argv */) {
     std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
               << std::endl;
 
-    Tecs::Observer<ECS, Tecs::EntityAdded> entityAddedObserver;
-    Tecs::Observer<ECS, Tecs::EntityRemoved> entityRemovedObserver;
-    Tecs::Observer<ECS, Tecs::Added<Transform>> transformAddedObserver;
-    Tecs::Observer<ECS, Tecs::Removed<Transform>> transformRemovedObserver;
-    Tecs::Observer<ECS, Tecs::Added<GlobalComponent>> globalCompAddedObserver;
-    Tecs::Observer<ECS, Tecs::Removed<GlobalComponent>> globalCompRemovedObserver;
+    Tecs::Observer<ECS, Tecs::EntityEvent> entityObserver;
+    Tecs::Observer<ECS, Tecs::ComponentEvent<Transform>> transformObserver;
+    Tecs::Observer<ECS, Tecs::ComponentEvent<GlobalComponent>> globalCompObserver;
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        entityAddedObserver = writeLock.Watch<Tecs::EntityAdded>();
-        entityRemovedObserver = writeLock.Watch<Tecs::EntityRemoved>();
-        transformAddedObserver = writeLock.Watch<Tecs::Added<Transform>>();
-        transformRemovedObserver = writeLock.Watch<Tecs::Removed<Transform>>();
-        globalCompAddedObserver = writeLock.Watch<Tecs::Added<GlobalComponent>>();
-        globalCompRemovedObserver = writeLock.Watch<Tecs::Removed<GlobalComponent>>();
+        entityObserver = writeLock.Watch<Tecs::EntityEvent>();
+        transformObserver = writeLock.Watch<Tecs::ComponentEvent<Transform>>();
+        globalCompObserver = writeLock.Watch<Tecs::ComponentEvent<GlobalComponent>>();
     }
     bool globalComponentInitialized = false;
     {
@@ -213,84 +207,75 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test reading observers");
         auto readLock = ecs.StartTransaction<>();
         {
-            Tecs::EntityAdded entityAdded;
+            Tecs::EntityEvent event;
             for (size_t i = 0; i < ENTITY_COUNT; i++) {
-                Assert(entityAddedObserver.Poll(readLock, entityAdded), "Expected another event #" + std::to_string(i));
-                Assert(entityAdded.entity.id == i,
-                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(entityAdded.entity.id));
+                Assert(entityObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
+                Assert(event.type == Tecs::EventType::ADDED, "Expected entity event type to be ADDED");
+                Assert(event.entity.id == i,
+                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
             }
             for (size_t i = 0; i < 100; i++) {
-                Assert(entityAddedObserver.Poll(readLock, entityAdded),
+                Assert(entityObserver.Poll(readLock, event),
                     "Expected another event #" + std::to_string(ENTITY_COUNT + i));
-                Assert(entityAdded.entity.id == ENTITY_COUNT + i,
+                Assert(event.type == Tecs::EventType::ADDED, "Expected entity event type to be ADDED");
+                Assert(event.entity.id == ENTITY_COUNT + i,
                     "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(entityAdded.entity.id));
+                        std::to_string(event.entity.id));
             }
-            Assert(!entityAddedObserver.Poll(readLock, entityAdded), "Too many events triggered");
+            for (size_t i = 0; i < 100; i++) {
+                Assert(entityObserver.Poll(readLock, event),
+                    "Expected another event #" + std::to_string(ENTITY_COUNT + i));
+                Assert(event.type == Tecs::EventType::REMOVED, "Expected component event type to be REMOVED");
+                Assert(event.entity.id == ENTITY_COUNT + i,
+                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
+                        std::to_string(event.entity.id));
+            }
+            Assert(!entityObserver.Poll(readLock, event), "Too many events triggered");
         }
         {
-            Tecs::Added<Transform> transformAdded;
+            Tecs::ComponentEvent<Transform> event;
             for (size_t i = 0; i < ENTITY_COUNT; i++) {
-                Assert(transformAddedObserver.Poll(readLock, transformAdded),
-                    "Expected another event #" + std::to_string(i));
-                Assert(transformAdded.entity.id == i,
-                    "Expected Entity id to be " + std::to_string(i) + ", was " +
-                        std::to_string(transformAdded.entity.id));
-                Assert(transformAdded.component == Transform(0.0, 0.0, 0.0, 1),
-                    "Expected component to be origin transform");
+                Assert(transformObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
+                Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
+                Assert(event.entity.id == i,
+                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
+                Assert(event.component == Transform(0.0, 0.0, 0.0, 1), "Expected component to be origin transform");
             }
             for (size_t i = 0; i < 100; i++) {
-                Assert(transformAddedObserver.Poll(readLock, transformAdded),
+                Assert(transformObserver.Poll(readLock, event),
                     "Expected another event #" + std::to_string(ENTITY_COUNT + i));
-                Assert(transformAdded.entity.id == ENTITY_COUNT + i,
+                Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
+                Assert(event.entity.id == ENTITY_COUNT + i,
                     "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(transformAdded.entity.id));
-                Assert(transformAdded.component == Transform(3.0, 1.0, 7.0, 3),
-                    "Expected component to be initial transform");
+                        std::to_string(event.entity.id));
+                Assert(event.component == Transform(3.0, 1.0, 7.0, 3), "Expected component to be initial transform");
             }
-            Assert(!transformAddedObserver.Poll(readLock, transformAdded), "Too many events triggered");
-        }
-        {
-            Tecs::Removed<Transform> transformRemoved;
             for (size_t i = 0; i < 100; i++) {
-                Assert(transformRemovedObserver.Poll(readLock, transformRemoved),
-                    "Expected another event #" + std::to_string(i));
-                Assert(transformRemoved.entity.id == ENTITY_COUNT + i,
+                Assert(transformObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
+                Assert(event.type == Tecs::EventType::REMOVED, "Expected component event type to be REMOVED");
+                Assert(event.entity.id == ENTITY_COUNT + i,
                     "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(transformRemoved.entity.id));
-                Assert(transformRemoved.component == Transform(3.0, 1.0, 7.0, 3),
+                        std::to_string(event.entity.id));
+                Assert(event.component == Transform(3.0, 1.0, 7.0, 3),
                     "Expected renderable name to be updated transform");
             }
-            Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "Too many events triggered");
+            Assert(!transformObserver.Poll(readLock, event), "Too many events triggered");
         }
         {
-            Tecs::EntityRemoved entityRemoved;
-            for (size_t i = 0; i < 100; i++) {
-                Assert(entityRemovedObserver.Poll(readLock, entityRemoved),
-                    "Expected another event #" + std::to_string(ENTITY_COUNT + i));
-                Assert(entityRemoved.entity.id == ENTITY_COUNT + i,
-                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(entityRemoved.entity.id));
-            }
-            Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "Too many events triggered");
-        }
-        {
-            Tecs::Added<GlobalComponent> compAdded;
-            Assert(globalCompAddedObserver.Poll(readLock, compAdded), "Expected a GlobalComponent created event");
-            Assert(!compAdded.entity, "Global component events should not have a valid entity");
-            Assert(compAdded.component.globalCounter == 1,
+            Tecs::ComponentEvent<GlobalComponent> event;
+            Assert(globalCompObserver.Poll(readLock, event), "Expected a GlobalComponent created event");
+            Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
+            Assert(!event.entity, "Global component events should not have a valid entity");
+            Assert(event.component.globalCounter == 1,
                 "Global component should have been created with globalCounter = 1");
 
-            Assert(!globalCompAddedObserver.Poll(readLock, compAdded), "Too many events triggered");
-        }
-        {
-            Tecs::Removed<GlobalComponent> compRemoved;
-            Assert(globalCompRemovedObserver.Poll(readLock, compRemoved), "Expected a GlobalComponent removed event");
-            Assert(!compRemoved.entity, "Global component events should not have a valid entity");
-            Assert(compRemoved.component.globalCounter == 2,
+            Assert(globalCompObserver.Poll(readLock, event), "Expected a GlobalComponent removed event");
+            Assert(event.type == Tecs::EventType::REMOVED, "Expected component event type to be REMOVED");
+            Assert(!event.entity, "Global component events should not have a valid entity");
+            Assert(event.component.globalCounter == 2,
                 "Global component should have been removed with globalCounter = 2");
 
-            Assert(!globalCompRemovedObserver.Poll(readLock, compRemoved), "Too many events triggered");
+            Assert(!globalCompObserver.Poll(readLock, event), "Too many events triggered");
         }
         Assert(!globalComponentInitialized, "Global component should be deconstructed");
     }
@@ -359,34 +344,29 @@ int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Test reading observers again");
         auto readLock = ecs.StartTransaction<>();
-        Tecs::EntityAdded entityAdded;
-        Tecs::EntityRemoved entityRemoved;
-        Tecs::Added<Transform> transformAdded;
-        Tecs::Removed<Transform> transformRemoved;
-        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
-        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
-        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
-        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
+        Tecs::EntityEvent entityEvent;
+        Tecs::ComponentEvent<Transform> transformEvent;
+        Tecs::ComponentEvent<GlobalComponent> globalCompEvent;
+        Assert(!entityObserver.Poll(readLock, entityEvent), "No events should have occured");
+        Assert(!transformObserver.Poll(readLock, transformEvent), "No events should have occured");
+        Assert(!globalCompObserver.Poll(readLock, globalCompEvent), "No events should have occured");
     }
     {
         Timer t("Test stopping observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        entityAddedObserver.Stop(writeLock);
-        entityRemovedObserver.Stop(writeLock);
-        transformAddedObserver.Stop(writeLock);
-        transformRemovedObserver.Stop(writeLock);
+        entityObserver.Stop(writeLock);
+        transformObserver.Stop(writeLock);
+        globalCompObserver.Stop(writeLock);
     }
     {
         Timer t("Test reading observers again");
         auto readLock = ecs.StartTransaction<>();
-        Tecs::EntityAdded entityAdded;
-        Tecs::EntityRemoved entityRemoved;
-        Tecs::Added<Transform> transformAdded;
-        Tecs::Removed<Transform> transformRemoved;
-        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
-        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
-        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
-        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
+        Tecs::EntityEvent entityEvent;
+        Tecs::ComponentEvent<Transform> transformEvent;
+        Tecs::ComponentEvent<GlobalComponent> globalCompEvent;
+        Assert(!entityObserver.Poll(readLock, entityEvent), "No events should have occured");
+        Assert(!transformObserver.Poll(readLock, transformEvent), "No events should have occured");
+        Assert(!globalCompObserver.Poll(readLock, globalCompEvent), "No events should have occured");
     }
     {
         Timer t("Test remove while iterating");
@@ -692,14 +672,12 @@ int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Test reading observers again");
         auto readLock = ecs.StartTransaction<>();
-        Tecs::EntityAdded entityAdded;
-        Tecs::EntityRemoved entityRemoved;
-        Tecs::Added<Transform> transformAdded;
-        Tecs::Removed<Transform> transformRemoved;
-        Assert(!entityAddedObserver.Poll(readLock, entityAdded), "No events should have occured");
-        Assert(!entityRemovedObserver.Poll(readLock, entityRemoved), "No events should have occured");
-        Assert(!transformAddedObserver.Poll(readLock, transformAdded), "No events should have occured");
-        Assert(!transformRemovedObserver.Poll(readLock, transformRemoved), "No events should have occured");
+        Tecs::EntityEvent entityEvent;
+        Tecs::ComponentEvent<Transform> transformEvent;
+        Tecs::ComponentEvent<GlobalComponent> globalCompEvent;
+        Assert(!entityObserver.Poll(readLock, entityEvent), "No events should have occured");
+        Assert(!transformObserver.Poll(readLock, transformEvent), "No events should have occured");
+        Assert(!globalCompObserver.Poll(readLock, globalCompEvent), "No events should have occured");
     }
     {
         Timer t("Test cross-component write commit");

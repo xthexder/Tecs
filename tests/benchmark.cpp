@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <thread>
 
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 using namespace testing;
 using namespace Tecs;
 
@@ -155,6 +159,14 @@ void transformWorkerThread() {
 int main(int /* argc */, char ** /* argv */) {
 #if __cpp_lib_atomic_wait
     std::cout << "Compiled with C++20 atomic.wait()" << std::endl;
+#endif
+#ifdef _WIN32
+    // Increase thread scheduler from default of 15ms
+    timeBeginPeriod(1);
+    std::shared_ptr<UINT> timePeriodReset(new UINT(1), [](UINT *period) {
+        timeEndPeriod(*period);
+        delete period;
+    });
 #endif
     {
         Timer t("Create entities");

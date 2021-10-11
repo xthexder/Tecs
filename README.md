@@ -57,10 +57,8 @@ correct permissions.
 
 ### Event Types
 
- - `EntityAdded`
- - `EntityRemoved`
- - `Added<ComponentType>`
- - `Removed<ComponentType>`
+ - `EntityEvent`
+ - `ComponentEvent<ComponentType>`
 
 ## Examples
 

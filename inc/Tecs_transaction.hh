@@ -139,14 +139,9 @@ namespace Tecs {
             }
 
             if (is_add_remove_allowed<LockType>()) {
-                auto &addedObserverList = this->instance.template Observers<EntityAdded>();
-                if (!addedObserverList.writeQueue) {
-                    addedObserverList.writeQueue = std::make_shared<std::deque<EntityAdded>>();
-                }
-
-                auto &removedObserverList = this->instance.template Observers<EntityRemoved>();
-                if (!removedObserverList.writeQueue) {
-                    removedObserverList.writeQueue = std::make_shared<std::deque<EntityRemoved>>();
+                auto &observerList = this->instance.template Observers<EntityEvent>();
+                if (!observerList.writeQueue) {
+                    observerList.writeQueue = std::make_shared<std::deque<EntityEvent>>();
                 }
                 InitObserverEventQueues<AllComponentTypes...>();
             }
@@ -174,12 +169,12 @@ namespace Tecs {
                     NotifyObservers<AllComponentTypes...>(id);
                     if (bitsets[id][0]) {
                         if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            auto &observerList = this->instance.template Observers<EntityAdded>();
-                            observerList.writeQueue->emplace_back(Entity(id));
+                            auto &observerList = this->instance.template Observers<EntityEvent>();
+                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(id));
                         }
                     } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
-                        auto &observerList = this->instance.template Observers<EntityRemoved>();
-                        observerList.writeQueue->emplace_back(Entity(id));
+                        auto &observerList = this->instance.template Observers<EntityEvent>();
+                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(id));
                     }
                 }
                 NotifyGlobalObservers<AllComponentTypes...>();
@@ -190,10 +185,8 @@ namespace Tecs {
                 this->instance.readValidGlobals = this->instance.writeValidGlobals;
                 this->instance.validIndex.template CommitEntities<true>();
 
-                CommitObservers<EntityAdded>();
-                CommitObservers<EntityRemoved>();
-                CommitObservers<Added<AllComponentTypes>...>();
-                CommitObservers<Removed<AllComponentTypes>...>();
+                CommitObservers<EntityEvent>();
+                CommitObservers<ComponentEvent<AllComponentTypes>...>();
             }
             UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
@@ -258,14 +251,9 @@ namespace Tecs {
 
         template<typename U>
         inline void InitObserverEventQueues() const {
-            auto &addedObserverList = this->instance.template Observers<Added<U>>();
-            if (!addedObserverList.writeQueue) {
-                addedObserverList.writeQueue = std::make_shared<std::deque<Added<U>>>();
-            }
-
-            auto &removedObserverList = this->instance.template Observers<Removed<U>>();
-            if (!removedObserverList.writeQueue) {
-                removedObserverList.writeQueue = std::make_shared<std::deque<Removed<U>>>();
+            auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+            if (!observerList.writeQueue) {
+                observerList.writeQueue = std::make_shared<std::deque<ComponentEvent<U>>>();
             }
         }
 
@@ -282,13 +270,13 @@ namespace Tecs {
                 auto &bitsets = this->instance.validIndex.writeComponents;
                 if (this->instance.template BitsetHas<U>(bitsets[id])) {
                     if (id >= oldBitsets.size() || !this->instance.template BitsetHas<U>(oldBitsets[id])) {
-                        auto &observerList = this->instance.template Observers<Added<U>>();
-                        observerList.writeQueue->emplace_back(Entity(id),
+                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(id),
                             this->instance.template Storage<U>().writeComponents[id]);
                     }
                 } else if (id < oldBitsets.size() && this->instance.template BitsetHas<U>(oldBitsets[id])) {
-                    auto &observerList = this->instance.template Observers<Removed<U>>();
-                    observerList.writeQueue->emplace_back(Entity(id),
+                    auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                    observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(id),
                         this->instance.template Storage<U>().readComponents[id]);
                 }
             } else {
@@ -309,13 +297,13 @@ namespace Tecs {
                 auto &bitset = this->instance.writeValidGlobals;
                 if (this->instance.template BitsetHas<U>(bitset)) {
                     if (!this->instance.template BitsetHas<U>(oldBitset)) {
-                        auto &observerList = this->instance.template Observers<Added<U>>();
-                        observerList.writeQueue->emplace_back(Entity(),
+                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(),
                             this->instance.template Storage<U>().writeComponents[0]);
                     }
                 } else if (this->instance.template BitsetHas<U>(oldBitset)) {
-                    auto &observerList = this->instance.template Observers<Removed<U>>();
-                    observerList.writeQueue->emplace_back(Entity(),
+                    auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                    observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(),
                         this->instance.template Storage<U>().readComponents[0]);
                 }
             }
