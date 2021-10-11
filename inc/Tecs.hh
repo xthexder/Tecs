@@ -157,5 +157,6 @@ namespace Tecs {
         friend class Transaction;
         template<template<typename...> typename, typename...>
         friend class BaseTransaction;
+        friend struct Entity;
     };
 } // namespace Tecs

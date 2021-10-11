@@ -265,5 +265,6 @@ namespace Tecs {
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
+        friend struct Entity;
     };
 } // namespace Tecs
