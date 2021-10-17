@@ -124,7 +124,7 @@ namespace Tecs {
 
     class TraceInfo {
     public:
-        TraceInfo() : traceEnabled(false), nextEventIndex(0) {}
+        TraceInfo() : traceEnabled(false), nextEventIndex(0), events(TECS_PERFORMANCE_TRACING_MAX_EVENTS) {}
 
         inline void Trace(TraceEvent::Type eventType) {
             if (traceEnabled) {
@@ -153,6 +153,6 @@ namespace Tecs {
     private:
         std::atomic_bool traceEnabled;
         std::atomic_uint32_t nextEventIndex;
-        std::array<TraceEvent, TECS_PERFORMANCE_TRACING_MAX_EVENTS> events;
+        std::vector<TraceEvent> events;
     };
 } // namespace Tecs
