@@ -65,7 +65,7 @@ namespace Tecs {
         // Reference an existing transaction
         template<typename... PermissionsSource>
         inline Lock(const Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
-            : permissions(source.permissions), instance(source.instance), base(source.base) {
+            : instance(source.instance), base(source.base), permissions(source.permissions) {
             using SourceLockType = Lock<ECS<AllComponentTypes...>, PermissionsSource...>;
             static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
                 "AddRemove permission is missing.");
