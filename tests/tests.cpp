@@ -170,9 +170,13 @@ int main(int /* argc */, char ** /* argv */) {
             e.Unset<Transform>(writeLock);
             AssertHas<Renderable>(writeLock, e);
 
+            auto eCopy = Tecs::Entity(e.id);
             e.Destroy(writeLock);
+            Assert(!e, "Entity id is still initialized after Destroy");
             Assert(!e.Exists(writeLock), "Entity still exists");
             AssertHas<>(writeLock, e);
+            Assert(!eCopy.Exists(writeLock), "Entity copy still exists");
+            AssertHas<>(writeLock, eCopy);
         }
     }
     {
@@ -429,14 +433,14 @@ int main(int /* argc */, char ** /* argv */) {
         std::atomic_bool commitStart = false;
         std::atomic_bool commited = false;
         std::vector<std::thread> readThreads;
-        readThreads.emplace_back([&e]() {
+        readThreads.emplace_back([e]() {
             auto readLock = ecs.StartTransaction<>();
             Assert(e.Exists(readLock), "The entity should exist for all transactions started before AddRemove.");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             Assert(e.Exists(readLock), "The entity should still exist for all transactions started before AddRemove.");
         });
         for (int i = 0; i < 100; i++) {
-            readThreads.emplace_back([&commitStart, &commited, &e, i]() {
+            readThreads.emplace_back([&commitStart, &commited, e, i]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(i));
                 auto readLock = ecs.StartTransaction<>();
                 if (commited) {

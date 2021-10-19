@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Tecs_entity.hh"
-#include "Tecs_locks.hh"
+#include "Tecs_permissions.hh"
 
 #include <deque>
 #include <memory>

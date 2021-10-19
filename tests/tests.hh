@@ -22,7 +22,11 @@ namespace testing {
         } else {
             Assert(!e.template Has<Script>(lock), "Entity should not have a Script component");
         }
-        Assert(e.template Has<Tn...>(lock), "Entity is missing components component");
+        if constexpr (sizeof...(Tn) > 0) {
+            Assert(e.template Has<Tn...>(lock), "Entity is missing components");
+        } else if (!e.Exists(lock)) {
+            Assert(!e.Has<>(lock), "Invalid entity should not have components");
+        }
     }
 
     void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);

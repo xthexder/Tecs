@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Tecs_locks.hh"
+#include "Tecs_lock.hh"
+#include "Tecs_permissions.hh"
 #include "Tecs_storage.hh"
-#include "Tecs_transaction.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -103,10 +103,22 @@ namespace Tecs {
 
     private:
         using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
+
         template<typename Event>
         struct ObserverList {
             std::vector<std::shared_ptr<std::deque<Event>>> observers;
             std::shared_ptr<std::deque<Event>> writeQueue;
+
+            void Init() {
+                if (!writeQueue) writeQueue = std::make_shared<std::deque<Event>>();
+            }
+
+            void Commit() {
+                for (auto &observer : observers) {
+                    observer->insert(observer->end(), writeQueue->begin(), writeQueue->end());
+                }
+                writeQueue->clear();
+            }
         };
 
         template<size_t I, typename U>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tecs_locks.hh"
+#include "Tecs_permissions.hh"
 
 #include <cstddef>
 #include <functional>
@@ -17,26 +17,6 @@ namespace Tecs {
 
         inline Entity() : id(std::numeric_limits<decltype(id)>::max()) {}
         inline Entity(decltype(id) id) : id(id) {}
-
-        inline bool operator==(const Entity &other) const {
-            return id == other.id;
-        }
-
-        inline bool operator!=(const Entity &other) const {
-            return id != other.id;
-        }
-
-        inline bool operator<(const Entity &other) const {
-            return id < other.id;
-        }
-
-        inline bool operator!() const {
-            return id == std::numeric_limits<decltype(id)>::max();
-        }
-
-        inline explicit operator bool() const {
-            return id != std::numeric_limits<decltype(id)>::max();
-        }
 
         template<typename LockType>
         inline bool Exists(LockType &lock) const {
@@ -58,11 +38,11 @@ namespace Tecs {
             if (lock.permissions[0]) {
                 if (id >= lock.instance.validIndex.writeComponents.size()) return false;
                 const auto &validBitset = lock.instance.validIndex.writeComponents[id];
-                return lock.instance.template BitsetHas<Tn...>(validBitset);
+                return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
             } else {
                 if (id >= lock.instance.validIndex.readComponents.size()) return false;
                 const auto &validBitset = lock.instance.validIndex.readComponents[id];
-                return lock.instance.template BitsetHas<Tn...>(validBitset);
+                return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
             }
         }
 
@@ -72,11 +52,9 @@ namespace Tecs {
 
             if (id >= lock.instance.validIndex.readComponents.size()) return false;
             const auto &validBitset = lock.instance.validIndex.readComponents[id];
-            return lock.instance.template BitsetHas<Tn...>(validBitset);
+            return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
         }
 
-        // Alias lock.Get<T>(e) to allow e.Get<T>(lock)
-        // Includes a lock type check to make errors more readable.
         template<typename T, typename LockType,
             typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
         inline ReturnType &Get(LockType &lock) const {
@@ -91,7 +69,7 @@ namespace Tecs {
 
             auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
                                                     : lock.instance.validIndex.readComponents[id];
-            if (!lock.instance.template BitsetHas<T>(validBitset)) {
+            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     if (validBitset[0]) {
                         lock.base->writeAccessedFlags[0] = true;
@@ -123,7 +101,7 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.GetPrevious()");
 
             const auto &validBitset = lock.instance.validIndex.readComponents[id];
-            if (!lock.instance.template BitsetHas<T>(validBitset)) {
+            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
             }
             return lock.instance.template Storage<T>().readComponents[id];
@@ -137,7 +115,7 @@ namespace Tecs {
 
             auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
                                                     : lock.instance.validIndex.readComponents[id];
-            if (!lock.instance.template BitsetHas<T>(validBitset)) {
+            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     if (validBitset[0]) {
                         lock.base->writeAccessedFlags[0] = true;
@@ -165,7 +143,7 @@ namespace Tecs {
 
             auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
                                                     : lock.instance.validIndex.readComponents[id];
-            if (!lock.instance.template BitsetHas<T>(validBitset)) {
+            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     if (validBitset[0]) {
                         lock.base->writeAccessedFlags[0] = true;
@@ -191,11 +169,11 @@ namespace Tecs {
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
 
-            lock.template RemoveComponents<Tn...>(*this);
+            (lock.template RemoveComponents<Tn>(*this), ...);
         }
 
         template<typename LockType>
-        inline void Destroy(LockType &lock) const {
+        inline void Destroy(LockType &lock) {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
             lock.base->writeAccessedFlags[0] = true;
 
@@ -204,6 +182,27 @@ namespace Tecs {
             size_t validIndex = lock.instance.validIndex.validEntityIndexes[id];
             lock.instance.validIndex.writeValidEntities[validIndex] = Entity();
             lock.RemoveAllComponents(*this);
+            id = std::numeric_limits<decltype(id)>::max();
+        }
+
+        inline bool operator==(const Entity &other) const {
+            return id == other.id;
+        }
+
+        inline bool operator!=(const Entity &other) const {
+            return id != other.id;
+        }
+
+        inline bool operator<(const Entity &other) const {
+            return id < other.id;
+        }
+
+        inline bool operator!() const {
+            return id == std::numeric_limits<decltype(id)>::max();
+        }
+
+        inline explicit operator bool() const {
+            return id != std::numeric_limits<decltype(id)>::max();
         }
     };
 } // namespace Tecs
