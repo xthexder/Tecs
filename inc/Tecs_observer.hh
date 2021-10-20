@@ -10,36 +10,29 @@
 #include <type_traits>
 
 namespace Tecs {
-    template<typename T>
-    struct Added {
-        Entity entity;
-        T component;
-
-        Added() : entity(), component() {}
-        Added(const Entity &entity, const T &component) : entity(entity), component(component) {}
+    enum class EventType {
+        INVALID = 0,
+        ADDED,
+        REMOVED,
     };
 
     template<typename T>
-    struct Removed {
+    struct ComponentEvent {
+        EventType type;
         Entity entity;
         T component;
 
-        Removed() : entity(), component() {}
-        Removed(const Entity &entity, const T &component) : entity(entity), component(component) {}
+        ComponentEvent() : type(EventType::INVALID), entity(), component() {}
+        ComponentEvent(EventType type, const Entity &entity, const T &component)
+            : type(type), entity(entity), component(component) {}
     };
 
-    struct EntityAdded {
+    struct EntityEvent {
+        EventType type;
         Entity entity;
 
-        EntityAdded() : entity() {}
-        EntityAdded(const Entity &entity) : entity(entity) {}
-    };
-
-    struct EntityRemoved {
-        Entity entity;
-
-        EntityRemoved() : entity() {}
-        EntityRemoved(const Entity &entity) : entity(entity) {}
+        EntityEvent() : type(EventType::INVALID), entity() {}
+        EntityEvent(EventType type, const Entity &entity) : type(type), entity(entity) {}
     };
 
     /**

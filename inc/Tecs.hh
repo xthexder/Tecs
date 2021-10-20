@@ -141,12 +141,7 @@ namespace Tecs {
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
 
-        // clang-format off
-        std::tuple<ObserverList<EntityAdded>,
-                   ObserverList<EntityRemoved>,
-                   ObserverList<Added<Tn>>...,
-                   ObserverList<Removed<Tn>>...> eventLists;
-        // clang-format on
+        std::tuple<ObserverList<EntityEvent>, ObserverList<ComponentEvent<Tn>>...> eventLists;
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo transactionTrace;
