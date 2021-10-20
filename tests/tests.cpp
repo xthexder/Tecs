@@ -44,6 +44,10 @@ int main(int /* argc */, char ** /* argv */) {
             *b = false;
         });
 
+        Assert(!writeLock.Had<GlobalComponent>(), "ECS shouldn't have a global component previously");
+        Assert(writeLock.Get<const GlobalComponent>().globalCounter == 1,
+            "Expected to be able to read const global counter");
+
         auto &gc2 = writeLock.Get<GlobalComponent>();
         Assert(gc2.globalCounter == 1, "Global counter should be read back as 1");
         Assert(globalComponentInitialized, "Global component should be initialized");
@@ -56,6 +60,13 @@ int main(int /* argc */, char ** /* argv */) {
         auto &gc = writeLock.Get<GlobalComponent>();
         Assert(gc.globalCounter == 1, "Global counter should be read back as 1");
         gc.globalCounter++;
+
+        Assert(writeLock.Had<GlobalComponent>(), "ECS shouldn have a global component previously");
+        Assert(writeLock.GetPrevious<GlobalComponent>().globalCounter == 1, "Expected previous counter to be 1");
+        Assert(writeLock.GetPrevious<const GlobalComponent>().globalCounter == 1,
+            "Expected const previous counter to be 1");
+        Assert(writeLock.Get<GlobalComponent>().globalCounter == 2, "Expected current counter to be 2");
+        Assert(writeLock.Get<const GlobalComponent>().globalCounter == 2, "Expected const current counter to be 2");
 
         Assert(globalComponentInitialized, "Global component should be initialized");
     }
@@ -300,11 +311,18 @@ int main(int /* argc */, char ** /* argv */) {
             // Both current and previous values can be read at the same time.
             auto &currentTransform = e.Get<Transform>(writeLock);
             auto &previousTransform = e.GetPrevious<Transform>(writeLock);
+            auto &constTransform = e.Get<const Transform>(writeLock);
+            Assert(&constTransform != &previousTransform, "Expected const position to not to point to previous");
+            Assert(&constTransform == &currentTransform, "Expected const position to point to current");
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
             currentTransform.pos[0] = previousTransform.pos[0] + 1;
+            Assert(constTransform.pos[0] != previousTransform.pos[0], "Expected const position not to equal previous");
+            Assert(constTransform.pos[0] == currentTransform.pos[0], "Expected const position to equal current");
 
             Assert(e.GetPrevious<Transform>(writeLock).pos[0] == 0, "Expected previous position.x to be 0");
+            Assert(e.GetPrevious<const Transform>(writeLock).pos[0] == 0, "Expected previous position.x to be 0");
             Assert(e.Get<Transform>(writeLock).pos[0] == 1, "Expected current position.x to be 1");
+            Assert(e.Get<const Transform>(writeLock).pos[0] == 1, "Expected const current position.x to be 1");
             entityCount++;
         }
         Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
@@ -314,7 +332,14 @@ int main(int /* argc */, char ** /* argv */) {
         auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
         size_t entityCount = 0;
         for (Tecs::Entity e : readLock.EntitiesWith<Transform>()) {
+            auto &currentTransform = e.Get<Transform>(readLock);
+            auto &previousTransform = e.GetPrevious<Transform>(readLock);
+            auto &constTransform = e.Get<const Transform>(readLock);
+            Assert(&constTransform == &previousTransform, "Expected const position to point to previous");
+            Assert(&constTransform == &currentTransform, "Expected const position to point to current read only");
             Assert(e.Get<Transform>(readLock).pos[0] == 1, "Expected previous position.x to be 1");
+            Assert(e.Get<const Transform>(readLock).pos[0] == 1, "Expected previous position.x to be 1");
+            Assert(e.GetPrevious<Transform>(readLock).pos[0] == 1, "Expected previous position.x to be 1");
             entityCount++;
         }
         Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
