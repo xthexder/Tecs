@@ -8,21 +8,25 @@ namespace testing {
     template<typename... Tn, typename LockType>
     static inline void AssertHas(LockType &lock, Tecs::Entity &e) {
         if (Tecs::contains<Transform, Tn...>()) {
-            Assert(lock.template Has<Transform>(e), "Entity is missing a Transform component");
+            Assert(e.template Has<Transform>(lock), "Entity is missing a Transform component");
         } else {
-            Assert(!lock.template Has<Transform>(e), "Entity should not have a Transform component");
+            Assert(!e.template Has<Transform>(lock), "Entity should not have a Transform component");
         }
         if (Tecs::contains<Renderable, Tn...>()) {
-            Assert(lock.template Has<Renderable>(e), "Entity is missing a Renderable component");
+            Assert(e.template Has<Renderable>(lock), "Entity is missing a Renderable component");
         } else {
-            Assert(!lock.template Has<Renderable>(e), "Entity should not have a Renderable component");
+            Assert(!e.template Has<Renderable>(lock), "Entity should not have a Renderable component");
         }
         if (Tecs::contains<Script, Tn...>()) {
-            Assert(lock.template Has<Script>(e), "Entity is missing a Script component");
+            Assert(e.template Has<Script>(lock), "Entity is missing a Script component");
         } else {
-            Assert(!lock.template Has<Script>(e), "Entity should not have a Script component");
+            Assert(!e.template Has<Script>(lock), "Entity should not have a Script component");
         }
-        Assert(lock.template Has<Tn...>(e), "Entity is missing components component");
+        if constexpr (sizeof...(Tn) > 0) {
+            Assert(e.template Has<Tn...>(lock), "Entity is missing components");
+        } else if (!e.Exists(lock)) {
+            Assert(!e.Has<>(lock), "Invalid entity should not have components");
+        }
     }
 
     void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);

@@ -2,7 +2,6 @@
 
 #include "Tecs_entity.hh"
 #include "Tecs_observer.hh"
-#include "Tecs_transaction.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -265,5 +264,6 @@ namespace Tecs {
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
+        friend struct Entity;
     };
 } // namespace Tecs
