@@ -151,45 +151,50 @@ namespace Tecs {
             return instance.template BitsetHas<Tn...>(instance.readValidGlobals);
         }
 
-        template<typename T, typename ReturnType = std::conditional_t<is_write_allowed<T, LockType>::value, T, const T>>
+        template<typename T, typename ReturnType =
+                                 std::conditional_t<is_write_allowed<std::remove_cv_t<T>, LockType>::value, T, const T>>
         inline ReturnType &Get() const {
-            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
-            static_assert(is_write_allowed<T, LockType>() || std::is_const<ReturnType>(),
+            using CompType = std::remove_cv_t<T>;
+            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
+            static_assert(is_write_allowed<CompType, LockType>() || std::is_const<ReturnType>(),
                 "Can't get non-const reference of read only Component.");
-            static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
+            static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (is_write_allowed<T, LockType>()) {
-                base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+            if (!std::is_const<ReturnType>()) {
+                base->writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()] = true;
             }
 
             auto &validBitset = permissions[0] ? instance.writeValidGlobals : instance.readValidGlobals;
-            if (!instance.template BitsetHas<T>(validBitset)) {
+            if (!instance.template BitsetHas<CompType>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
-                    validBitset[1 + instance.template GetComponentIndex<T>()] = true;
-                    instance.template Storage<T>().writeComponents.resize(1);
-                    instance.template Storage<T>().writeComponents[0] = {}; // Reset value before allowing reading.
+                    validBitset[1 + instance.template GetComponentIndex<CompType>()] = true;
+                    instance.template Storage<CompType>().writeComponents.resize(1);
+                    // Reset value before allowing reading.
+                    instance.template Storage<CompType>().writeComponents[0] = {};
                 } else {
-                    throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
+                    throw std::runtime_error(
+                        "Missing global component of type: " + std::string(typeid(CompType).name()));
                 }
             }
-            if (permissions[1 + instance.template GetComponentIndex<T>()]) {
-                return instance.template Storage<T>().writeComponents[0];
+            if (permissions[1 + instance.template GetComponentIndex<CompType>()]) {
+                return instance.template Storage<CompType>().writeComponents[0];
             } else {
-                return instance.template Storage<T>().readComponents[0];
+                return instance.template Storage<CompType>().readComponents[0];
             }
         }
 
         template<typename T>
         inline const T &GetPrevious() const {
-            static_assert(is_read_allowed<T, LockType>(), "Component is not locked for reading.");
-            static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
+            using CompType = std::remove_cv_t<T>;
+            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
+            static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!instance.template BitsetHas<T>(instance.readValidGlobals)) {
-                throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
+            if (!instance.template BitsetHas<CompType>(instance.readValidGlobals)) {
+                throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
             }
-            return instance.template Storage<T>().readComponents[0];
+            return instance.template Storage<CompType>().readComponents[0];
         }
 
         template<typename T>
