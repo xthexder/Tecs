@@ -97,7 +97,7 @@ int main(int /* argc */, char ** /* argv */) {
                     if (e.Has<ComplexComponent, State>(lock)) {
                         // Only access components as read-only until we know we have work to do.
                         // This allows the transaction to skip Commit if no writes occured.
-                        const ComplexComponent &readComp = e.GetPrevious<ComplexComponent>(lock);
+                        const ComplexComponent &readComp = e.Get<const ComplexComponent>(lock);
                         if (readComp.HasChanged()) {
                             auto &state = e.Get<State>(lock);
                             state = (State)((state + 1) % STATE_COUNT);
