@@ -19,6 +19,13 @@ namespace Tecs {
         inline Entity(decltype(id) id) : id(id) {}
 
         template<typename LockType>
+        inline bool Existed(LockType &lock) const {
+            if (id >= lock.instance.validIndex.readComponents.size()) return false;
+            const auto &validBitset = lock.instance.validIndex.readComponents[id];
+            return validBitset[0];
+        }
+
+        template<typename LockType>
         inline bool Exists(LockType &lock) const {
             if (lock.permissions[0]) {
                 if (id >= lock.instance.validIndex.writeComponents.size()) return false;

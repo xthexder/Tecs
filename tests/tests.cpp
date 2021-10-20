@@ -170,8 +170,10 @@ int main(int /* argc */, char ** /* argv */) {
             e.Unset<Transform>(writeLock);
             AssertHas<Renderable>(writeLock, e);
 
+            Assert(!e.Existed(writeLock), "Entity shouldn't exist before transaction");
             auto eCopy = Tecs::Entity(e.id);
             e.Destroy(writeLock);
+            Assert(!eCopy.Existed(writeLock), "Entity copy shouldn't exist before transaction");
             Assert(!e, "Entity id is still initialized after Destroy");
             Assert(!e.Exists(writeLock), "Entity still exists");
             AssertHas<>(writeLock, e);
@@ -198,12 +200,18 @@ int main(int /* argc */, char ** /* argv */) {
 
                 // Try setting the value twice in one transaction
                 e.Set<Transform>(writeLock, 3.0, 1.0, 7.0, 3);
+
+                Assert(!e.Existed(writeLock), "Entity shouldn't exist before transaction");
             }
         }
         {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
             for (Tecs::Entity &e : entityList) {
+                Assert(e.Existed(writeLock), "Entity should exist before transaction");
+                auto eCopy = e;
                 e.Destroy(writeLock);
+                Assert(!e.Existed(writeLock), "Invalid entity id should not exist");
+                Assert(eCopy.Existed(writeLock), "Entity copy should exist before transaction");
             }
         }
     }
