@@ -227,6 +227,58 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
+        Timer t("Test operations on null entity");
+        auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+        Tecs::Entity ent;
+
+        Assert(!ent.Existed(lock), "Null entity should not exist at start of transaction");
+        Assert(!ent.Exists(lock), "Null entity should not exist");
+        Assert(!ent.Has<Transform>(lock), "Null entity should not have Transform");
+        Assert(!ent.Had<Transform>(lock), "Null entity should not have previous Transform");
+        try {
+            ent.Get<Transform>(lock);
+            Assert(false, "Entity.Get() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+        try {
+            ent.GetPrevious<Transform>(lock);
+            Assert(false, "Entity.GetPrevious() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+        try {
+            ent.Set<Transform>(lock, Transform(1, 2, 3));
+            Assert(false, "Entity.Set() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+        try {
+            ent.Set<Transform>(lock, 1, 2, 3);
+            Assert(false, "Entity.Set() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+        try {
+            ent.Unset<Transform>(lock);
+            Assert(false, "Entity.Unset() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+        try {
+            ent.Destroy(lock);
+            Assert(false, "Entity.Destroy() on null entity should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+        }
+    }
+    {
         Timer t("Test reading observers");
         auto readLock = ecs.StartTransaction<>();
         {
@@ -825,6 +877,15 @@ int main(int /* argc */, char ** /* argv */) {
         {
             auto readLock = ecs.StartTransaction<>();
             Assert(readLock.Entities().size() == ENTITY_COUNT, "Expected entity count not to change");
+        }
+    }
+    {
+        Timer t("Test destroy entities using reference to entity list");
+        {
+            auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+            for (auto &e : lock.Entities()) {
+                e.Destroy(lock);
+            }
         }
     }
 

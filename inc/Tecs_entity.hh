@@ -76,6 +76,14 @@ namespace Tecs {
                 lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
             }
 
+            if (lock.permissions[0]) {
+                if (id >= lock.instance.validIndex.writeComponents.size()) {
+                    throw std::runtime_error("Entity is invalid");
+                }
+            } else if (id >= lock.instance.validIndex.readComponents.size()) {
+                throw std::runtime_error("Entity is invalid");
+            }
+
             auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
                                                     : lock.instance.validIndex.readComponents[id];
             if (!validBitset[0] || !lock.instance.template BitsetHas<CompType>(validBitset)) {
@@ -111,6 +119,8 @@ namespace Tecs {
             static_assert(!is_global_component<CompType>(),
                 "Global components must be accessed through lock.GetPrevious()");
 
+            if (id >= lock.instance.validIndex.readComponents.size()) throw std::runtime_error("Entity is invalid");
+
             const auto &validBitset = lock.instance.validIndex.readComponents[id];
             if (!validBitset[0] || !lock.instance.template BitsetHas<CompType>(validBitset)) {
                 throw std::runtime_error(
@@ -125,8 +135,11 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<T>()] = true;
 
-            auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
-                                                    : lock.instance.validIndex.readComponents[id];
+            if (id >= lock.instance.validIndex.writeComponents.size()) {
+                throw std::runtime_error("Entity is invalid");
+            }
+
+            auto &validBitset = lock.instance.validIndex.writeComponents[id];
             if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     if (validBitset[0]) {
@@ -153,8 +166,11 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<T>()] = true;
 
-            auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
-                                                    : lock.instance.validIndex.readComponents[id];
+            if (id >= lock.instance.validIndex.writeComponents.size()) {
+                throw std::runtime_error("Entity is invalid");
+            }
+
+            auto &validBitset = lock.instance.validIndex.writeComponents[id];
             if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
                 if (is_add_remove_allowed<LockType>()) {
                     if (validBitset[0]) {
@@ -181,6 +197,10 @@ namespace Tecs {
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
 
+            if (id >= lock.instance.validIndex.writeComponents.size()) {
+                throw std::runtime_error("Entity is invalid");
+            }
+
             (lock.template RemoveComponents<Tn>(*this), ...);
         }
 
@@ -189,12 +209,18 @@ namespace Tecs {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
             lock.base->writeAccessedFlags[0] = true;
 
-            // Invalidate the entity and all of its Components
-            lock.instance.validIndex.writeComponents[id][0] = false;
-            size_t validIndex = lock.instance.validIndex.validEntityIndexes[id];
-            lock.instance.validIndex.writeValidEntities[validIndex] = Entity();
-            lock.RemoveAllComponents(*this);
+            if (id >= lock.instance.validIndex.writeComponents.size()) {
+                throw std::runtime_error("Entity is invalid");
+            }
+
+            Tecs::Entity copy = *this;
             id = std::numeric_limits<decltype(id)>::max();
+
+            // Invalidate the entity and all of its Components
+            lock.instance.validIndex.writeComponents[copy.id][0] = false;
+            size_t validIndex = lock.instance.validIndex.validEntityIndexes[copy.id];
+            lock.instance.validIndex.writeValidEntities[validIndex] = Entity();
+            lock.RemoveAllComponents(copy);
         }
 
         inline bool operator==(const Entity &other) const {
