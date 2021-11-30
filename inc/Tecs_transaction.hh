@@ -169,7 +169,9 @@ namespace Tecs {
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
             }
+            UnlockIfNoCommit<AllComponentTypes...>();
             CommitLockInOrder<AllComponentTypes...>();
+            CommitUnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 this->instance.validIndex.CommitLock();
                 this->instance.readValidGlobals = this->instance.writeValidGlobals;
@@ -182,7 +184,6 @@ namespace Tecs {
                     },
                     this->instance.eventLists);
             }
-            UnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>()) {
                 this->instance.validIndex.WriteUnlock();
             } else {
@@ -262,40 +263,37 @@ namespace Tecs {
 
         // Call lock operations on Permissions in the same order they are defined in AllComponentTypes
         // This is accomplished by filtering AllComponentTypes by Permissions
-        template<typename U>
+        template<typename U, typename... Un>
+        inline void UnlockIfNoCommit() const {
+            if (is_write_allowed<U, LockType>()) {
+                if (!this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
+                    this->instance.template Storage<U>().WriteUnlock();
+                }
+            } else if (is_read_allowed<U, LockType>()) {
+                this->instance.template Storage<U>().ReadUnlock();
+            }
+            if constexpr (sizeof...(Un) > 0) UnlockIfNoCommit<Un...>();
+        }
+
+        template<typename U, typename... Un>
         inline void CommitLockInOrder() const {
             if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
                 this->instance.template Storage<U>().CommitLock();
             }
+            if constexpr (sizeof...(Un) > 0) CommitLockInOrder<Un...>();
         }
 
-        template<typename U, typename U2, typename... Un>
-        inline void CommitLockInOrder() const {
-            CommitLockInOrder<U>();
-            CommitLockInOrder<U2, Un...>();
-        }
-
-        // Unlock in the reverse order from Commit
-        template<typename U>
-        inline void UnlockInOrder() const {
-            if (is_write_allowed<U, LockType>()) {
-                if (this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                    if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                        this->instance.template Storage<U>().template CommitEntities<true>();
-                    } else {
-                        this->instance.template Storage<U>().template CommitEntities<is_global_component<U>::value>();
-                    }
+        template<typename U, typename... Un>
+        inline void CommitUnlockInOrder() const {
+            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
+                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                    this->instance.template Storage<U>().template CommitEntities<true>();
+                } else {
+                    this->instance.template Storage<U>().template CommitEntities<is_global_component<U>::value>();
                 }
                 this->instance.template Storage<U>().WriteUnlock();
-            } else if (is_read_allowed<U, LockType>()) {
-                this->instance.template Storage<U>().ReadUnlock();
             }
-        }
-
-        template<typename U, typename U2, typename... Un>
-        inline void UnlockInOrder() const {
-            UnlockInOrder<U2, Un...>();
-            UnlockInOrder<U>();
+            if constexpr (sizeof...(Un) > 0) CommitUnlockInOrder<Un...>();
         }
     };
 }; // namespace Tecs
