@@ -180,10 +180,12 @@ namespace Tecs {
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
             }
             UnlockIfNoCommit<AllComponentTypes...>();
+            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                this->instance.validIndex.CommitLock();
+            }
             CommitLockInOrder<AllComponentTypes...>();
             CommitUnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.validIndex.CommitLock();
                 this->instance.readValidGlobals = this->instance.writeValidGlobals;
                 this->instance.validIndex.template CommitEntities<true>();
 
