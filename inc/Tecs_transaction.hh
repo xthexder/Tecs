@@ -12,12 +12,16 @@
 #include <bitset>
 #include <cstddef>
 #include <stdexcept>
-#include <vector>
 
 namespace Tecs {
 #ifndef TECS_HEADER_ONLY
+    #ifndef TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD
+        #define TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD 64
+    #endif
+
     // Used for detecting nested transactions
-    extern thread_local std::vector<size_t> activeTransactions;
+    extern thread_local std::array<size_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
+    extern thread_local size_t activeTransactionsCount;
     extern std::atomic_size_t nextEcsId;
 #endif
 
@@ -33,10 +37,15 @@ namespace Tecs {
     public:
         BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
 #ifndef TECS_HEADER_ONLY
-            for (auto &id : activeTransactions) {
-                if (id == instance.ecsId) throw std::runtime_error("Nested transactions are not allowed");
+            for (size_t i = 0; i < activeTransactionsCount; i++) {
+                if (activeTransactions[i] == instance.ecsId)
+                    throw std::runtime_error("Nested transactions are not allowed");
             }
-            activeTransactions.push_back(instance.ecsId);
+            if (activeTransactionsCount == activeTransactions.size()) {
+                throw std::runtime_error("A single thread can't create more than "
+                                         "TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD simultaneous transactions");
+            }
+            activeTransactions[activeTransactionsCount++] = instance.ecsId;
 #endif
         }
         // Delete copy constructor
@@ -44,7 +53,8 @@ namespace Tecs {
 
         virtual ~BaseTransaction() {
 #ifndef TECS_HEADER_ONLY
-            activeTransactions.erase(std::remove(activeTransactions.begin(), activeTransactions.end(), instance.ecsId));
+            auto start = activeTransactions.begin();
+            activeTransactionsCount = std::remove(start, start + activeTransactionsCount, instance.ecsId) - start;
 #endif
         }
 
