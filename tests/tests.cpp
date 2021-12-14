@@ -622,51 +622,48 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test overlapping commit transactions don't deadlock");
-        std::thread writeThreadA, writeThreadB;
+        Tecs::Entity readIdA, readIdB;
+        double previousValueA;
+        uint8_t previousValueB;
         {
-            Tecs::Entity readIdA, readIdB;
-            double previousValueA;
-            uint8_t previousValueB;
-            {
-                auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
-                readIdA = readLock.EntitiesWith<Transform>()[0];
-                readIdB = readLock.EntitiesWith<Script>()[0];
-                previousValueA = readIdA.Get<Transform>(readLock).pos[2];
-                previousValueB = readIdB.Get<Script>(readLock).data[3];
-            }
-
-            int startedThreads = 0;
-            std::mutex mutex;
-            std::condition_variable startedCond;
-
-            // Start both write transactions while another read transaction is active so they commit at the same time.
-            writeThreadA = std::thread([readIdA, previousValueA, &startedThreads, &startedCond, &mutex] {
-                auto writeLock = ecs.StartTransaction<Tecs::Read<Script>, Tecs::Write<Transform>>();
-                auto &transform = readIdA.Get<Transform>(writeLock);
-                Assert(transform.pos[2] == previousValueA, "Transform data should match read transaction");
-                transform.pos[2]++;
-
-                std::unique_lock<std::mutex> lock(mutex);
-                startedThreads++;
-                startedCond.notify_all();
-                startedCond.wait(lock, [&startedThreads] {
-                    return startedThreads == 2;
-                });
-            });
-            writeThreadB = std::thread([readIdB, previousValueB, &startedThreads, &startedCond, &mutex] {
-                auto writeLock = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Script>>();
-                auto &script = readIdB.Get<Script>(writeLock);
-                Assert(script.data[3] == previousValueB, "Script data should match read transaction");
-                script.data[3]++;
-
-                std::unique_lock<std::mutex> lock(mutex);
-                startedThreads++;
-                startedCond.notify_all();
-                startedCond.wait(lock, [&startedThreads] {
-                    return startedThreads == 2;
-                });
-            });
+            auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
+            readIdA = readLock.EntitiesWith<Transform>()[0];
+            readIdB = readLock.EntitiesWith<Script>()[0];
+            previousValueA = readIdA.Get<Transform>(readLock).pos[2];
+            previousValueB = readIdB.Get<Script>(readLock).data[3];
         }
+
+        int startedThreads = 0;
+        std::mutex mutex;
+        std::condition_variable startedCond;
+
+        // Start both write transactions while another read transaction is active so they commit at the same time.
+        std::thread writeThreadA = std::thread([readIdA, previousValueA, &startedThreads, &startedCond, &mutex] {
+            auto writeLock = ecs.StartTransaction<Tecs::Read<Script>, Tecs::Write<Transform>>();
+            auto &transform = readIdA.Get<Transform>(writeLock);
+            Assert(transform.pos[2] == previousValueA, "Transform data should match read transaction");
+            transform.pos[2]++;
+
+            std::unique_lock<std::mutex> lock(mutex);
+            startedThreads++;
+            startedCond.notify_all();
+            startedCond.wait(lock, [&startedThreads] {
+                return startedThreads == 2;
+            });
+        });
+        std::thread writeThreadB = std::thread([readIdB, previousValueB, &startedThreads, &startedCond, &mutex] {
+            auto writeLock = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Script>>();
+            auto &script = readIdB.Get<Script>(writeLock);
+            Assert(script.data[3] == previousValueB, "Script data should match read transaction");
+            script.data[3]++;
+
+            std::unique_lock<std::mutex> lock(mutex);
+            startedThreads++;
+            startedCond.notify_all();
+            startedCond.wait(lock, [&startedThreads] {
+                return startedThreads == 2;
+            });
+        });
         writeThreadA.join();
         writeThreadB.join();
     }

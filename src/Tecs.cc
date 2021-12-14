@@ -2,6 +2,7 @@
 
 namespace Tecs {
     // Used for detecting nested transactions
-    thread_local std::vector<size_t> activeTransactions;
+    thread_local std::array<size_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
+    thread_local size_t activeTransactionsCount = 0;
     std::atomic_size_t nextEcsId(0);
 } // namespace Tecs
