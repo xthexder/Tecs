@@ -73,6 +73,10 @@ namespace Tecs {
                 "Lock types are not a subset of existing permissions.");
         }
 
+        inline constexpr ECS<AllComponentTypes...> &GetInstance() const {
+            return instance;
+        }
+
         template<typename T>
         inline constexpr const nonstd::span<Entity> PreviousEntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
