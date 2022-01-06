@@ -75,18 +75,6 @@ namespace Tecs {
 #endif
 
         /**
-         * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
-         */
-        template<typename U>
-        inline static std::string GetComponentName() {
-            if constexpr (std::extent<decltype(component_name<U>::value)>::value > 1) {
-                return component_name<U>::value;
-            } else {
-                return "Component" + std::to_string(GetComponentIndex<U>());
-            }
-        }
-
-        /**
          * Returns the index of a Component type for use in a bitset.
          */
         template<typename U>
@@ -100,6 +88,33 @@ namespace Tecs {
         inline static constexpr size_t GetComponentCount() {
             return sizeof...(Tn);
         }
+
+        /**
+         * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
+         */
+        template<typename U>
+        inline static std::string GetComponentName() {
+            if constexpr (std::extent<decltype(component_name<U>::value)>::value > 1) {
+                return component_name<U>::value;
+            } else {
+                return "Component" + std::to_string(GetComponentIndex<U>());
+            }
+        }
+
+        /**
+         * The name of each individual component type as returned by GetComponentName<T>().
+         */
+        inline static const std::array<std::string, sizeof...(Tn)> ComponentNames = {GetComponentName<Tn>()...};
+
+        /**
+         * The byte sizes of each individual component type.
+         */
+        static constexpr std::array<size_t, sizeof...(Tn)> ComponentSizes = {sizeof(Tn)...};
+
+        /**
+         * The total number of bytes allocated by the ECS per Entity.
+         */
+        static constexpr size_t TotalComponentSize = (sizeof(Tn) + ...);
 
     private:
         using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
