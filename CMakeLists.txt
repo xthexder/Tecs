@@ -75,5 +75,6 @@ install(
 # Build tests and examples if we are the root project
 if("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
     add_subdirectory(tests)
+    add_subdirectory(benchmark)
     add_subdirectory(examples)
 ENDIF ()
