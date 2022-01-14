@@ -172,28 +172,23 @@ namespace Tecs {
                     if (newMetadata.validComponents.HasGlobal()) {
                         this->instance.metadata.validEntityIndexes[index] =
                             this->instance.metadata.writeValidEntities.size();
-                        this->instance.metadata.writeValidEntities.emplace_back(
-                            EntityId(index, newMetadata.generation));
+                        this->instance.metadata.writeValidEntities.emplace_back(EntityId(index));
                     } else {
-                        this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
+                        this->instance.freeEntities.emplace_back(index);
                     }
 
                     // Compare new and old metadata to notify observers
                     (NotifyObservers<AllComponentTypes>(index), ...);
                     if (newMetadata.template Has<>()) {
-                        EntityId newId(index, newMetadata.generation);
-                        if (!oldMetadata.template Has<>(newId)) {
+                        if (!oldMetadata.template Has<>()) {
                             auto &observerList = this->instance.template Observers<EntityEvent>();
-                            observerList.writeQueue->emplace_back(EventType::ADDED,
-                                Entity(EntityId(index, newMetadata.generation)));
+                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(EntityId(index)));
                         }
                     }
                     if (oldMetadata.template Has<>()) {
-                        EntityId oldId(index, oldMetadata.generation);
-                        if (!newMetadata.template Has<>(oldId)) {
+                        if (!newMetadata.template Has<>()) {
                             auto &observerList = this->instance.template Observers<EntityEvent>();
-                            observerList.writeQueue->emplace_back(EventType::REMOVED,
-                                Entity(EntityId(index, oldMetadata.generation)));
+                            observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(EntityId(index)));
                         }
                     }
                 }
@@ -242,8 +237,7 @@ namespace Tecs {
                 if (metadata.template Has<U>()) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(
-                        EntityId(index, metadata.generation));
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(EntityId(index));
                 }
             } else {
                 (void)index; // Unreferenced parameter warning on MSVC
@@ -256,20 +250,18 @@ namespace Tecs {
                 auto &oldMetadata = ReadMetadata(index);
                 auto &newMetadata = WriteMetadata(index);
                 if (newMetadata.template Has<U>()) {
-                    EntityId newId(index, newMetadata.generation);
-                    if (!oldMetadata.template Has<U>(newId)) {
+                    if (!oldMetadata.template Has<U>()) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(newId),
+                            Entity(EntityId(index)),
                             this->instance.template Storage<U>().writeComponents[index]);
                     }
                 }
                 if (oldMetadata.template Has<U>()) {
-                    EntityId oldId(index, oldMetadata.generation);
-                    if (!newMetadata.template Has<U>(oldId)) {
+                    if (!newMetadata.template Has<U>()) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::REMOVED,
-                            Entity(oldId),
+                            Entity(EntityId(index)),
                             this->instance.template Storage<U>().readComponents[index]);
                     }
                 }

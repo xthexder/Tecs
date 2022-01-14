@@ -135,7 +135,6 @@ namespace Tecs {
             }
 
             auto &newMetadata = instance.metadata.writeComponents[entity.id.index];
-            newMetadata.generation = entity.id.generation;
             newMetadata.validComponents.SetGlobal(true);
             auto &validEntities = instance.metadata.writeValidEntities;
             instance.metadata.validEntityIndexes[entity.id.index] = validEntities.size();

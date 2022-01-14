@@ -166,18 +166,11 @@ namespace Tecs {
         };
 
         struct EntityMetadata {
-            TECS_ENTITY_GENERATION_TYPE generation = 0;
             ComponentBitset validComponents;
 
             template<typename... Un>
             inline constexpr bool Has() const {
-                if (this->generation == 0) return false;
                 return this->validComponents.HasGlobal() && this->validComponents.template Has<Un...>();
-            }
-
-            template<typename... Un>
-            inline constexpr bool Has(EntityId entity) const {
-                return this->generation == entity.generation && this->template Has<Un...>();
             }
         };
 

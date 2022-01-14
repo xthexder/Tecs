@@ -6,30 +6,19 @@
 #include <functional>
 #include <stdexcept>
 
-// Default to half the entity id bits being used for index, and half for generation count.
-#ifndef TECS_ENTITY_INDEX_TYPE
-    #define TECS_ENTITY_INDEX_TYPE uint32_t
-#endif
-#ifndef TECS_ENTITY_GENERATION_TYPE
-    #define TECS_ENTITY_GENERATION_TYPE uint32_t
+#ifndef TECS_ENTITY_ID_TYPE
+    #define TECS_ENTITY_ID_TYPE uint64_t
 #endif
 
 namespace Tecs {
     struct EntityId {
-        TECS_ENTITY_INDEX_TYPE index = 0;
-        TECS_ENTITY_GENERATION_TYPE generation = 0;
+        TECS_ENTITY_ID_TYPE index = 0;
 
         EntityId() {}
-        EntityId(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE gen = 1) : index(index), generation(gen) {}
-        EntityId(size_t index, TECS_ENTITY_GENERATION_TYPE gen = 1) : generation(gen) {
-            if (index > std::numeric_limits<decltype(index)>::max()) {
-                throw std::runtime_error("New entity index overflows index type: " + std::to_string(index));
-            }
-            this->index = (TECS_ENTITY_INDEX_TYPE)index;
-        }
+        EntityId(TECS_ENTITY_ID_TYPE index) : index(index) {}
 
         inline bool operator==(const EntityId &other) const {
-            return index == other.index && generation == other.generation;
+            return index == other.index;
         }
 
         inline bool operator!=(const EntityId &other) const {
@@ -41,11 +30,11 @@ namespace Tecs {
         }
 
         inline bool operator!() const {
-            return generation == 0;
+            return index == std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
         }
 
         inline explicit operator bool() const {
-            return generation != 0;
+            return index != std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
         }
     };
     static_assert(sizeof(EntityId) == sizeof(uint64_t), "EntityId is too large!");
@@ -53,7 +42,7 @@ namespace Tecs {
 
 namespace std {
     inline string to_string(const Tecs::EntityId &id) {
-        return "Id(" + to_string(id.generation) + ", " + to_string(id.index) + ")";
+        return "Id(" + to_string(id.index) + ")";
     }
 } // namespace std
 
@@ -68,15 +57,15 @@ namespace Tecs {
         template<typename LockType>
         inline bool Exists(LockType &lock) const {
             if (lock.permissions.HasGlobal()) {
-                return lock.WriteMetadata(id).template Has<>(id);
+                return lock.WriteMetadata(id).template Has<>();
             } else {
-                return lock.ReadMetadata(id).template Has<>(id);
+                return lock.ReadMetadata(id).template Has<>();
             }
         }
 
         template<typename LockType>
         inline bool Existed(LockType &lock) const {
-            return lock.ReadMetadata(id).template Has<>(id);
+            return lock.ReadMetadata(id).template Has<>();
         }
 
         template<typename... Tn, typename LockType>
@@ -84,9 +73,9 @@ namespace Tecs {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
             if (lock.permissions.HasGlobal()) {
-                return lock.WriteMetadata(id).template Has<Tn...>(id);
+                return lock.WriteMetadata(id).template Has<Tn...>();
             } else {
-                return lock.ReadMetadata(id).template Has<Tn...>(id);
+                return lock.ReadMetadata(id).template Has<Tn...>();
             }
         }
 
@@ -94,7 +83,7 @@ namespace Tecs {
         inline bool Had(LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            return lock.ReadMetadata(id).template Has<Tn...>(id);
+            return lock.ReadMetadata(id).template Has<Tn...>();
         }
 
         template<typename T, typename LockType,
@@ -110,11 +99,11 @@ namespace Tecs {
             if constexpr (!std::is_const<ReturnType>()) lock.base->writeAccessedFlags.template Set<CompType>(true);
 
             auto &metadata = lock.permissions.HasGlobal() ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            if (!metadata.template Has<CompType>(id)) {
+            if (!metadata.template Has<CompType>()) {
                 if (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
@@ -145,11 +134,11 @@ namespace Tecs {
                 "Global components must be accessed through lock.GetPrevious()");
 
             auto &metadata = lock.ReadMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            if (!metadata.template Has<CompType>(id)) {
+            if (!metadata.template Has<CompType>()) {
                 throw std::runtime_error(
                     "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
             }
@@ -163,11 +152,11 @@ namespace Tecs {
             lock.base->writeAccessedFlags.template Set<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            if (!metadata.template Has<T>(id)) {
+            if (!metadata.template Has<T>()) {
                 if (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
@@ -190,11 +179,11 @@ namespace Tecs {
             lock.base->writeAccessedFlags.template Set<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            if (!metadata.template Has<T>(id)) {
+            if (!metadata.template Has<T>()) {
                 if (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
@@ -217,7 +206,7 @@ namespace Tecs {
                 "Global components must be removed through lock.Unset()");
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
@@ -230,7 +219,7 @@ namespace Tecs {
             lock.base->writeAccessedFlags.SetGlobal(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>(id)) {
+            if (!metadata.template Has<>()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
@@ -272,7 +261,7 @@ namespace std {
     template<>
     struct hash<Tecs::Entity> {
         std::size_t operator()(const Tecs::Entity &e) const {
-            return e.id.index | ((size_t)e.id.generation << 32);
+            return e.id.index;
         }
     };
 } // namespace std
