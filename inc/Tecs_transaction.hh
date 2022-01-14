@@ -34,7 +34,7 @@ namespace Tecs {
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class BaseTransaction {
-        using ECS = typename ECSType<AllComponentTypes...>;
+        using ECS = ECSType<AllComponentTypes...>;
 
     public:
         BaseTransaction(ECS &instance) : instance(instance) {

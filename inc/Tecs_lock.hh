@@ -42,7 +42,7 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
     class Lock<ECSType<AllComponentTypes...>, Permissions...> {
     private:
-        using ECS = typename ECSType<AllComponentTypes...>;
+        using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
         ECS &instance;

@@ -85,7 +85,7 @@ namespace Tecs {
 
         template<typename LockType>
         inline bool Existed(LockType &lock) const {
-            return lock.ReadMetadata(id).Has<>(id);
+            return lock.ReadMetadata(id).template Has<>(id);
         }
 
         template<typename... Tn, typename LockType>
