@@ -13,33 +13,29 @@
     // Default to half the entity id bits being used for index, and half for generation count.
     #define TECS_ENTITY_GENERATION_TYPE uint32_t
 #endif
-static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) < sizeof(TECS_ENTITY_ID_TYPE), "TECS_ENTITY_GENERATION_TYPE must be smaller than TECS_ENTITY_ID_TYPE");
+static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) < sizeof(TECS_ENTITY_ID_TYPE),
+    "TECS_ENTITY_GENERATION_TYPE must be smaller than TECS_ENTITY_ID_TYPE");
 
 namespace Tecs {
     struct EntityId {
         TECS_ENTITY_ID_TYPE value = 0;
-        
+
         static const size_t IndexBits = (sizeof(TECS_ENTITY_ID_TYPE) - sizeof(TECS_ENTITY_GENERATION_TYPE)) * 8;
+        static const size_t IndexMask = (((size_t)1 << IndexBits) - 1);
 
         EntityId() {}
-        explicit EntityId(TECS_ENTITY_ID_TYPE index, TECS_ENTITY_GENERATION_TYPE gen = 1) {
+        EntityId(TECS_ENTITY_ID_TYPE index, TECS_ENTITY_GENERATION_TYPE gen = 1) {
             value = index;
-            if (Generation() != 0) {
-                throw std::runtime_error("Entity index overflows into generation id");
-            }
+            if (Generation() != 0) { throw std::runtime_error("Entity index overflows into generation id"); }
             value |= (TECS_ENTITY_ID_TYPE)gen << IndexBits;
         }
 
-        TECS_ENTITY_GENERATION_TYPE Generation() const {
+        constexpr TECS_ENTITY_GENERATION_TYPE Generation() const {
             return value >> IndexBits;
         }
 
-        size_t Index() const {
-            return value & (((size_t)1 << IndexBits) - 1);
-        }
-
-        explicit operator size_t() const {
-            return Index();
+        constexpr size_t Index() const {
+            return value & IndexMask;
         }
 
         inline bool operator==(const EntityId &other) const {
@@ -62,14 +58,13 @@ namespace Tecs {
             return Generation() != 0;
         }
     };
-}
+} // namespace Tecs
 
 namespace std {
     inline string to_string(const Tecs::EntityId &id) {
-        return "Entity::Id(" + to_string(id.Generation()) + ", " + to_string(id.Index()) + ")";
+        return "Id(" + to_string(id.Generation()) + ", " + to_string(id.Index()) + ")";
     }
 } // namespace std
-
 
 namespace Tecs {
     struct Entity {
@@ -78,38 +73,29 @@ namespace Tecs {
         inline Entity() : id() {}
         inline Entity(EntityId id) : id(id) {}
 
+    public:
         template<typename LockType>
-        inline bool Existed(LockType &lock) const {
-            if (id >= lock.instance.validIndex.readComponents.size()) return false;
-            const auto &validBitset = lock.instance.validIndex.readComponents[id];
-            return validBitset[0];
+        inline bool Exists(LockType &lock) const {
+            if (lock.permissions.HasGlobal()) {
+                return lock.WriteMetadata(id).Has<>(id);
+            } else {
+                return lock.ReadMetadata(id).Has<>(id);
+            }
         }
 
         template<typename LockType>
-        inline bool Exists(LockType &lock) const {
-            if (lock.permissions[0]) {
-                if (id >= lock.instance.validIndex.writeComponents.size()) return false;
-                const auto &validBitset = lock.instance.validIndex.writeComponents[id];
-                return validBitset[0];
-            } else {
-                if (id >= lock.instance.validIndex.readComponents.size()) return false;
-                const auto &validBitset = lock.instance.validIndex.readComponents[id];
-                return validBitset[0];
-            }
+        inline bool Existed(LockType &lock) const {
+            return lock.ReadMetadata(id).Has<>(id);
         }
 
         template<typename... Tn, typename LockType>
         inline bool Has(LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            if (lock.permissions[0]) {
-                if (id >= lock.instance.validIndex.writeComponents.size()) return false;
-                const auto &validBitset = lock.instance.validIndex.writeComponents[id];
-                return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
+            if (lock.permissions.HasGlobal()) {
+                return lock.WriteMetadata(id).template Has<Tn...>(id);
             } else {
-                if (id >= lock.instance.validIndex.readComponents.size()) return false;
-                const auto &validBitset = lock.instance.validIndex.readComponents[id];
-                return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
+                return lock.ReadMetadata(id).template Has<Tn...>(id);
             }
         }
 
@@ -117,9 +103,7 @@ namespace Tecs {
         inline bool Had(LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            if (id >= lock.instance.validIndex.readComponents.size()) return false;
-            const auto &validBitset = lock.instance.validIndex.readComponents[id];
-            return validBitset[0] && lock.instance.template BitsetHas<Tn...>(validBitset);
+            return lock.ReadMetadata(id).template Has<Tn...>(id);
         }
 
         template<typename T, typename LockType,
@@ -132,43 +116,34 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
-            if (!std::is_const<ReturnType>()) {
-                lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
+            if constexpr (!std::is_const<ReturnType>()) lock.base->writeAccessedFlags.template Set<CompType>(true);
+
+            auto &metadata = lock.permissions.HasGlobal() ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            if (lock.permissions[0]) {
-                if (id >= lock.instance.validIndex.writeComponents.size()) {
-                    throw std::runtime_error("Entity is invalid");
-                }
-            } else if (id >= lock.instance.validIndex.readComponents.size()) {
-                throw std::runtime_error("Entity is invalid");
-            }
-
-            auto &validBitset = lock.permissions[0] ? lock.instance.validIndex.writeComponents[id]
-                                                    : lock.instance.validIndex.readComponents[id];
-            if (!validBitset[0] || !lock.instance.template BitsetHas<CompType>(validBitset)) {
+            size_t index = id.Index();
+            if (!metadata.template Has<CompType>(id)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (validBitset[0]) {
-                        lock.base->writeAccessedFlags[0] = true;
+                    lock.base->writeAccessedFlags.SetGlobal(true);
 
-                        // Reset value before allowing reading.
-                        lock.instance.template Storage<CompType>().writeComponents[id] = {};
-                        validBitset[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
-                        auto &validEntities = lock.instance.template Storage<CompType>().writeValidEntities;
-                        lock.instance.template Storage<CompType>().validEntityIndexes[id] = validEntities.size();
-                        validEntities.emplace_back(*this);
-                    } else {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
+                    // Reset value before allowing reading.
+                    lock.instance.template Storage<CompType>().writeComponents[index] = {};
+                    lock.instance.metadata.writeComponents[index].validComponents.template Set<CompType>(true);
+                    auto &validEntities = lock.instance.template Storage<CompType>().writeValidEntities;
+                    lock.instance.template Storage<CompType>().validEntityIndexes[index] = validEntities.size();
+                    validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
                         "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
                 }
             }
-            if (lock.permissions[1 + lock.instance.template GetComponentIndex<CompType>()]) {
-                return lock.instance.template Storage<CompType>().writeComponents[id];
+
+            if (lock.permissions.template Has<CompType>()) {
+                return lock.instance.template Storage<CompType>().writeComponents[index];
             } else {
-                return lock.instance.template Storage<CompType>().readComponents[id];
+                return lock.instance.template Storage<CompType>().readComponents[index];
             }
         }
 
@@ -179,76 +154,72 @@ namespace Tecs {
             static_assert(!is_global_component<CompType>(),
                 "Global components must be accessed through lock.GetPrevious()");
 
-            if (id >= lock.instance.validIndex.readComponents.size()) throw std::runtime_error("Entity is invalid");
+            auto &metadata = lock.ReadMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+            }
 
-            const auto &validBitset = lock.instance.validIndex.readComponents[id];
-            if (!validBitset[0] || !lock.instance.template BitsetHas<CompType>(validBitset)) {
+            if (!metadata.template Has<CompType>(id)) {
                 throw std::runtime_error(
                     "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
             }
-            return lock.instance.template Storage<CompType>().readComponents[id];
+            return lock.instance.template Storage<CompType>().readComponents[id.Index()];
         }
 
         template<typename T, typename LockType>
         inline T &Set(LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<T>()] = true;
+            lock.base->writeAccessedFlags.template Set<T>(true);
 
-            if (id >= lock.instance.validIndex.writeComponents.size()) {
-                throw std::runtime_error("Entity is invalid");
+            auto &metadata = lock.WriteMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            auto &validBitset = lock.instance.validIndex.writeComponents[id];
-            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
+            size_t index = id.Index();
+            if (!metadata.template Has<T>(id)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (validBitset[0]) {
-                        lock.base->writeAccessedFlags[0] = true;
+                    lock.base->writeAccessedFlags.SetGlobal(true);
 
-                        validBitset[1 + lock.instance.template GetComponentIndex<T>()] = true;
-                        auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
-                        lock.instance.template Storage<T>().validEntityIndexes[id] = validEntities.size();
-                        validEntities.emplace_back(*this);
-                    } else {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
+                    lock.instance.metadata.writeComponents[index].validComponents.template Set<T>(true);
+                    auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
+                    lock.instance.template Storage<T>().validEntityIndexes[index] = validEntities.size();
+                    validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
                         "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
-            return lock.instance.template Storage<T>().writeComponents[id] = value;
+            return lock.instance.template Storage<T>().writeComponents[index] = value;
         }
 
         template<typename T, typename LockType, typename... Args>
         inline T &Set(LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->writeAccessedFlags[1 + lock.instance.template GetComponentIndex<T>()] = true;
+            lock.base->writeAccessedFlags.template Set<T>(true);
 
-            if (id >= lock.instance.validIndex.writeComponents.size()) {
-                throw std::runtime_error("Entity is invalid");
+            auto &metadata = lock.WriteMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            auto &validBitset = lock.instance.validIndex.writeComponents[id];
-            if (!validBitset[0] || !lock.instance.template BitsetHas<T>(validBitset)) {
+            size_t index = id.Index();
+            if (!metadata.template Has<T>(id)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (validBitset[0]) {
-                        lock.base->writeAccessedFlags[0] = true;
+                    lock.base->writeAccessedFlags.SetGlobal(true);
 
-                        validBitset[1 + lock.instance.template GetComponentIndex<T>()] = true;
-                        auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
-                        lock.instance.template Storage<T>().validEntityIndexes[id] = validEntities.size();
-                        validEntities.emplace_back(*this);
-                    } else {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
+                    lock.instance.metadata.writeComponents[index].validComponents.template Set<T>(true);
+                    auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
+                    lock.instance.template Storage<T>().validEntityIndexes[index] = validEntities.size();
+                    validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
                         "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
-            return lock.instance.template Storage<T>().writeComponents[id] = T(std::forward<Args>(args)...);
+            return lock.instance.template Storage<T>().writeComponents[index] = T(std::forward<Args>(args)...);
         }
 
         template<typename... Tn, typename LockType>
@@ -257,30 +228,32 @@ namespace Tecs {
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
 
-            if (id >= lock.instance.validIndex.writeComponents.size()) {
-                throw std::runtime_error("Entity is invalid");
+            auto &metadata = lock.WriteMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            (lock.template RemoveComponents<Tn>(*this), ...);
+            (lock.template RemoveComponents<Tn>(id.Index()), ...);
         }
 
         template<typename LockType>
         inline void Destroy(LockType &lock) {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
-            lock.base->writeAccessedFlags[0] = true;
+            lock.base->writeAccessedFlags.SetGlobal(true);
 
-            if (id >= lock.instance.validIndex.writeComponents.size()) {
-                throw std::runtime_error("Entity is invalid");
+            auto &metadata = lock.WriteMetadata(id);
+            if (!metadata.validComponents.HasGlobal() || metadata.generation != id.Generation()) {
+                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
             }
 
-            Tecs::Entity copy = *this;
-            id = 0;
+            size_t index = id.Index();
 
             // Invalidate the entity and all of its Components
-            lock.instance.validIndex.writeComponents[copy.id][0] = false;
-            size_t validIndex = lock.instance.validIndex.validEntityIndexes[copy.id];
-            lock.instance.validIndex.writeValidEntities[validIndex] = Entity();
-            lock.RemoveAllComponents(copy);
+            lock.RemoveAllComponents(index);
+            lock.instance.metadata.writeComponents[index] = lock.instance.EmptyMetadataRef();
+            size_t validIndex = lock.instance.metadata.validEntityIndexes[index];
+            lock.instance.metadata.writeValidEntities[validIndex] = Entity();
+            id = EntityId();
         }
 
         inline bool operator==(const Entity &other) const {

@@ -119,11 +119,12 @@ int main(int /* argc */, char ** /* argv */) {
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
-            Assert(e.id == i, "Expected Nth entity id to be " + std::to_string(i) + ", was " + std::to_string(e.id));
+            Tecs::EntityId id(i);
+            Assert(e.id == id, "Expected Nth entity id to be " + std::to_string(id) + ", was " + std::to_string(e.id));
             AssertHas<>(writeLock, e);
 
             // Test adding each component type
-            Transform value(1.0, 0.0, 0.0, 1);
+            Transform value(1.0, 0.0, 0.0);
             e.Set<Transform>(writeLock, value);
             AssertHas<Transform>(writeLock, e);
 
@@ -169,11 +170,11 @@ int main(int /* argc */, char ** /* argv */) {
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < 100; i++) {
             Tecs::Entity e = writeLock.NewEntity();
-            Assert(e.id == ENTITY_COUNT + i,
-                "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e.id));
+            Tecs::EntityId id(ENTITY_COUNT + i);
+            Assert(e.id == id, "Expected Nth entity id to be " + std::to_string(id) + ", was " + std::to_string(e.id));
             AssertHas<>(writeLock, e);
 
-            e.Set<Transform>(writeLock, 1.0, 3.0, 3.0, 7);
+            e.Set<Transform>(writeLock, 1.0, 3.0, 3.0);
             AssertHas<Transform>(writeLock, e);
 
             e.Set<Renderable>(writeLock, "foo");
@@ -201,18 +202,18 @@ int main(int /* argc */, char ** /* argv */) {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
             for (size_t i = 0; i < 100; i++) {
                 Tecs::Entity e = writeLock.NewEntity();
-                Assert(e.id == ENTITY_COUNT + i,
-                    "Expected Nth entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(e.id));
+                Tecs::EntityId id(ENTITY_COUNT + i);
+                Assert(e.id == id,
+                    "Expected Nth entity id to be " + std::to_string(id) + ", was " + std::to_string(e.id));
                 AssertHas<>(writeLock, e);
 
                 entityList.emplace_back(e);
 
-                e.Set<Transform>(writeLock, 1.0, 3.0, 3.0, 7);
+                e.Set<Transform>(writeLock, 1.0, 3.0, 3.0);
                 AssertHas<Transform>(writeLock, e);
 
                 // Try setting the value twice in one transaction
-                e.Set<Transform>(writeLock, 3.0, 1.0, 7.0, 3);
+                e.Set<Transform>(writeLock, 3.0, 1.0, 7.0);
 
                 Assert(!e.Existed(writeLock), "Entity shouldn't exist before transaction");
             }
@@ -242,42 +243,42 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(false, "Entity.Get() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.GetPrevious<Transform>(lock);
             Assert(false, "Entity.GetPrevious() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Set<Transform>(lock, Transform(1, 2, 3));
             Assert(false, "Entity.Set() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Set<Transform>(lock, 1, 2, 3);
             Assert(false, "Entity.Set() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Unset<Transform>(lock);
             Assert(false, "Entity.Unset() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Destroy(lock);
             Assert(false, "Entity.Destroy() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity is invalid", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
         }
     }
     {
@@ -288,24 +289,25 @@ int main(int /* argc */, char ** /* argv */) {
             for (size_t i = 0; i < ENTITY_COUNT; i++) {
                 Assert(entityObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
                 Assert(event.type == Tecs::EventType::ADDED, "Expected entity event type to be ADDED");
-                Assert(event.entity.id == i,
-                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
+                Tecs::EntityId id(i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
                     "Expected another event #" + std::to_string(ENTITY_COUNT + i));
                 Assert(event.type == Tecs::EventType::ADDED, "Expected entity event type to be ADDED");
-                Assert(event.entity.id == ENTITY_COUNT + i,
-                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(event.entity.id));
+                Tecs::EntityId id(ENTITY_COUNT + i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
                     "Expected another event #" + std::to_string(ENTITY_COUNT + i));
                 Assert(event.type == Tecs::EventType::REMOVED, "Expected component event type to be REMOVED");
-                Assert(event.entity.id == ENTITY_COUNT + i,
-                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(event.entity.id));
+                Tecs::EntityId id(ENTITY_COUNT + i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
             }
             Assert(!entityObserver.Poll(readLock, event), "Too many events triggered");
         }
@@ -314,27 +316,27 @@ int main(int /* argc */, char ** /* argv */) {
             for (size_t i = 0; i < ENTITY_COUNT; i++) {
                 Assert(transformObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
                 Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
-                Assert(event.entity.id == i,
-                    "Expected Entity id to be " + std::to_string(i) + ", was " + std::to_string(event.entity.id));
-                Assert(event.component == Transform(0.0, 0.0, 0.0, 1), "Expected component to be origin transform");
+                Tecs::EntityId id(i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
+                Assert(event.component == Transform(0.0, 0.0, 0.0), "Expected component to be origin transform");
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(transformObserver.Poll(readLock, event),
                     "Expected another event #" + std::to_string(ENTITY_COUNT + i));
                 Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
-                Assert(event.entity.id == ENTITY_COUNT + i,
-                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(event.entity.id));
-                Assert(event.component == Transform(3.0, 1.0, 7.0, 3), "Expected component to be initial transform");
+                Tecs::EntityId id(ENTITY_COUNT + i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
+                Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected component to be initial transform");
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(transformObserver.Poll(readLock, event), "Expected another event #" + std::to_string(i));
                 Assert(event.type == Tecs::EventType::REMOVED, "Expected component event type to be REMOVED");
-                Assert(event.entity.id == ENTITY_COUNT + i,
-                    "Expected Entity id to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
-                        std::to_string(event.entity.id));
-                Assert(event.component == Transform(3.0, 1.0, 7.0, 3),
-                    "Expected renderable name to be updated transform");
+                Tecs::EntityId id(ENTITY_COUNT + i);
+                Assert(event.entity.id == id,
+                    "Expected Entity id to be " + std::to_string(id) + ", was " + std::to_string(event.entity.id));
+                Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected renderable name to be updated transform");
             }
             Assert(!transformObserver.Poll(readLock, event), "Too many events triggered");
         }
@@ -482,7 +484,7 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
 
-            e.Set<Transform>(writeLock, 1.0, 0.0, 0.0, 1);
+            e.Set<Transform>(writeLock, 1.0, 0.0, 0.0);
             Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
         }
         Assert(writeLock.EntitiesWith<Transform>().size() == prevSize + 100,
@@ -515,7 +517,7 @@ int main(int /* argc */, char ** /* argv */) {
         {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
             e = writeLock.NewEntity();
-            e.Set<Transform>(writeLock, 42.0, 1.0, 64.0, 99);
+            e.Set<Transform>(writeLock, 42.0, 1.0, 64.0);
         }
         std::atomic_bool commitStart = false;
         std::atomic_bool commited = false;

@@ -205,7 +205,7 @@ namespace Tecs {
                     readComponents = writeComponents;
                 } else {
                     for (auto &valid : readValidEntities) {
-                        readComponents[valid.id] = writeComponents[valid.id];
+                        readComponents[valid.id.Index()] = writeComponents[valid.id.Index()];
                     }
                 }
             }
@@ -256,8 +256,8 @@ namespace Tecs {
 
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
-        std::vector<EntityId> readValidEntities;
-        std::vector<EntityId> writeValidEntities;
+        std::vector<Entity> readValidEntities;
+        std::vector<Entity> writeValidEntities;
         std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
 
         template<typename, typename...>

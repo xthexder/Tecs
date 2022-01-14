@@ -61,7 +61,7 @@ namespace Tecs {
     protected:
         ECSType<AllComponentTypes...> &instance;
 
-        std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
+        ECSType<AllComponentTypes...>::ComponentBitset writeAccessedFlags;
 
         template<typename, typename...>
         friend class Lock;
@@ -72,6 +72,16 @@ namespace Tecs {
     class Transaction<ECS<AllComponentTypes...>, Permissions...> : public BaseTransaction<ECS, AllComponentTypes...> {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
+
+        inline const auto &ReadMetadata(size_t index) const {
+            if (index >= this->instance.metadata.readComponents.size()) return this->instance.EmptyMetadataRef();
+            return this->instance.metadata.readComponents[index];
+        }
+
+        inline const auto &WriteMetadata(size_t index) const {
+            if (index >= this->instance.metadata.writeComponents.size()) return this->instance.EmptyMetadataRef();
+            return this->instance.metadata.writeComponents[index];
+        }
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
@@ -84,9 +94,9 @@ namespace Tecs {
             std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
                 [&instance](bool block) {
                     if (is_add_remove_allowed<LockType>()) {
-                        return instance.validIndex.WriteLock(block);
+                        return instance.metadata.WriteLock(block);
                     } else {
-                        return instance.validIndex.ReadLock(block);
+                        return instance.metadata.ReadLock(block);
                     }
                 },
                 [&instance](bool block) {
@@ -101,9 +111,9 @@ namespace Tecs {
             std::array<std::function<void()>, acquired.size()> unlockFuncs = {
                 [&instance]() {
                     if (is_add_remove_allowed<LockType>()) {
-                        return instance.validIndex.WriteUnlock();
+                        return instance.metadata.WriteUnlock();
                     } else {
-                        return instance.validIndex.ReadUnlock();
+                        return instance.metadata.ReadUnlock();
                     }
                 },
                 [&instance]() {
@@ -148,48 +158,54 @@ namespace Tecs {
         }
 
         inline ~Transaction() {
-            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags.HasGlobal()) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
-                this->instance.validIndex.writeValidEntities.clear();
+                this->instance.metadata.writeValidEntities.clear();
                 (ClearValidEntities<AllComponentTypes>(), ...);
                 this->instance.freeEntities.clear();
-                auto &oldValidIndex = this->instance.validIndex.readComponents;
-                auto &newValidIndex = this->instance.validIndex.writeComponents;
-                for (size_t index = 0; index < newValidIndex.size(); index++) {
-                    auto &newMetadata = newValidIndex[index];
-                    auto oldMetadata = index >= oldValidIndex.size() ? EntityMetadata() : oldValidIndex[index];
+                for (size_t index = 0; index < this->instance.metadata.writeComponents.size(); index++) {
+                    auto &newMetadata = this->instance.metadata.writeComponents[index];
+                    auto &oldMetadata = ReadMetadata(index);
                     (UpdateValidEntity<AllComponentTypes>(index), ...);
-                    if (newMetadata.validComponents[0]) {
-                        this->instance.validIndex.validEntityIndexes[index] =
-                            this->instance.validIndex.writeValidEntities.size();
-                        this->instance.validIndex.writeValidEntities.emplace_back(index, newMetadata.generation);
+                    if (newMetadata.validComponents.HasGlobal()) {
+                        this->instance.metadata.validEntityIndexes[index] =
+                            this->instance.metadata.writeValidEntities.size();
+                        this->instance.metadata.writeValidEntities.emplace_back(
+                            EntityId(index, newMetadata.generation));
                     } else {
                         this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
                     }
 
                     // Compare new and old metadata to notify observers
                     (NotifyObservers<AllComponentTypes>(index), ...);
-                    if (newMetadata.validComponents[0]) {
-                        if (!oldMetadata.validComponents[0] || oldMetadata.generation != newMetadata.generation) {
+                    if (newMetadata.template Has<>()) {
+                        EntityId newId(index, newMetadata.generation);
+                        if (!oldMetadata.template Has<>(newId)) {
                             auto &observerList = this->instance.template Observers<EntityEvent>();
-                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(EntityId(index, newMetadata.generation)));
+                            observerList.writeQueue->emplace_back(EventType::ADDED,
+                                Entity(EntityId(index, newMetadata.generation)));
                         }
-                    } else if (oldMetadata.validComponents[0] || oldMetadata.generation != newMetadata.generation) {
-                        auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(EntityId(index, oldMetadata.generation)));
+                    }
+                    if (oldMetadata.template Has<>()) {
+                        EntityId oldId(index, oldMetadata.generation);
+                        if (!newMetadata.template Has<>(oldId)) {
+                            auto &observerList = this->instance.template Observers<EntityEvent>();
+                            observerList.writeQueue->emplace_back(EventType::REMOVED,
+                                Entity(EntityId(index, oldMetadata.generation)));
+                        }
                     }
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
             }
             UnlockIfNoCommit<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.validIndex.CommitLock();
+                this->instance.metadata.CommitLock();
             }
             CommitLockInOrder<AllComponentTypes...>();
             CommitUnlockInOrder<AllComponentTypes...>();
-            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.readValidGlobals = this->instance.writeValidGlobals;
-                this->instance.validIndex.template CommitEntities<true>();
+            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags.HasGlobal()) {
+                this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
+                this->instance.metadata.template CommitEntities<true>();
 
                 // Commit observers
                 std::apply(
@@ -199,9 +215,9 @@ namespace Tecs {
                     this->instance.eventLists);
             }
             if (is_add_remove_allowed<LockType>()) {
-                this->instance.validIndex.WriteUnlock();
+                this->instance.metadata.WriteUnlock();
             } else {
-                this->instance.validIndex.ReadUnlock();
+                this->instance.metadata.ReadUnlock();
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -220,11 +236,12 @@ namespace Tecs {
         template<typename U>
         inline void UpdateValidEntity(size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &metadata = this->instance.validIndex.writeComponents;
-                if (this->instance.template MetadataHas<U>(metadata[index])) {
+                auto &metadata = WriteMetadata(index);
+                if (metadata.template Has<U>()) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index, metadata.generation);
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(
+                        EntityId(index, metadata.generation));
                 }
             } else {
                 (void)index; // Unreferenced parameter warning on MSVC
@@ -234,21 +251,25 @@ namespace Tecs {
         template<typename U>
         inline void NotifyObservers(size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &oldValidIndex = this->instance.validIndex.readComponents;
-                auto &newMetadata = this->instance.validIndex.writeComponents[index];
-                auto oldMetadata = index >= oldValidIndex.size() ? EntityMetadata() : oldValidIndex[index];
-                if (this->instance.template MetadataHas<U>(newMetadata)) {
-                    if (!this->instance.template MetadataHas<U>(oldMetadata)) {
+                auto &oldMetadata = ReadMetadata(index);
+                auto &newMetadata = WriteMetadata(index);
+                if (newMetadata.template Has<U>()) {
+                    EntityId newId(index, newMetadata.generation);
+                    if (!oldMetadata.template Has<U>(newId)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(EntityId(index, newMetadata.generation)),
+                            Entity(newId),
                             this->instance.template Storage<U>().writeComponents[index]);
                     }
-                } else if (this->instance.template MetadataHas<U>(oldMetadata)) {
-                    auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
-                    observerList.writeQueue->emplace_back(EventType::REMOVED,
-                        Entity(EntityId(index, oldMetadata.generation)),
-                        this->instance.template Storage<U>().readComponents[index]);
+                }
+                if (oldMetadata.template Has<U>()) {
+                    EntityId oldId(index, oldMetadata.generation);
+                    if (!newMetadata.template Has<U>(oldId)) {
+                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                        observerList.writeQueue->emplace_back(EventType::REMOVED,
+                            Entity(oldId),
+                            this->instance.template Storage<U>().readComponents[index]);
+                    }
                 }
             } else {
                 (void)index; // Unreferenced parameter warning on MSVC
@@ -258,16 +279,16 @@ namespace Tecs {
         template<typename U>
         inline void NotifyGlobalObservers() const {
             if constexpr (is_global_component<U>()) {
-                auto &oldBitset = this->instance.readValidGlobals;
-                auto &bitset = this->instance.writeValidGlobals;
-                if (this->instance.template BitsetHas<U>(bitset)) {
-                    if (!this->instance.template BitsetHas<U>(oldBitset)) {
+                auto &oldMetadata = this->instance.globalReadMetadata;
+                auto &newMetadata = this->instance.globalWriteMetadata;
+                if (newMetadata.template Has<U>()) {
+                    if (!oldMetadata.template Has<U>()) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
                             Entity(),
                             this->instance.template Storage<U>().writeComponents[0]);
                     }
-                } else if (this->instance.template BitsetHas<U>(oldBitset)) {
+                } else if (oldMetadata.template Has<U>()) {
                     auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                     observerList.writeQueue->emplace_back(EventType::REMOVED,
                         Entity(),
@@ -281,9 +302,7 @@ namespace Tecs {
         template<typename U, typename... Un>
         inline void UnlockIfNoCommit() const {
             if (is_write_allowed<U, LockType>()) {
-                if (!this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                    this->instance.template Storage<U>().WriteUnlock();
-                }
+                if (!this->writeAccessedFlags.template Has<U>()) this->instance.template Storage<U>().WriteUnlock();
             } else if (is_read_allowed<U, LockType>()) {
                 this->instance.template Storage<U>().ReadUnlock();
             }
@@ -292,7 +311,7 @@ namespace Tecs {
 
         template<typename U, typename... Un>
         inline void CommitLockInOrder() const {
-            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
+            if (is_write_allowed<U, LockType>() && this->writeAccessedFlags.template Has<U>()) {
                 this->instance.template Storage<U>().CommitLock();
             }
             if constexpr (sizeof...(Un) > 0) CommitLockInOrder<Un...>();
@@ -300,8 +319,8 @@ namespace Tecs {
 
         template<typename U, typename... Un>
         inline void CommitUnlockInOrder() const {
-            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+            if (is_write_allowed<U, LockType>() && this->writeAccessedFlags.template Has<U>()) {
+                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags.HasGlobal()) {
                     this->instance.template Storage<U>().template CommitEntities<true>();
                 } else {
                     this->instance.template Storage<U>().template CommitEntities<is_global_component<U>::value>();

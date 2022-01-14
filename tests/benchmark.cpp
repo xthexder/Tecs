@@ -173,7 +173,7 @@ int main(int /* argc */, char ** /* argv */) {
         auto writeLock = ecs.StartTransaction<AddRemove>();
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Entity e = writeLock.NewEntity();
-            if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
+            if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0); }
             if (i % RENDERABLE_DIVISOR == 0) { e.Set<Renderable>(writeLock, "entity" + std::to_string(i)); }
             if (i % SCRIPT_DIVISOR == 0) {
                 e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
@@ -223,7 +223,7 @@ int main(int /* argc */, char ** /* argv */) {
         t = timer2;
         for (auto removedEntity : removedList) {
             Entity e = writeLock.NewEntity();
-            if (removedEntity.components[0]) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0, 1); }
+            if (removedEntity.components[0]) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0); }
             if (removedEntity.components[1]) { e.Set<Renderable>(writeLock, removedEntity.name); }
             if (removedEntity.components[2]) {
                 e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));

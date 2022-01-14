@@ -59,14 +59,14 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         inline void StartTrace() {
             transactionTrace.StartTrace();
-            validIndex.traceInfo.StartTrace();
+            metadata.traceInfo.StartTrace();
             (Storage<Tn>().traceInfo.StartTrace(), ...);
         }
 
         inline PerformanceTrace StopTrace() {
             return PerformanceTrace{
                 transactionTrace.StopTrace(),             // transactionEvents
-                validIndex.traceInfo.StopTrace(),         // validIndexEvents
+                metadata.traceInfo.StopTrace(),           // metadataEvents
                 {Storage<Tn>().traceInfo.StopTrace()...}, // componentEvents
                 {GetComponentName<Tn>()...},              // componentNames
                 {},                                       // threadNames
@@ -117,11 +117,6 @@ namespace Tecs {
         static constexpr size_t TotalComponentSize = (sizeof(Tn) + ...);
 
     private:
-        struct EntityMetadata {
-            TECS_ENTITY_GENERATION_TYPE generation = 0;
-            std::bitset<1 + sizeof...(Tn)> validComponents;
-        }
-
         template<typename Event>
         struct ObserverList {
             std::vector<std::shared_ptr<std::deque<Event>>> observers;
@@ -150,15 +145,45 @@ namespace Tecs {
             }
         }
 
-        template<typename... Un>
-        inline static constexpr bool MetadataHas(const EntityMetadata &metadata, EntityId entity) {
-            if (metadata.generation == 0 || !metadata.validComponents[0]) return false;
-            return metadata.generation == entity.Generation() && (metadata.validComponents[1 + GetComponentIndex<0, Un>()] && ...);
-        }
+        struct ComponentBitset : private std::bitset<1 + sizeof...(Tn)> {
+            template<typename... Un>
+            inline constexpr bool Has() const {
+                return ((*this)[1 + GetComponentIndex<0, Un>()] && ...);
+            }
 
-        template<typename... Un>
-        inline static constexpr bool MetadataHas(const EntityMetadata &metadata) {
-            return (metadata.validComponents[1 + GetComponentIndex<0, Un>()] && ...);
+            inline constexpr bool HasGlobal() const {
+                return (*this)[0];
+            }
+
+            template<typename U>
+            inline constexpr bool Set(bool value) {
+                return (*this)[1 + GetComponentIndex<0, U>()] = value;
+            }
+
+            inline constexpr bool SetGlobal(bool value) {
+                return (*this)[0] = value;
+            }
+        };
+
+        struct EntityMetadata {
+            TECS_ENTITY_GENERATION_TYPE generation = 0;
+            ComponentBitset validComponents;
+
+            template<typename... Un>
+            inline constexpr bool Has() const {
+                if (this->generation == 0) return false;
+                return this->validComponents.HasGlobal() && this->validComponents.template Has<Un...>();
+            }
+
+            template<typename... Un>
+            inline constexpr bool Has(EntityId entity) const {
+                return this->generation == entity.Generation() && this->template Has<Un...>();
+            }
+        };
+
+        inline static const EntityMetadata &EmptyMetadataRef() {
+            static const EntityMetadata empty = {};
+            return empty;
         }
 
         template<typename T>
@@ -171,9 +196,9 @@ namespace Tecs {
             return std::get<ObserverList<Event>>(eventLists);
         }
 
-        ComponentIndex<EntityMetadata> validIndex;
-        EntityMetadata readValidGlobals;
-        EntityMetadata writeValidGlobals;
+        ComponentIndex<EntityMetadata> metadata;
+        ComponentBitset globalReadMetadata;
+        ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<EntityId> freeEntities;
 
