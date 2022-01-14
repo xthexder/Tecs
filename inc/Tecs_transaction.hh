@@ -63,7 +63,7 @@ namespace Tecs {
     protected:
         ECS &instance;
 
-        ECS::ComponentBitset writeAccessedFlags;
+        typename ECS::ComponentBitset writeAccessedFlags;
 
         template<typename, typename...>
         friend class Lock;

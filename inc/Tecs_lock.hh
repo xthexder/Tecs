@@ -47,7 +47,7 @@ namespace Tecs {
 
         ECS &instance;
         std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
-        ECS::ComponentBitset permissions;
+        typename ECS::ComponentBitset permissions;
 
         inline const auto &ReadMetadata(const EntityId &id) const {
             auto index = id.Index();
@@ -65,7 +65,7 @@ namespace Tecs {
         // Start a new transaction
         inline Lock(ECS &instance) : instance(instance), base(new Transaction<ECS, Permissions...>(instance)) {
             permissions.SetGlobal(is_add_remove_allowed<LockType>());
-            (permissions.Set<AllComponentTypes>(is_write_allowed<AllComponentTypes, LockType>()), ...);
+            (permissions.template Set<AllComponentTypes>(is_write_allowed<AllComponentTypes, LockType>()), ...);
         }
 
         // Reference an existing transaction

@@ -176,7 +176,7 @@ namespace Tecs {
             }
 
             template<typename... Un>
-            inline constexpr bool Has(EntityId entity) const {
+            inline bool Has(EntityId entity) const {
                 return this->generation == entity.Generation() && this->template Has<Un...>();
             }
         };
