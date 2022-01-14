@@ -4,19 +4,79 @@
 
 #include <cstddef>
 #include <functional>
-#include <limits>
 #include <stdexcept>
 
 #ifndef TECS_ENTITY_ID_TYPE
-    #define TECS_ENTITY_ID_TYPE size_t
+    #define TECS_ENTITY_ID_TYPE uint64_t
 #endif
+#ifndef TECS_ENTITY_GENERATION_TYPE
+    // Default to half the entity id bits being used for index, and half for generation count.
+    #define TECS_ENTITY_GENERATION_TYPE uint32_t
+#endif
+static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) < sizeof(TECS_ENTITY_ID_TYPE), "TECS_ENTITY_GENERATION_TYPE must be smaller than TECS_ENTITY_ID_TYPE");
+
+namespace Tecs {
+    struct EntityId {
+        TECS_ENTITY_ID_TYPE value = 0;
+        
+        static const size_t IndexBits = (sizeof(TECS_ENTITY_ID_TYPE) - sizeof(TECS_ENTITY_GENERATION_TYPE)) * 8;
+
+        EntityId() {}
+        explicit EntityId(TECS_ENTITY_ID_TYPE index, TECS_ENTITY_GENERATION_TYPE gen = 1) {
+            value = index;
+            if (Generation() != 0) {
+                throw std::runtime_error("Entity index overflows into generation id");
+            }
+            value |= (TECS_ENTITY_ID_TYPE)gen << IndexBits;
+        }
+
+        TECS_ENTITY_GENERATION_TYPE Generation() const {
+            return value >> IndexBits;
+        }
+
+        size_t Index() const {
+            return value & (((size_t)1 << IndexBits) - 1);
+        }
+
+        explicit operator size_t() const {
+            return Index();
+        }
+
+        inline bool operator==(const EntityId &other) const {
+            return value == other.value;
+        }
+
+        inline bool operator!=(const EntityId &other) const {
+            return value != other.value;
+        }
+
+        inline bool operator<(const EntityId &other) const {
+            return Index() < other.Index();
+        }
+
+        inline bool operator!() const {
+            return Generation() == 0;
+        }
+
+        inline explicit operator bool() const {
+            return Generation() != 0;
+        }
+    };
+}
+
+namespace std {
+    inline string to_string(const Tecs::EntityId &id) {
+        return "Entity::Id(" + to_string(id.Generation()) + ", " + to_string(id.Index()) + ")";
+    }
+} // namespace std
+
 
 namespace Tecs {
     struct Entity {
-        TECS_ENTITY_ID_TYPE id;
+        EntityId id;
 
-        inline Entity() : id(std::numeric_limits<decltype(id)>::max()) {}
-        inline Entity(decltype(id) id) : id(id) {}
+        inline Entity() : id() {}
+        inline Entity(EntityId id) : id(id) {}
 
         template<typename LockType>
         inline bool Existed(LockType &lock) const {
@@ -214,7 +274,7 @@ namespace Tecs {
             }
 
             Tecs::Entity copy = *this;
-            id = std::numeric_limits<decltype(id)>::max();
+            id = 0;
 
             // Invalidate the entity and all of its Components
             lock.instance.validIndex.writeComponents[copy.id][0] = false;
@@ -236,11 +296,11 @@ namespace Tecs {
         }
 
         inline bool operator!() const {
-            return id == std::numeric_limits<decltype(id)>::max();
+            return !id;
         }
 
         inline explicit operator bool() const {
-            return id != std::numeric_limits<decltype(id)>::max();
+            return (bool)id;
         }
     };
 } // namespace Tecs
@@ -249,7 +309,7 @@ namespace std {
     template<>
     struct hash<Tecs::Entity> {
         std::size_t operator()(const Tecs::Entity &e) const {
-            return e.id;
+            return e.id.value;
         }
     };
 } // namespace std

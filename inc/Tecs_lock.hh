@@ -115,15 +115,16 @@ namespace Tecs {
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
                 (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
-                entity.id = instance.validIndex.writeComponents.size();
-                size_t newSize = entity.id + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
+                size_t nextIndex = instance.validIndex.writeComponents.size();
+                size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
                 instance.validIndex.writeComponents.resize(newSize);
                 instance.validIndex.validEntityIndexes.resize(newSize);
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t id = 1; id < TECS_ENTITY_ALLOCATION_BATCH_SIZE; id++) {
-                    instance.freeEntities.emplace_back(entity.id + id);
+                    instance.freeEntities.emplace_back(nextIndex + id);
                 }
+                entity.id = EntityId(nextIndex);
             } else {
                 entity = instance.freeEntities.front();
                 instance.freeEntities.pop_front();

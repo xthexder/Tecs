@@ -256,8 +256,8 @@ namespace Tecs {
 
         std::vector<T> readComponents;
         std::vector<T> writeComponents;
-        std::vector<Entity> readValidEntities;
-        std::vector<Entity> writeValidEntities;
+        std::vector<EntityId> readValidEntities;
+        std::vector<EntityId> writeValidEntities;
         std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
 
         template<typename, typename...>

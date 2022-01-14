@@ -153,28 +153,30 @@ namespace Tecs {
                 this->instance.validIndex.writeValidEntities.clear();
                 (ClearValidEntities<AllComponentTypes>(), ...);
                 this->instance.freeEntities.clear();
-                auto &oldBitsets = this->instance.validIndex.readComponents;
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                for (size_t id = 0; id < bitsets.size(); id++) {
-                    (UpdateValidEntity<AllComponentTypes>(id), ...);
-                    if (bitsets[id][0]) {
-                        this->instance.validIndex.validEntityIndexes[id] =
+                auto &oldValidIndex = this->instance.validIndex.readComponents;
+                auto &newValidIndex = this->instance.validIndex.writeComponents;
+                for (size_t index = 0; index < newValidIndex.size(); index++) {
+                    auto &newMetadata = newValidIndex[index];
+                    auto oldMetadata = index >= oldValidIndex.size() ? EntityMetadata() : oldValidIndex[index];
+                    (UpdateValidEntity<AllComponentTypes>(index), ...);
+                    if (newMetadata.validComponents[0]) {
+                        this->instance.validIndex.validEntityIndexes[index] =
                             this->instance.validIndex.writeValidEntities.size();
-                        this->instance.validIndex.writeValidEntities.emplace_back(id);
+                        this->instance.validIndex.writeValidEntities.emplace_back(index, newMetadata.generation);
                     } else {
-                        this->instance.freeEntities.emplace_back(Entity(id));
+                        this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
                     }
 
-                    // Compare new and old bitsets to notifiy observers
-                    (NotifyObservers<AllComponentTypes>(id), ...);
-                    if (bitsets[id][0]) {
-                        if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
+                    // Compare new and old metadata to notify observers
+                    (NotifyObservers<AllComponentTypes>(index), ...);
+                    if (newMetadata.validComponents[0]) {
+                        if (!oldMetadata.validComponents[0] || oldMetadata.generation != newMetadata.generation) {
                             auto &observerList = this->instance.template Observers<EntityEvent>();
-                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(id));
+                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(EntityId(index, newMetadata.generation)));
                         }
-                    } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
+                    } else if (oldMetadata.validComponents[0] || oldMetadata.generation != newMetadata.generation) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(id));
+                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(EntityId(index, oldMetadata.generation)));
                     }
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
@@ -216,39 +218,40 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void UpdateValidEntity(size_t id) const {
+        inline void UpdateValidEntity(size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                if (this->instance.template BitsetHas<U>(bitsets[id])) {
-                    this->instance.template Storage<U>().validEntityIndexes[id] =
+                auto &metadata = this->instance.validIndex.writeComponents;
+                if (this->instance.template MetadataHas<U>(metadata[index])) {
+                    this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(id);
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index, metadata.generation);
                 }
             } else {
-                (void)id; // Unreferenced parameter warning on MSVC
+                (void)index; // Unreferenced parameter warning on MSVC
             }
         }
 
         template<typename U>
-        inline void NotifyObservers(size_t id) const {
+        inline void NotifyObservers(size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &oldBitsets = this->instance.validIndex.readComponents;
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                if (this->instance.template BitsetHas<U>(bitsets[id])) {
-                    if (id >= oldBitsets.size() || !this->instance.template BitsetHas<U>(oldBitsets[id])) {
+                auto &oldValidIndex = this->instance.validIndex.readComponents;
+                auto &newMetadata = this->instance.validIndex.writeComponents[index];
+                auto oldMetadata = index >= oldValidIndex.size() ? EntityMetadata() : oldValidIndex[index];
+                if (this->instance.template MetadataHas<U>(newMetadata)) {
+                    if (!this->instance.template MetadataHas<U>(oldMetadata)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(id),
-                            this->instance.template Storage<U>().writeComponents[id]);
+                            Entity(EntityId(index, newMetadata.generation)),
+                            this->instance.template Storage<U>().writeComponents[index]);
                     }
-                } else if (id < oldBitsets.size() && this->instance.template BitsetHas<U>(oldBitsets[id])) {
+                } else if (this->instance.template MetadataHas<U>(oldMetadata)) {
                     auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                     observerList.writeQueue->emplace_back(EventType::REMOVED,
-                        Entity(id),
-                        this->instance.template Storage<U>().readComponents[id]);
+                        Entity(EntityId(index, oldMetadata.generation)),
+                        this->instance.template Storage<U>().readComponents[index]);
                 }
             } else {
-                (void)id; // Unreferenced parameter warning on MSVC
+                (void)index; // Unreferenced parameter warning on MSVC
             }
         }
 

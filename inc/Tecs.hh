@@ -117,7 +117,10 @@ namespace Tecs {
         static constexpr size_t TotalComponentSize = (sizeof(Tn) + ...);
 
     private:
-        using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
+        struct EntityMetadata {
+            TECS_ENTITY_GENERATION_TYPE generation = 0;
+            std::bitset<1 + sizeof...(Tn)> validComponents;
+        }
 
         template<typename Event>
         struct ObserverList {
@@ -148,8 +151,14 @@ namespace Tecs {
         }
 
         template<typename... Un>
-        inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
-            return (validBitset[1 + GetComponentIndex<0, Un>()] && ...);
+        inline static constexpr bool MetadataHas(const EntityMetadata &metadata, EntityId entity) {
+            if (metadata.generation == 0 || !metadata.validComponents[0]) return false;
+            return metadata.generation == entity.Generation() && (metadata.validComponents[1 + GetComponentIndex<0, Un>()] && ...);
+        }
+
+        template<typename... Un>
+        inline static constexpr bool MetadataHas(const EntityMetadata &metadata) {
+            return (metadata.validComponents[1 + GetComponentIndex<0, Un>()] && ...);
         }
 
         template<typename T>
@@ -162,11 +171,11 @@ namespace Tecs {
             return std::get<ObserverList<Event>>(eventLists);
         }
 
-        ComponentIndex<ValidBitset> validIndex;
-        ValidBitset readValidGlobals;
-        ValidBitset writeValidGlobals;
+        ComponentIndex<EntityMetadata> validIndex;
+        EntityMetadata readValidGlobals;
+        EntityMetadata writeValidGlobals;
         std::tuple<ComponentIndex<Tn>...> indexes;
-        std::deque<Entity> freeEntities;
+        std::deque<EntityId> freeEntities;
 
         std::tuple<ObserverList<EntityEvent>, ObserverList<ComponentEvent<Tn>>...> eventLists;
 
