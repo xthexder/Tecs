@@ -77,9 +77,9 @@ namespace Tecs {
         template<typename LockType>
         inline bool Exists(LockType &lock) const {
             if (lock.permissions.HasGlobal()) {
-                return lock.WriteMetadata(id).Has<>(id);
+                return lock.WriteMetadata(id).template Has<>(id);
             } else {
-                return lock.ReadMetadata(id).Has<>(id);
+                return lock.ReadMetadata(id).template Has<>(id);
             }
         }
 

@@ -34,8 +34,10 @@ namespace Tecs {
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class BaseTransaction {
+        using ECS = typename ECSType<AllComponentTypes...>;
+
     public:
-        BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
+        BaseTransaction(ECS &instance) : instance(instance) {
 #ifndef TECS_HEADER_ONLY
             for (size_t i = 0; i < activeTransactionsCount; i++) {
                 if (activeTransactions[i] == instance.ecsId)
@@ -59,9 +61,9 @@ namespace Tecs {
         }
 
     protected:
-        ECSType<AllComponentTypes...> &instance;
+        ECS &instance;
 
-        ECSType<AllComponentTypes...>::ComponentBitset writeAccessedFlags;
+        ECS::ComponentBitset writeAccessedFlags;
 
         template<typename, typename...>
         friend class Lock;

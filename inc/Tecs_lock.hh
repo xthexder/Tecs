@@ -39,14 +39,15 @@ namespace Tecs {
      * // A Lock allowing the creation and removal of entities and components.
      * Lock<ECSType, AddRemove> lock2;
      */
-    template<typename... AllComponentTypes, typename... Permissions>
-    class Lock<ECS<AllComponentTypes...>, Permissions...> {
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
+    class Lock<ECSType<AllComponentTypes...>, Permissions...> {
     private:
-        using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
+        using ECS = typename ECSType<AllComponentTypes...>;
+        using LockType = Lock<ECS, Permissions...>;
 
-        ECS<AllComponentTypes...> &instance;
-        std::shared_ptr<BaseTransaction<ECS, AllComponentTypes...>> base;
-        ECS<AllComponentTypes...>::ComponentBitset permissions;
+        ECS &instance;
+        std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
+        ECS::ComponentBitset permissions;
 
         inline const auto &ReadMetadata(const EntityId &id) const {
             auto index = id.Index();
@@ -62,17 +63,16 @@ namespace Tecs {
 
     public:
         // Start a new transaction
-        inline Lock(ECS<AllComponentTypes...> &instance)
-            : instance(instance), base(new Transaction<ECS<AllComponentTypes...>, Permissions...>(instance)) {
+        inline Lock(ECS &instance) : instance(instance), base(new Transaction<ECS, Permissions...>(instance)) {
             permissions.SetGlobal(is_add_remove_allowed<LockType>());
             (permissions.Set<AllComponentTypes>(is_write_allowed<AllComponentTypes, LockType>()), ...);
         }
 
         // Reference an existing transaction
         template<typename... PermissionsSource>
-        inline Lock(const Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
+        inline Lock(const Lock<ECS, PermissionsSource...> &source)
             : instance(source.instance), base(source.base), permissions(source.permissions) {
-            using SourceLockType = Lock<ECS<AllComponentTypes...>, PermissionsSource...>;
+            using SourceLockType = Lock<ECS, PermissionsSource...>;
             static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
                 "AddRemove permission is missing.");
             static_assert(std::conjunction<is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>(),
@@ -257,7 +257,7 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline Observer<ECS<AllComponentTypes...>, Event> Watch() const {
+        inline Observer<ECS, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
             auto &observerList = instance.template Observers<Event>();
@@ -266,7 +266,7 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline void StopWatching(Observer<ECS<AllComponentTypes...>, Event> &observer) const {
+        inline void StopWatching(Observer<ECS, Event> &observer) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
             auto &observers = instance.template Observers<Event>().observers;
@@ -275,14 +275,14 @@ namespace Tecs {
         }
 
         template<typename... PermissionsSubset>
-        inline Lock<ECS<AllComponentTypes...>, PermissionsSubset...> Subset() const {
-            using NewLockType = Lock<ECS<AllComponentTypes...>, PermissionsSubset...>;
+        inline Lock<ECS, PermissionsSubset...> Subset() const {
+            using NewLockType = Lock<ECS, PermissionsSubset...>;
             static_assert(is_add_remove_allowed<LockType>() || !is_add_remove_allowed<NewLockType>(),
                 "AddRemove permission is missing.");
             static_assert(std::conjunction<is_lock_subset<AllComponentTypes, NewLockType, LockType>...>(),
                 "Lock types are not a subset of existing permissions.");
 
-            return Lock<ECS<AllComponentTypes...>, PermissionsSubset...>(*this);
+            return Lock<ECS, PermissionsSubset...>(*this);
         }
 
     private:
