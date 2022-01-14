@@ -205,7 +205,7 @@ namespace Tecs {
                     readComponents = writeComponents;
                 } else {
                     for (auto &valid : readValidEntities) {
-                        readComponents[valid.id.Index()] = writeComponents[valid.id.Index()];
+                        readComponents[valid.id.index] = writeComponents[valid.id.index];
                     }
                 }
             }

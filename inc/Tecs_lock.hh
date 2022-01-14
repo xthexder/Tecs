@@ -50,15 +50,13 @@ namespace Tecs {
         typename ECS::ComponentBitset permissions;
 
         inline const auto &ReadMetadata(const EntityId &id) const {
-            auto index = id.Index();
-            if (index >= instance.metadata.readComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.readComponents[index];
+            if (id.index >= instance.metadata.readComponents.size()) return instance.EmptyMetadataRef();
+            return instance.metadata.readComponents[id.index];
         }
 
         inline const auto &WriteMetadata(const EntityId &id) const {
-            auto index = id.Index();
-            if (index >= instance.metadata.writeComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.writeComponents[index];
+            if (id.index >= instance.metadata.writeComponents.size()) return instance.EmptyMetadataRef();
+            return instance.metadata.writeComponents[id.index];
         }
 
     public:
@@ -136,11 +134,11 @@ namespace Tecs {
                 instance.freeEntities.pop_front();
             }
 
-            auto &newMetadata = instance.metadata.writeComponents[entity.id.Index()];
-            newMetadata.generation = entity.id.Generation();
+            auto &newMetadata = instance.metadata.writeComponents[entity.id.index];
+            newMetadata.generation = entity.id.generation;
             newMetadata.validComponents.SetGlobal(true);
             auto &validEntities = instance.metadata.writeValidEntities;
-            instance.metadata.validEntityIndexes[entity.id.Index()] = validEntities.size();
+            instance.metadata.validEntityIndexes[entity.id.index] = validEntities.size();
             validEntities.emplace_back(entity);
 
             return entity;
