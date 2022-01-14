@@ -99,12 +99,11 @@ namespace Tecs {
             if constexpr (!std::is_const<ReturnType>()) lock.base->writeAccessedFlags.template Set<CompType>(true);
 
             auto &metadata = lock.permissions.HasGlobal() ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
-
             if (!metadata.template Has<CompType>()) {
                 if (is_add_remove_allowed<LockType>()) {
+                    if (!metadata.template Has<>()) {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+                    }
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
                     // Reset value before allowing reading.
@@ -134,13 +133,13 @@ namespace Tecs {
                 "Global components must be accessed through lock.GetPrevious()");
 
             auto &metadata = lock.ReadMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
-
             if (!metadata.template Has<CompType>()) {
-                throw std::runtime_error(
-                    "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
+                if (!metadata.template Has<>()) {
+                    throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+                } else {
+                    throw std::runtime_error(
+                        "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
+                }
             }
             return lock.instance.template Storage<CompType>().readComponents[id.index];
         }
@@ -152,12 +151,11 @@ namespace Tecs {
             lock.base->writeAccessedFlags.template Set<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
-
             if (!metadata.template Has<T>()) {
                 if (is_add_remove_allowed<LockType>()) {
+                    if (!metadata.template Has<>()) {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+                    }
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
                     lock.instance.metadata.writeComponents[id.index].validComponents.template Set<T>(true);
@@ -179,12 +177,11 @@ namespace Tecs {
             lock.base->writeAccessedFlags.template Set<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
-
             if (!metadata.template Has<T>()) {
                 if (is_add_remove_allowed<LockType>()) {
+                    if (!metadata.template Has<>()) {
+                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+                    }
                     lock.base->writeAccessedFlags.SetGlobal(true);
 
                     lock.instance.metadata.writeComponents[id.index].validComponents.template Set<T>(true);
