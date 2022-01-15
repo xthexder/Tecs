@@ -71,7 +71,7 @@ namespace Tecs {
                 "Lock types are not a subset of existing permissions.");
         }
 
-        inline constexpr ECS<AllComponentTypes...> &GetInstance() const {
+        inline constexpr ECS &GetInstance() const {
             return instance;
         }
 
