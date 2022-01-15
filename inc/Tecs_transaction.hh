@@ -79,16 +79,7 @@ namespace Tecs {
     class Transaction<ECS<AllComponentTypes...>, Permissions...> : public BaseTransaction<ECS, AllComponentTypes...> {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
-
-        inline const auto &ReadMetadata(size_t index) const {
-            if (index >= this->instance.metadata.readComponents.size()) return this->instance.EmptyMetadataRef();
-            return this->instance.metadata.readComponents[index];
-        }
-
-        inline const auto &WriteMetadata(size_t index) const {
-            if (index >= this->instance.metadata.writeComponents.size()) return this->instance.EmptyMetadataRef();
-            return this->instance.metadata.writeComponents[index];
-        }
+        using ComponentBitset = typename ECS<AllComponentTypes...>::ComponentBitset;
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
@@ -172,8 +163,10 @@ namespace Tecs {
                 this->instance.freeEntities.clear();
                 for (size_t index = 0; index < this->instance.metadata.writeComponents.size(); index++) {
                     auto &newMetadata = this->instance.metadata.writeComponents[index];
-                    auto &oldMetadata = ReadMetadata(index);
-                    (UpdateValidEntity<AllComponentTypes>(index), ...);
+                    auto &oldMetadata = index >= this->instance.metadata.readComponents.size()
+                                            ? this->instance.EmptyMetadataRef()
+                                            : this->instance.metadata.readComponents[index];
+                    (UpdateValidEntity<AllComponentTypes>(newMetadata, index), ...);
                     if (newMetadata[0]) {
                         this->instance.metadata.validEntityIndexes[index] =
                             this->instance.metadata.writeValidEntities.size();
@@ -183,7 +176,7 @@ namespace Tecs {
                     }
 
                     // Compare new and old metadata to notify observers
-                    (NotifyObservers<AllComponentTypes>(index), ...);
+                    (NotifyObservers<AllComponentTypes>(newMetadata, oldMetadata, index), ...);
                     if (newMetadata[0] && !oldMetadata[0]) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
                         observerList.writeQueue->emplace_back(EventType::ADDED, Entity(index));
@@ -232,24 +225,23 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void UpdateValidEntity(size_t index) const {
+        inline void UpdateValidEntity(const ComponentBitset &metadata, size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &metadata = WriteMetadata(index);
                 if (this->instance.template BitsetHas<U>(metadata)) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
                     this->instance.template Storage<U>().writeValidEntities.emplace_back(index);
                 }
             } else {
-                (void)index; // Unreferenced parameter warning on MSVC
+                (void)metadata; // Unreferenced parameter warning on MSVC
+                (void)index;
             }
         }
 
         template<typename U>
-        inline void NotifyObservers(size_t index) const {
+        inline void NotifyObservers(const ComponentBitset &newMetadata, const ComponentBitset &oldMetadata,
+            size_t index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &oldMetadata = ReadMetadata(index);
-                auto &newMetadata = WriteMetadata(index);
                 if (this->instance.template BitsetHas<U>(newMetadata)) {
                     if (!this->instance.template BitsetHas<U>(oldMetadata)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
@@ -267,7 +259,9 @@ namespace Tecs {
                     }
                 }
             } else {
-                (void)index; // Unreferenced parameter warning on MSVC
+                (void)newMetadata; // Unreferenced parameter warning on MSVC
+                (void)oldMetadata;
+                (void)index;
             }
         }
 

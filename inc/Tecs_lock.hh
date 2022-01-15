@@ -49,16 +49,6 @@ namespace Tecs {
         std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
         typename ECS::ComponentBitset permissions;
 
-        inline const auto &ReadMetadata(const TECS_ENTITY_ID_TYPE &id) const {
-            if (id >= instance.metadata.readComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.readComponents[id];
-        }
-
-        inline const auto &WriteMetadata(const TECS_ENTITY_ID_TYPE &id) const {
-            if (id >= instance.metadata.writeComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.writeComponents[id];
-        }
-
     public:
         // Start a new transaction
         inline Lock(ECS &instance) : instance(instance), base(new Transaction<ECS, Permissions...>(instance)) {
