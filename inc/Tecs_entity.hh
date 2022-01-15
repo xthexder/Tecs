@@ -66,7 +66,7 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
-            if constexpr (!std::is_const<ReturnType>()) lock.base->SetAccessFlag<CompType>(true);
+            if constexpr (!std::is_const<ReturnType>()) lock.base->template SetAccessFlag<CompType>(true);
 
             auto &metadataList =
                 lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
@@ -119,7 +119,7 @@ namespace Tecs {
         inline T &Set(LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->SetAccessFlag<T>(true);
+            lock.base->template SetAccessFlag<T>(true);
 
             if (id >= lock.instance.metadata.writeComponents.size()) {
                 throw std::runtime_error("Entity does not exist: InvalidId");
@@ -147,7 +147,7 @@ namespace Tecs {
         inline T &Set(LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->SetAccessFlag<T>(true);
+            lock.base->template SetAccessFlag<T>(true);
 
             if (id >= lock.instance.metadata.writeComponents.size()) {
                 throw std::runtime_error("Entity does not exist: InvalidId");
