@@ -243,42 +243,42 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(false, "Entity.Get() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.GetPrevious<Transform>(lock);
             Assert(false, "Entity.GetPrevious() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Set<Transform>(lock, Transform(1, 2, 3));
             Assert(false, "Entity.Set() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Set<Transform>(lock, 1, 2, 3);
             Assert(false, "Entity.Set() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Unset<Transform>(lock);
             Assert(false, "Entity.Unset() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
         try {
             ent.Destroy(lock);
             Assert(false, "Entity.Destroy() on null entity should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not exist: Id(0, 0)", "Received wrong runtime_error: " + msg);
+            Assert(msg == "Entity does not exist: InvalidId", "Received wrong runtime_error: " + msg);
         }
     }
     {

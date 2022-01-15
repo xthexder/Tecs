@@ -12,7 +12,7 @@
 
 namespace Tecs {
     struct EntityId {
-        TECS_ENTITY_ID_TYPE index = 0;
+        TECS_ENTITY_ID_TYPE index = std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
 
         EntityId() {}
         EntityId(TECS_ENTITY_ID_TYPE index) : index(index) {}
@@ -42,7 +42,11 @@ namespace Tecs {
 
 namespace std {
     inline string to_string(const Tecs::EntityId &id) {
-        return "Id(" + to_string(id.index) + ")";
+        if (id) {
+            return "Id(" + to_string(id.index) + ")";
+        } else {
+            return "InvalidId";
+        }
     }
 } // namespace std
 
@@ -56,34 +60,29 @@ namespace Tecs {
     public:
         template<typename LockType>
         inline bool Exists(LockType &lock) const {
-            if (lock.permissions.HasGlobal()) {
-                return lock.WriteMetadata(id).template Has<>();
-            } else {
-                return lock.ReadMetadata(id).template Has<>();
-            }
+            auto &metadata = lock.permissions[0] ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
+            return metadata[0];
         }
 
         template<typename LockType>
         inline bool Existed(LockType &lock) const {
-            return lock.ReadMetadata(id).template Has<>();
+            return lock.ReadMetadata(id)[0];
         }
 
         template<typename... Tn, typename LockType>
         inline bool Has(LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            if (lock.permissions.HasGlobal()) {
-                return lock.WriteMetadata(id).template Has<Tn...>();
-            } else {
-                return lock.ReadMetadata(id).template Has<Tn...>();
-            }
+            auto &metadata = lock.permissions[0] ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
+            return metadata[0] && lock.instance.template BitsetHas<Tn...>(metadata);
         }
 
         template<typename... Tn, typename LockType>
         inline bool Had(LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            return lock.ReadMetadata(id).template Has<Tn...>();
+            auto &metadata = lock.ReadMetadata(id);
+            return metadata[0] && lock.instance.template BitsetHas<Tn...>(metadata);
         }
 
         template<typename T, typename LockType,
@@ -96,19 +95,18 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
-            if constexpr (!std::is_const<ReturnType>()) lock.base->writeAccessedFlags.template Set<CompType>(true);
+            if constexpr (!std::is_const<ReturnType>()) lock.base->SetAccessFlag<CompType>(true);
 
-            auto &metadata = lock.permissions.HasGlobal() ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
-            if (!metadata.template Has<CompType>()) {
+            auto &metadata = lock.permissions[0] ? lock.WriteMetadata(id) : lock.ReadMetadata(id);
+            if (!metadata[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+            if (!lock.instance.template BitsetHas<CompType>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (!metadata.template Has<>()) {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
-                    lock.base->writeAccessedFlags.SetGlobal(true);
+                    lock.base->writeAccessedFlags[0] = true;
 
                     // Reset value before allowing reading.
                     lock.instance.template Storage<CompType>().writeComponents[id.index] = {};
-                    lock.instance.metadata.writeComponents[id.index].validComponents.template Set<CompType>(true);
+                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    validComponents[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
                     auto &validEntities = lock.instance.template Storage<CompType>().writeValidEntities;
                     lock.instance.template Storage<CompType>().validEntityIndexes[id.index] = validEntities.size();
                     validEntities.emplace_back(*this);
@@ -118,7 +116,7 @@ namespace Tecs {
                 }
             }
 
-            if (lock.permissions.template Has<CompType>()) {
+            if (lock.instance.template BitsetHas<CompType>(lock.permissions)) {
                 return lock.instance.template Storage<CompType>().writeComponents[id.index];
             } else {
                 return lock.instance.template Storage<CompType>().readComponents[id.index];
@@ -133,13 +131,10 @@ namespace Tecs {
                 "Global components must be accessed through lock.GetPrevious()");
 
             auto &metadata = lock.ReadMetadata(id);
-            if (!metadata.template Has<CompType>()) {
-                if (!metadata.template Has<>()) {
-                    throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                } else {
-                    throw std::runtime_error(
-                        "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
-                }
+            if (!metadata[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+            if (!lock.instance.template BitsetHas<CompType>(metadata)) {
+                throw std::runtime_error(
+                    "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
             }
             return lock.instance.template Storage<CompType>().readComponents[id.index];
         }
@@ -148,17 +143,16 @@ namespace Tecs {
         inline T &Set(LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->writeAccessedFlags.template Set<T>(true);
+            lock.base->SetAccessFlag<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<T>()) {
+            if (!metadata[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+            if (!lock.instance.template BitsetHas<T>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (!metadata.template Has<>()) {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
-                    lock.base->writeAccessedFlags.SetGlobal(true);
+                    lock.base->writeAccessedFlags[0] = true;
 
-                    lock.instance.metadata.writeComponents[id.index].validComponents.template Set<T>(true);
+                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    validComponents[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
                     lock.instance.template Storage<T>().validEntityIndexes[id.index] = validEntities.size();
                     validEntities.emplace_back(*this);
@@ -174,17 +168,16 @@ namespace Tecs {
         inline T &Set(LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->writeAccessedFlags.template Set<T>(true);
+            lock.base->SetAccessFlag<T>(true);
 
             auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<T>()) {
+            if (!metadata[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
+            if (!lock.instance.template BitsetHas<T>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
-                    if (!metadata.template Has<>()) {
-                        throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-                    }
-                    lock.base->writeAccessedFlags.SetGlobal(true);
+                    lock.base->writeAccessedFlags[0] = true;
 
-                    lock.instance.metadata.writeComponents[id.index].validComponents.template Set<T>(true);
+                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    validComponents[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
                     lock.instance.template Storage<T>().validEntityIndexes[id.index] = validEntities.size();
                     validEntities.emplace_back(*this);
@@ -202,10 +195,7 @@ namespace Tecs {
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
 
-            auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
+            if (!lock.WriteMetadata(id)[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
 
             (lock.template RemoveComponents<Tn>(id.index), ...);
         }
@@ -213,12 +203,9 @@ namespace Tecs {
         template<typename LockType>
         inline void Destroy(LockType &lock) {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
-            lock.base->writeAccessedFlags.SetGlobal(true);
+            lock.base->writeAccessedFlags[0] = true;
 
-            auto &metadata = lock.WriteMetadata(id);
-            if (!metadata.template Has<>()) {
-                throw std::runtime_error("Entity does not exist: " + std::to_string(id));
-            }
+            if (!lock.WriteMetadata(id)[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
 
             // It is possible for *this to be a reference to a component's writeValidEntities list
             // Copy the index before removing components so we can complete the removal.

@@ -145,37 +145,15 @@ namespace Tecs {
             }
         }
 
-        struct ComponentBitset : private std::bitset<1 + sizeof...(Tn)> {
-            template<typename... Un>
-            inline constexpr bool Has() const {
-                return ((*this)[1 + GetComponentIndex<0, Un>()] && ...);
-            }
+        using ComponentBitset = std::bitset<1 + sizeof...(Tn)>;
 
-            inline constexpr bool HasGlobal() const {
-                return (*this)[0];
-            }
+        template<typename... Un>
+        inline static constexpr bool BitsetHas(const ComponentBitset &bitset) {
+            return (bitset[1 + GetComponentIndex<0, Un>()] && ...);
+        }
 
-            template<typename U>
-            inline constexpr bool Set(bool value) {
-                return (*this)[1 + GetComponentIndex<0, U>()] = value;
-            }
-
-            inline constexpr bool SetGlobal(bool value) {
-                return (*this)[0] = value;
-            }
-        };
-
-        struct EntityMetadata {
-            ComponentBitset validComponents;
-
-            template<typename... Un>
-            inline constexpr bool Has() const {
-                return this->validComponents.HasGlobal() && this->validComponents.template Has<Un...>();
-            }
-        };
-
-        inline static const EntityMetadata &EmptyMetadataRef() {
-            static const EntityMetadata empty = {};
+        inline static const ComponentBitset &EmptyMetadataRef() {
+            static const ComponentBitset empty = {};
             return empty;
         }
 
@@ -189,7 +167,7 @@ namespace Tecs {
             return std::get<ObserverList<Event>>(eventLists);
         }
 
-        ComponentIndex<EntityMetadata> metadata;
+        ComponentIndex<ComponentBitset> metadata;
         ComponentBitset globalReadMetadata;
         ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
