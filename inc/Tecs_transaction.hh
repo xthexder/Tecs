@@ -161,10 +161,13 @@ namespace Tecs {
                 this->instance.metadata.writeValidEntities.clear();
                 (ClearValidEntities<AllComponentTypes>(), ...);
                 this->instance.freeEntities.clear();
-                for (size_t index = 0; index < this->instance.metadata.writeComponents.size(); index++) {
-                    auto &newMetadata = this->instance.metadata.writeComponents[index];
+
+                static const ComponentBitset emptyMetadata = {};
+                auto &writeMetadataList = this->instance.metadata.writeComponents;
+                for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
+                    auto &newMetadata = writeMetadataList[index];
                     auto &oldMetadata = index >= this->instance.metadata.readComponents.size()
-                                            ? this->instance.EmptyMetadataRef()
+                                            ? emptyMetadata
                                             : this->instance.metadata.readComponents[index];
                     (UpdateValidEntity<AllComponentTypes>(newMetadata, index), ...);
                     if (newMetadata[0]) {
@@ -225,7 +228,7 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void UpdateValidEntity(const ComponentBitset &metadata, size_t index) const {
+        inline void UpdateValidEntity(const ComponentBitset &metadata, TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
                 if (this->instance.template BitsetHas<U>(metadata)) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
@@ -240,7 +243,7 @@ namespace Tecs {
 
         template<typename U>
         inline void NotifyObservers(const ComponentBitset &newMetadata, const ComponentBitset &oldMetadata,
-            size_t index) const {
+            TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
                 if (this->instance.template BitsetHas<U>(newMetadata)) {
                     if (!this->instance.template BitsetHas<U>(oldMetadata)) {

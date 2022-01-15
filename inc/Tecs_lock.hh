@@ -115,22 +115,27 @@ namespace Tecs {
                 (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
                 size_t nextIndex = instance.metadata.writeComponents.size();
                 size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
+                if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
+                    throw std::runtime_error("New entity index overflows type: " + std::to_string(newSize));
+                }
                 instance.metadata.writeComponents.resize(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
-                    instance.freeEntities.emplace_back(nextIndex + count);
+                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count));
                 }
-                entity.id = nextIndex;
+                entity.index = (TECS_ENTITY_INDEX_TYPE)nextIndex;
+                entity.generation = 1;
             } else {
                 entity = instance.freeEntities.front();
                 instance.freeEntities.pop_front();
             }
 
-            instance.metadata.writeComponents[entity.id][0] = true;
+            instance.metadata.writeComponents[entity.index][0] = true;
+            instance.metadata.writeComponents[entity.index].generation = entity.generation;
             auto &validEntities = instance.metadata.writeValidEntities;
-            instance.metadata.validEntityIndexes[entity.id] = validEntities.size();
+            instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
             validEntities.emplace_back(entity);
 
             return entity;

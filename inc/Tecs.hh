@@ -147,14 +147,13 @@ namespace Tecs {
 
         using ComponentBitset = std::bitset<1 + sizeof...(Tn)>;
 
+        struct EntityMetadata : public ComponentBitset {
+            TECS_ENTITY_GENERATION_TYPE generation = 0;
+        };
+
         template<typename... Un>
         inline static constexpr bool BitsetHas(const ComponentBitset &bitset) {
             return (bitset[1 + GetComponentIndex<0, Un>()] && ...);
-        }
-
-        inline static const ComponentBitset &EmptyMetadataRef() {
-            static const ComponentBitset empty = {};
-            return empty;
         }
 
         template<typename T>
@@ -167,7 +166,7 @@ namespace Tecs {
             return std::get<ObserverList<Event>>(eventLists);
         }
 
-        ComponentIndex<ComponentBitset> metadata;
+        ComponentIndex<EntityMetadata> metadata;
         ComponentBitset globalReadMetadata;
         ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
