@@ -177,7 +177,7 @@ namespace Tecs {
                     if (newMetadata[0]) {
                         this->instance.metadata.validEntityIndexes[index] =
                             this->instance.metadata.writeValidEntities.size();
-                        this->instance.metadata.writeValidEntities.emplace_back(EntityId(index));
+                        this->instance.metadata.writeValidEntities.emplace_back(index);
                     } else {
                         this->instance.freeEntities.emplace_back(index);
                     }
@@ -186,11 +186,11 @@ namespace Tecs {
                     (NotifyObservers<AllComponentTypes>(index), ...);
                     if (newMetadata[0] && !oldMetadata[0]) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(EntityId(index)));
+                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(index));
                     }
                     if (oldMetadata[0] && !newMetadata[0]) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(EntityId(index)));
+                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(index));
                     }
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
@@ -238,7 +238,7 @@ namespace Tecs {
                 if (this->instance.template BitsetHas<U>(metadata)) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(EntityId(index));
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index);
                 }
             } else {
                 (void)index; // Unreferenced parameter warning on MSVC
@@ -254,7 +254,7 @@ namespace Tecs {
                     if (!this->instance.template BitsetHas<U>(oldMetadata)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(EntityId(index)),
+                            Entity(index),
                             this->instance.template Storage<U>().writeComponents[index]);
                     }
                 }
@@ -262,7 +262,7 @@ namespace Tecs {
                     if (!this->instance.template BitsetHas<U>(newMetadata)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::REMOVED,
-                            Entity(EntityId(index)),
+                            Entity(index),
                             this->instance.template Storage<U>().readComponents[index]);
                     }
                 }

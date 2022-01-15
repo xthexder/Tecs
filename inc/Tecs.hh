@@ -171,7 +171,7 @@ namespace Tecs {
         ComponentBitset globalReadMetadata;
         ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
-        std::deque<EntityId> freeEntities;
+        std::deque<Entity> freeEntities;
 
         std::tuple<ObserverList<EntityEvent>, ObserverList<ComponentEvent<Tn>>...> eventLists;
 

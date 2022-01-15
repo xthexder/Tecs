@@ -49,14 +49,14 @@ namespace Tecs {
         std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
         typename ECS::ComponentBitset permissions;
 
-        inline const auto &ReadMetadata(const EntityId &id) const {
-            if (id.index >= instance.metadata.readComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.readComponents[id.index];
+        inline const auto &ReadMetadata(const TECS_ENTITY_ID_TYPE &id) const {
+            if (id >= instance.metadata.readComponents.size()) return instance.EmptyMetadataRef();
+            return instance.metadata.readComponents[id];
         }
 
-        inline const auto &WriteMetadata(const EntityId &id) const {
-            if (id.index >= instance.metadata.writeComponents.size()) return instance.EmptyMetadataRef();
-            return instance.metadata.writeComponents[id.index];
+        inline const auto &WriteMetadata(const TECS_ENTITY_ID_TYPE &id) const {
+            if (id >= instance.metadata.writeComponents.size()) return instance.EmptyMetadataRef();
+            return instance.metadata.writeComponents[id];
         }
 
     public:
@@ -132,15 +132,15 @@ namespace Tecs {
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
                     instance.freeEntities.emplace_back(nextIndex + count);
                 }
-                entity.id = EntityId(nextIndex);
+                entity.id = nextIndex;
             } else {
                 entity = instance.freeEntities.front();
                 instance.freeEntities.pop_front();
             }
 
-            instance.metadata.writeComponents[entity.id.index][0] = true;
+            instance.metadata.writeComponents[entity.id][0] = true;
             auto &validEntities = instance.metadata.writeValidEntities;
-            instance.metadata.validEntityIndexes[entity.id.index] = validEntities.size();
+            instance.metadata.validEntityIndexes[entity.id] = validEntities.size();
             validEntities.emplace_back(entity);
 
             return entity;

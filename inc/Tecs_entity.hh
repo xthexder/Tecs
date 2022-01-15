@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 
 #ifndef TECS_ENTITY_ID_TYPE
@@ -11,51 +12,11 @@
 #endif
 
 namespace Tecs {
-    struct EntityId {
-        TECS_ENTITY_ID_TYPE index = std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
-
-        EntityId() {}
-        EntityId(TECS_ENTITY_ID_TYPE index) : index(index) {}
-
-        inline bool operator==(const EntityId &other) const {
-            return index == other.index;
-        }
-
-        inline bool operator!=(const EntityId &other) const {
-            return !(*this == other);
-        }
-
-        inline bool operator<(const EntityId &other) const {
-            return index < other.index;
-        }
-
-        inline bool operator!() const {
-            return index == std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
-        }
-
-        inline explicit operator bool() const {
-            return index != std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
-        }
-    };
-    static_assert(sizeof(EntityId) == sizeof(uint64_t), "EntityId is too large!");
-} // namespace Tecs
-
-namespace std {
-    inline string to_string(const Tecs::EntityId &id) {
-        if (id) {
-            return "Id(" + to_string(id.index) + ")";
-        } else {
-            return "InvalidId";
-        }
-    }
-} // namespace std
-
-namespace Tecs {
     struct Entity {
-        EntityId id;
+        TECS_ENTITY_ID_TYPE id;
 
-        inline Entity() : id() {}
-        inline Entity(EntityId id) : id(id) {}
+        inline Entity() : id(std::numeric_limits<TECS_ENTITY_ID_TYPE>::max()) {}
+        inline Entity(TECS_ENTITY_ID_TYPE id) : id(id) {}
 
     public:
         template<typename LockType>
@@ -104,11 +65,11 @@ namespace Tecs {
                     lock.base->writeAccessedFlags[0] = true;
 
                     // Reset value before allowing reading.
-                    lock.instance.template Storage<CompType>().writeComponents[id.index] = {};
-                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    lock.instance.template Storage<CompType>().writeComponents[id] = {};
+                    auto &validComponents = lock.instance.metadata.writeComponents[id];
                     validComponents[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
                     auto &validEntities = lock.instance.template Storage<CompType>().writeValidEntities;
-                    lock.instance.template Storage<CompType>().validEntityIndexes[id.index] = validEntities.size();
+                    lock.instance.template Storage<CompType>().validEntityIndexes[id] = validEntities.size();
                     validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
@@ -117,9 +78,9 @@ namespace Tecs {
             }
 
             if (lock.instance.template BitsetHas<CompType>(lock.permissions)) {
-                return lock.instance.template Storage<CompType>().writeComponents[id.index];
+                return lock.instance.template Storage<CompType>().writeComponents[id];
             } else {
-                return lock.instance.template Storage<CompType>().readComponents[id.index];
+                return lock.instance.template Storage<CompType>().readComponents[id];
             }
         }
 
@@ -136,7 +97,7 @@ namespace Tecs {
                 throw std::runtime_error(
                     "Entity does not have a component of type: " + std::string(typeid(CompType).name()));
             }
-            return lock.instance.template Storage<CompType>().readComponents[id.index];
+            return lock.instance.template Storage<CompType>().readComponents[id];
         }
 
         template<typename T, typename LockType>
@@ -151,17 +112,17 @@ namespace Tecs {
                 if (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
-                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    auto &validComponents = lock.instance.metadata.writeComponents[id];
                     validComponents[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
-                    lock.instance.template Storage<T>().validEntityIndexes[id.index] = validEntities.size();
+                    lock.instance.template Storage<T>().validEntityIndexes[id] = validEntities.size();
                     validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
                         "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
-            return lock.instance.template Storage<T>().writeComponents[id.index] = value;
+            return lock.instance.template Storage<T>().writeComponents[id] = value;
         }
 
         template<typename T, typename LockType, typename... Args>
@@ -176,17 +137,17 @@ namespace Tecs {
                 if (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
-                    auto &validComponents = lock.instance.metadata.writeComponents[id.index];
+                    auto &validComponents = lock.instance.metadata.writeComponents[id];
                     validComponents[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
-                    lock.instance.template Storage<T>().validEntityIndexes[id.index] = validEntities.size();
+                    lock.instance.template Storage<T>().validEntityIndexes[id] = validEntities.size();
                     validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
                         "Entity does not have a component of type: " + std::string(typeid(T).name()));
                 }
             }
-            return lock.instance.template Storage<T>().writeComponents[id.index] = T(std::forward<Args>(args)...);
+            return lock.instance.template Storage<T>().writeComponents[id] = T(std::forward<Args>(args)...);
         }
 
         template<typename... Tn, typename LockType>
@@ -197,7 +158,7 @@ namespace Tecs {
 
             if (!lock.WriteMetadata(id)[0]) throw std::runtime_error("Entity does not exist: " + std::to_string(id));
 
-            (lock.template RemoveComponents<Tn>(id.index), ...);
+            (lock.template RemoveComponents<Tn>(id), ...);
         }
 
         template<typename LockType>
@@ -209,14 +170,14 @@ namespace Tecs {
 
             // It is possible for *this to be a reference to a component's writeValidEntities list
             // Copy the index before removing components so we can complete the removal.
-            size_t index = id.index;
+            size_t index = id;
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(index);
             lock.instance.metadata.writeComponents[index] = lock.instance.EmptyMetadataRef();
             size_t validIndex = lock.instance.metadata.validEntityIndexes[index];
             lock.instance.metadata.writeValidEntities[validIndex] = Entity();
-            id = EntityId();
+            id = std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
         }
 
         inline bool operator==(const Entity &other) const {
@@ -232,11 +193,11 @@ namespace Tecs {
         }
 
         inline bool operator!() const {
-            return !id;
+            return id == std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
         }
 
         inline explicit operator bool() const {
-            return (bool)id;
+            return id != std::numeric_limits<TECS_ENTITY_ID_TYPE>::max();
         }
     };
 } // namespace Tecs
@@ -245,7 +206,7 @@ namespace std {
     template<>
     struct hash<Tecs::Entity> {
         std::size_t operator()(const Tecs::Entity &e) const {
-            return e.id.index;
+            return e.id;
         }
     };
 } // namespace std
