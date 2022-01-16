@@ -79,7 +79,7 @@ namespace Tecs {
     class Transaction<ECS<AllComponentTypes...>, Permissions...> : public BaseTransaction<ECS, AllComponentTypes...> {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
-        using ComponentBitset = typename ECS<AllComponentTypes...>::ComponentBitset;
+        using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
@@ -162,7 +162,7 @@ namespace Tecs {
                 (ClearValidEntities<AllComponentTypes>(), ...);
                 this->instance.freeEntities.clear();
 
-                static const ComponentBitset emptyMetadata = {};
+                static const EntityMetadata emptyMetadata = {};
                 auto &writeMetadataList = this->instance.metadata.writeComponents;
                 for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
                     auto &newMetadata = writeMetadataList[index];
@@ -173,20 +173,23 @@ namespace Tecs {
                     if (newMetadata[0]) {
                         this->instance.metadata.validEntityIndexes[index] =
                             this->instance.metadata.writeValidEntities.size();
-                        this->instance.metadata.writeValidEntities.emplace_back(index);
+                        this->instance.metadata.writeValidEntities.emplace_back(index, newMetadata.generation);
                     } else {
-                        this->instance.freeEntities.emplace_back(index);
+                        this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
                     }
 
                     // Compare new and old metadata to notify observers
                     (NotifyObservers<AllComponentTypes>(newMetadata, oldMetadata, index), ...);
-                    if (newMetadata[0] && !oldMetadata[0]) {
+                    if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(index));
-                    }
-                    if (oldMetadata[0] && !newMetadata[0]) {
-                        auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(index));
+                        if (oldMetadata[0]) {
+                            observerList.writeQueue->emplace_back(EventType::REMOVED,
+                                Entity(index, oldMetadata.generation));
+                        }
+                        if (newMetadata[0]) {
+                            observerList.writeQueue->emplace_back(EventType::ADDED,
+                                Entity(index, newMetadata.generation));
+                        }
                     }
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
@@ -228,12 +231,12 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void UpdateValidEntity(const ComponentBitset &metadata, TECS_ENTITY_INDEX_TYPE index) const {
+        inline void UpdateValidEntity(const EntityMetadata &metadata, TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
                 if (this->instance.template BitsetHas<U>(metadata)) {
                     this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index);
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index, metadata.generation);
                 }
             } else {
                 (void)metadata; // Unreferenced parameter warning on MSVC
@@ -242,23 +245,22 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void NotifyObservers(const ComponentBitset &newMetadata, const ComponentBitset &oldMetadata,
+        inline void NotifyObservers(const EntityMetadata &newMetadata, const EntityMetadata &oldMetadata,
             TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
-                if (this->instance.template BitsetHas<U>(newMetadata)) {
-                    if (!this->instance.template BitsetHas<U>(oldMetadata)) {
-                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
-                        observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(index),
-                            this->instance.template Storage<U>().writeComponents[index]);
-                    }
-                }
-                if (this->instance.template BitsetHas<U>(oldMetadata)) {
-                    if (!this->instance.template BitsetHas<U>(newMetadata)) {
-                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                bool newExists = this->instance.template BitsetHas<U>(newMetadata);
+                bool oldExists = this->instance.template BitsetHas<U>(oldMetadata);
+                if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
+                    auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                    if (oldExists) {
                         observerList.writeQueue->emplace_back(EventType::REMOVED,
-                            Entity(index),
+                            Entity(index, oldMetadata.generation),
                             this->instance.template Storage<U>().readComponents[index]);
+                    }
+                    if (newExists) {
+                        observerList.writeQueue->emplace_back(EventType::ADDED,
+                            Entity(index, newMetadata.generation),
+                            this->instance.template Storage<U>().writeComponents[index]);
                     }
                 }
             } else {

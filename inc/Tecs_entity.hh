@@ -29,7 +29,7 @@ namespace Tecs {
         TECS_ENTITY_INDEX_TYPE index;
 
         inline Entity() : generation(0), index(0) {}
-        inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation = 1)
+        inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
             : generation(generation), index(index) {}
 
     public:
@@ -240,7 +240,7 @@ namespace Tecs {
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);
-            lock.instance.metadata.writeComponents[copy] = {};
+            lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];
             lock.instance.metadata.writeValidEntities[validIndex] = Entity();
             generation = 0;
