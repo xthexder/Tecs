@@ -8,6 +8,7 @@
 
 #include <bitset>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -39,41 +40,39 @@ namespace Tecs {
      * // A Lock allowing the creation and removal of entities and components.
      * Lock<ECSType, AddRemove> lock2;
      */
-    template<typename... AllComponentTypes, typename... Permissions>
-    class Lock<ECS<AllComponentTypes...>, Permissions...> {
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
+    class Lock<ECSType<AllComponentTypes...>, Permissions...> {
     private:
-        using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
+        using ECS = ECSType<AllComponentTypes...>;
+        using LockType = Lock<ECS, Permissions...>;
 
-        ECS<AllComponentTypes...> &instance;
-        std::shared_ptr<BaseTransaction<ECS, AllComponentTypes...>> base;
+        ECS &instance;
+        std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
         std::bitset<1 + sizeof...(AllComponentTypes)> permissions;
-
-        template<typename T>
-        inline void SetPermissionBit() {
-            permissions[1 + ECS<AllComponentTypes...>::template GetComponentIndex<T>()] =
-                is_write_allowed<T, LockType>();
-        }
 
     public:
         // Start a new transaction
-        inline Lock(ECS<AllComponentTypes...> &instance)
-            : instance(instance), base(new Transaction<ECS<AllComponentTypes...>, Permissions...>(instance)) {
+        inline Lock(ECS &instance) : instance(instance), base(new Transaction<ECS, Permissions...>(instance)) {
             permissions[0] = is_add_remove_allowed<LockType>();
-            (SetPermissionBit<AllComponentTypes>(), ...);
+            // clang-format off
+            ((
+                permissions[1 + instance.template GetComponentIndex<AllComponentTypes>()] = is_write_allowed<AllComponentTypes, LockType>()
+            ), ...);
+            // clang-format on
         }
 
         // Reference an existing transaction
         template<typename... PermissionsSource>
-        inline Lock(const Lock<ECS<AllComponentTypes...>, PermissionsSource...> &source)
+        inline Lock(const Lock<ECS, PermissionsSource...> &source)
             : instance(source.instance), base(source.base), permissions(source.permissions) {
-            using SourceLockType = Lock<ECS<AllComponentTypes...>, PermissionsSource...>;
+            using SourceLockType = Lock<ECS, PermissionsSource...>;
             static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
                 "AddRemove permission is missing.");
             static_assert(std::conjunction<is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>(),
                 "Lock types are not a subset of existing permissions.");
         }
 
-        inline constexpr ECS<AllComponentTypes...> &GetInstance() const {
+        inline constexpr ECS &GetInstance() const {
             return instance;
         }
 
@@ -96,14 +95,14 @@ namespace Tecs {
         }
 
         inline constexpr const nonstd::span<Entity> PreviousEntities() const {
-            return instance.validIndex.readValidEntities;
+            return instance.metadata.readValidEntities;
         }
 
         inline constexpr const nonstd::span<Entity> Entities() const {
             if (permissions[0]) {
-                return instance.validIndex.writeValidEntities;
+                return instance.metadata.writeValidEntities;
             } else {
-                return instance.validIndex.readValidEntities;
+                return instance.metadata.readValidEntities;
             }
         }
 
@@ -115,23 +114,29 @@ namespace Tecs {
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
                 (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
-                entity.id = instance.validIndex.writeComponents.size();
-                size_t newSize = entity.id + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
-                instance.validIndex.writeComponents.resize(newSize);
-                instance.validIndex.validEntityIndexes.resize(newSize);
+                size_t nextIndex = instance.metadata.writeComponents.size();
+                size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
+                if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
+                    throw std::runtime_error("New entity index overflows type: " + std::to_string(newSize));
+                }
+                instance.metadata.writeComponents.resize(newSize);
+                instance.metadata.validEntityIndexes.resize(newSize);
 
                 // Add all but 1 of the new Entity ids to the free list.
-                for (size_t id = 1; id < TECS_ENTITY_ALLOCATION_BATCH_SIZE; id++) {
-                    instance.freeEntities.emplace_back(entity.id + id);
+                for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
+                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count), 1);
                 }
+                entity.index = (TECS_ENTITY_INDEX_TYPE)nextIndex;
+                entity.generation = 1;
             } else {
                 entity = instance.freeEntities.front();
                 instance.freeEntities.pop_front();
             }
 
-            instance.validIndex.writeComponents[entity.id][0] = true;
-            auto &validEntities = instance.validIndex.writeValidEntities;
-            instance.validIndex.validEntityIndexes[entity.id] = validEntities.size();
+            instance.metadata.writeComponents[entity.index][0] = true;
+            instance.metadata.writeComponents[entity.index].generation = entity.generation;
+            auto &validEntities = instance.metadata.writeValidEntities;
+            instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
             validEntities.emplace_back(entity);
 
             return entity;
@@ -142,9 +147,9 @@ namespace Tecs {
             static_assert(all_global_components<Tn...>(), "Only global components can be accessed without an Entity");
 
             if (permissions[0]) {
-                return instance.template BitsetHas<Tn...>(instance.writeValidGlobals);
+                return instance.template BitsetHas<Tn...>(instance.globalWriteMetadata);
             } else {
-                return instance.template BitsetHas<Tn...>(instance.readValidGlobals);
+                return instance.template BitsetHas<Tn...>(instance.globalReadMetadata);
             }
         }
 
@@ -152,7 +157,7 @@ namespace Tecs {
         inline bool Had() const {
             static_assert(all_global_components<Tn...>(), "Only global components can be accessed without an Entity");
 
-            return instance.template BitsetHas<Tn...>(instance.readValidGlobals);
+            return instance.template BitsetHas<Tn...>(instance.globalReadMetadata);
         }
 
         template<typename T, typename ReturnType =
@@ -164,16 +169,14 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!std::is_const<ReturnType>()) {
-                base->writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()] = true;
-            }
+            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>(true);
 
-            auto &validBitset = permissions[0] ? instance.writeValidGlobals : instance.readValidGlobals;
-            if (!instance.template BitsetHas<CompType>(validBitset)) {
+            auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            if (!instance.template BitsetHas<CompType>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
-                    validBitset[1 + instance.template GetComponentIndex<CompType>()] = true;
+                    metadata[1 + instance.template GetComponentIndex<CompType>()] = true;
                     instance.template Storage<CompType>().writeComponents.resize(1);
                     // Reset value before allowing reading.
                     instance.template Storage<CompType>().writeComponents[0] = {};
@@ -182,7 +185,7 @@ namespace Tecs {
                         "Missing global component of type: " + std::string(typeid(CompType).name()));
                 }
             }
-            if (permissions[1 + instance.template GetComponentIndex<CompType>()]) {
+            if (instance.template BitsetHas<CompType>(permissions)) {
                 return instance.template Storage<CompType>().writeComponents[0];
             } else {
                 return instance.template Storage<CompType>().readComponents[0];
@@ -195,7 +198,7 @@ namespace Tecs {
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!instance.template BitsetHas<CompType>(instance.readValidGlobals)) {
+            if (!instance.template BitsetHas<CompType>(instance.globalReadMetadata)) {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
             }
             return instance.template Storage<CompType>().readComponents[0];
@@ -205,14 +208,14 @@ namespace Tecs {
         inline T &Set(T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+            base->template SetAccessFlag<T>(true);
 
-            auto &validBitset = permissions[0] ? instance.writeValidGlobals : instance.readValidGlobals;
-            if (!instance.template BitsetHas<T>(validBitset)) {
+            auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            if (!instance.template BitsetHas<T>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
-                    validBitset[1 + instance.template GetComponentIndex<T>()] = true;
+                    metadata[1 + instance.template GetComponentIndex<T>()] = true;
                     instance.template Storage<T>().writeComponents.resize(1);
                 } else {
                     throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
@@ -225,14 +228,14 @@ namespace Tecs {
         inline T &Set(Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+            base->template SetAccessFlag<T>(true);
 
-            auto &validBitset = permissions[0] ? instance.writeValidGlobals : instance.readValidGlobals;
-            if (!instance.template BitsetHas<T>(validBitset)) {
+            auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            if (!instance.template BitsetHas<T>(metadata)) {
                 if (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
-                    validBitset[1 + instance.template GetComponentIndex<T>()] = true;
+                    metadata[1 + instance.template GetComponentIndex<T>()] = true;
                     instance.template Storage<T>().writeComponents.resize(1);
                 } else {
                     throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
@@ -250,7 +253,7 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline Observer<ECS<AllComponentTypes...>, Event> Watch() const {
+        inline Observer<ECS, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
             auto &observerList = instance.template Observers<Event>();
@@ -259,7 +262,7 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline void StopWatching(Observer<ECS<AllComponentTypes...>, Event> &observer) const {
+        inline void StopWatching(Observer<ECS, Event> &observer) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
             auto &observers = instance.template Observers<Event>().observers;
@@ -268,21 +271,21 @@ namespace Tecs {
         }
 
         template<typename... PermissionsSubset>
-        inline Lock<ECS<AllComponentTypes...>, PermissionsSubset...> Subset() const {
-            using NewLockType = Lock<ECS<AllComponentTypes...>, PermissionsSubset...>;
+        inline Lock<ECS, PermissionsSubset...> Subset() const {
+            using NewLockType = Lock<ECS, PermissionsSubset...>;
             static_assert(is_add_remove_allowed<LockType>() || !is_add_remove_allowed<NewLockType>(),
                 "AddRemove permission is missing.");
             static_assert(std::conjunction<is_lock_subset<AllComponentTypes, NewLockType, LockType>...>(),
                 "Lock types are not a subset of existing permissions.");
 
-            return Lock<ECS<AllComponentTypes...>, PermissionsSubset...>(*this);
+            return Lock<ECS, PermissionsSubset...>(*this);
         }
 
     private:
         template<typename T>
         inline void AllocateComponents(size_t count) const {
             if constexpr (!is_global_component<T>()) {
-                base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+                base->template SetAccessFlag<T>(true);
 
                 size_t newSize = instance.template Storage<T>().writeComponents.size() + count;
                 instance.template Storage<T>().writeComponents.resize(newSize);
@@ -293,17 +296,17 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void RemoveComponents(const Entity &e) const {
+        inline void RemoveComponents(size_t index) const {
             if constexpr (!is_global_component<T>()) { // Ignore global components
-                auto &validBitset = instance.validIndex.writeComponents[e.id];
-                if (instance.template BitsetHas<T>(validBitset)) {
+                auto &metadata = instance.metadata.writeComponents[index];
+                if (instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
-                    base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+                    base->template SetAccessFlag<T>(true);
 
-                    validBitset[1 + instance.template GetComponentIndex<T>()] = false;
+                    metadata[1 + instance.template GetComponentIndex<T>()] = false;
                     auto &compIndex = instance.template Storage<T>();
-                    compIndex.writeComponents[e.id] = {};
-                    size_t validIndex = compIndex.validEntityIndexes[e.id];
+                    compIndex.writeComponents[index] = {};
+                    size_t validIndex = compIndex.validEntityIndexes[index];
                     compIndex.writeValidEntities[validIndex] = Entity();
                 }
             }
@@ -313,18 +316,18 @@ namespace Tecs {
         inline void RemoveComponents() const {
             static_assert(is_global_component<T>(), "Only global components can be removed without an Entity");
 
-            auto &validBitset = instance.writeValidGlobals;
-            if (instance.template BitsetHas<T>(validBitset)) {
+            auto &metadata = instance.globalWriteMetadata;
+            if (instance.template BitsetHas<T>(metadata)) {
                 base->writeAccessedFlags[0] = true;
-                base->writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+                base->template SetAccessFlag<T>(true);
 
-                validBitset[1 + instance.template GetComponentIndex<T>()] = false;
+                metadata[1 + instance.template GetComponentIndex<T>()] = false;
                 instance.template Storage<T>().writeComponents[0] = {};
             }
         }
 
-        inline void RemoveAllComponents(Entity e) const {
-            (RemoveComponents<AllComponentTypes>(e), ...);
+        inline void RemoveAllComponents(size_t index) const {
+            (RemoveComponents<AllComponentTypes>(index), ...);
         }
 
         template<typename, typename...>

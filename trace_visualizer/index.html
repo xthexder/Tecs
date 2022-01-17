@@ -260,7 +260,7 @@
                                 end: 0,
                                 threadId: threadId,
                                 locks: {
-                                    validIndex: [],
+                                    metadata: [],
                                     components: {}
                                 }
                             });
@@ -280,19 +280,19 @@
                         }
                     });
                     csvData.forEach(row => {
-                        if (row["ValidIndex Event"]) {
-                            let threadId = row["ValidIndex Thread Id"];
-                            let eventTimeNs = parseInt(row["ValidIndex TimeNs"], 10);
+                        if (row["Metadata Event"]) {
+                            let threadId = row["Metadata Thread Id"];
+                            let eventTimeNs = parseInt(row["Metadata TimeNs"], 10);
                             let i = data[threadId].findIndex(transaction => {
                                 return transaction.start <= eventTimeNs && transaction.end >= eventTimeNs;
                             });
                             if (i >= 0) {
-                                data[threadId][i].locks.validIndex.push({
-                                    event: row["ValidIndex Event"],
+                                data[threadId][i].locks.metadata.push({
+                                    event: row["Metadata Event"],
                                     time: eventTimeNs
                                 });
                             } else {
-                                console.log("Skipped ValidIndex event: ", row);
+                                console.log("Skipped Metadata event: ", row);
                             }
                         }
                         components.forEach(component => {
@@ -318,8 +318,8 @@
                     for (const [threadId, thread] of Object.entries(data)) {
                         thread.forEach(t => {
                             t.eventLocks = [];
-                            if (t.locks.validIndex.length > 0) t.eventLocks.push("ValidIndex");
-                            t.events = [].concat(mergeEvents(t.locks.validIndex, "ValidIndex"));
+                            if (t.locks.metadata.length > 0) t.eventLocks.push("Metadata");
+                            t.events = [].concat(mergeEvents(t.locks.metadata, "Metadata"));
                             for (const [name, component] of Object.entries(t.locks.components)) {
                                 if (component.length > 0) t.eventLocks.push(name);
                                 t.events = t.events.concat(mergeEvents(component, name));

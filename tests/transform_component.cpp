@@ -1,11 +1,6 @@
-#include "test_components.hh"
+#include "transform_component.hh"
 
-#include "test_ecs.hh"
-
-#include <Tecs.hh>
-#include <cstdint>
-#include <string>
-#include <vector>
+// Intentionally leaving out test_components.hh include to test ECS access with only partial component definitions.
 
 namespace testing {
     bool Transform::HasParent(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {

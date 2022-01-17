@@ -55,7 +55,7 @@ namespace Tecs {
 
     struct PerformanceTrace {
         nonstd::span<TraceEvent> transactionEvents;
-        nonstd::span<TraceEvent> validIndexEvents;
+        nonstd::span<TraceEvent> metadataEvents;
         std::vector<nonstd::span<TraceEvent>> componentEvents;
         std::vector<std::string> componentNames;
         std::map<std::thread::id, std::string> threadNames;
@@ -74,7 +74,7 @@ namespace Tecs {
 
         void SaveToCSV(std::ostream &out) {
             out << "Transaction Event,Transaction Thread Id,Transaction TimeNs";
-            out << ",ValidIndex Event,ValidIndex Thread Id,ValidIndex TimeNs";
+            out << ",Metadata Event,Metadata Thread Id,Metadata TimeNs";
             if (componentEvents.size() != componentNames.size()) {
                 throw std::runtime_error("Trying to save a trace with mismatched array sizes");
             }
@@ -97,8 +97,8 @@ namespace Tecs {
                     out << ",,";
                 }
 
-                if (row < validIndexEvents.size()) {
-                    auto &event = validIndexEvents[row];
+                if (row < metadataEvents.size()) {
+                    auto &event = metadataEvents[row];
                     out << "," << event.type << "," << GetThreadName(event.thread) << ",";
                     out << std::chrono::duration_cast<std::chrono::nanoseconds>(event.time.time_since_epoch()).count();
                     done = false;

@@ -63,6 +63,11 @@ namespace Tecs {
 
         std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 
+        template<typename T>
+        inline void SetAccessFlag(bool value) {
+            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
+        }
+
         template<typename, typename...>
         friend class Lock;
         friend struct Entity;
@@ -72,6 +77,7 @@ namespace Tecs {
     class Transaction<ECS<AllComponentTypes...>, Permissions...> : public BaseTransaction<ECS, AllComponentTypes...> {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
+        using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
@@ -84,9 +90,9 @@ namespace Tecs {
             std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
                 [&instance](bool block) {
                     if (is_add_remove_allowed<LockType>()) {
-                        return instance.validIndex.WriteLock(block);
+                        return instance.metadata.WriteLock(block);
                     } else {
-                        return instance.validIndex.ReadLock(block);
+                        return instance.metadata.ReadLock(block);
                     }
                 },
                 [&instance](bool block) {
@@ -101,9 +107,9 @@ namespace Tecs {
             std::array<std::function<void()>, acquired.size()> unlockFuncs = {
                 [&instance]() {
                     if (is_add_remove_allowed<LockType>()) {
-                        return instance.validIndex.WriteUnlock();
+                        return instance.metadata.WriteUnlock();
                     } else {
-                        return instance.validIndex.ReadUnlock();
+                        return instance.metadata.ReadUnlock();
                     }
                 },
                 [&instance]() {
@@ -150,44 +156,51 @@ namespace Tecs {
         inline ~Transaction() {
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
-                this->instance.validIndex.writeValidEntities.clear();
+                this->instance.metadata.writeValidEntities.clear();
                 (ClearValidEntities<AllComponentTypes>(), ...);
                 this->instance.freeEntities.clear();
-                auto &oldBitsets = this->instance.validIndex.readComponents;
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                for (size_t id = 0; id < bitsets.size(); id++) {
-                    (UpdateValidEntity<AllComponentTypes>(id), ...);
-                    if (bitsets[id][0]) {
-                        this->instance.validIndex.validEntityIndexes[id] =
-                            this->instance.validIndex.writeValidEntities.size();
-                        this->instance.validIndex.writeValidEntities.emplace_back(id);
+
+                static const EntityMetadata emptyMetadata = {};
+                auto &writeMetadataList = this->instance.metadata.writeComponents;
+                for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
+                    auto &newMetadata = writeMetadataList[index];
+                    auto &oldMetadata = index >= this->instance.metadata.readComponents.size()
+                                            ? emptyMetadata
+                                            : this->instance.metadata.readComponents[index];
+                    (UpdateValidEntity<AllComponentTypes>(newMetadata, index), ...);
+                    if (newMetadata[0]) {
+                        this->instance.metadata.validEntityIndexes[index] =
+                            this->instance.metadata.writeValidEntities.size();
+                        this->instance.metadata.writeValidEntities.emplace_back(index, newMetadata.generation);
                     } else {
-                        this->instance.freeEntities.emplace_back(Entity(id));
+                        this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
                     }
 
-                    // Compare new and old bitsets to notifiy observers
-                    (NotifyObservers<AllComponentTypes>(id), ...);
-                    if (bitsets[id][0]) {
-                        if (id >= oldBitsets.size() || !oldBitsets[id][0]) {
-                            auto &observerList = this->instance.template Observers<EntityEvent>();
-                            observerList.writeQueue->emplace_back(EventType::ADDED, Entity(id));
-                        }
-                    } else if (id < oldBitsets.size() && oldBitsets[id][0]) {
+                    // Compare new and old metadata to notify observers
+                    (NotifyObservers<AllComponentTypes>(newMetadata, oldMetadata, index), ...);
+                    if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
                         auto &observerList = this->instance.template Observers<EntityEvent>();
-                        observerList.writeQueue->emplace_back(EventType::REMOVED, Entity(id));
+                        if (oldMetadata[0]) {
+                            observerList.writeQueue->emplace_back(EventType::REMOVED,
+                                Entity(index, oldMetadata.generation));
+                        }
+                        if (newMetadata[0]) {
+                            observerList.writeQueue->emplace_back(EventType::ADDED,
+                                Entity(index, newMetadata.generation));
+                        }
                     }
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
             }
             UnlockIfNoCommit<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.validIndex.CommitLock();
+                this->instance.metadata.CommitLock();
             }
             CommitLockInOrder<AllComponentTypes...>();
             CommitUnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.readValidGlobals = this->instance.writeValidGlobals;
-                this->instance.validIndex.template CommitEntities<true>();
+                this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
+                this->instance.metadata.template CommitEntities<true>();
 
                 // Commit observers
                 std::apply(
@@ -197,9 +210,9 @@ namespace Tecs {
                     this->instance.eventLists);
             }
             if (is_add_remove_allowed<LockType>()) {
-                this->instance.validIndex.WriteUnlock();
+                this->instance.metadata.WriteUnlock();
             } else {
-                this->instance.validIndex.ReadUnlock();
+                this->instance.metadata.ReadUnlock();
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -216,55 +229,58 @@ namespace Tecs {
         }
 
         template<typename U>
-        inline void UpdateValidEntity(size_t id) const {
+        inline void UpdateValidEntity(const EntityMetadata &metadata, TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                if (this->instance.template BitsetHas<U>(bitsets[id])) {
-                    this->instance.template Storage<U>().validEntityIndexes[id] =
+                if (this->instance.template BitsetHas<U>(metadata)) {
+                    this->instance.template Storage<U>().validEntityIndexes[index] =
                         this->instance.template Storage<U>().writeValidEntities.size();
-                    this->instance.template Storage<U>().writeValidEntities.emplace_back(id);
+                    this->instance.template Storage<U>().writeValidEntities.emplace_back(index, metadata.generation);
                 }
             } else {
-                (void)id; // Unreferenced parameter warning on MSVC
+                (void)metadata; // Unreferenced parameter warning on MSVC
+                (void)index;
             }
         }
 
         template<typename U>
-        inline void NotifyObservers(size_t id) const {
+        inline void NotifyObservers(const EntityMetadata &newMetadata, const EntityMetadata &oldMetadata,
+            TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<U>()) {
-                auto &oldBitsets = this->instance.validIndex.readComponents;
-                auto &bitsets = this->instance.validIndex.writeComponents;
-                if (this->instance.template BitsetHas<U>(bitsets[id])) {
-                    if (id >= oldBitsets.size() || !this->instance.template BitsetHas<U>(oldBitsets[id])) {
-                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
-                        observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(id),
-                            this->instance.template Storage<U>().writeComponents[id]);
-                    }
-                } else if (id < oldBitsets.size() && this->instance.template BitsetHas<U>(oldBitsets[id])) {
+                bool newExists = this->instance.template BitsetHas<U>(newMetadata);
+                bool oldExists = this->instance.template BitsetHas<U>(oldMetadata);
+                if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
                     auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
-                    observerList.writeQueue->emplace_back(EventType::REMOVED,
-                        Entity(id),
-                        this->instance.template Storage<U>().readComponents[id]);
+                    if (oldExists) {
+                        observerList.writeQueue->emplace_back(EventType::REMOVED,
+                            Entity(index, oldMetadata.generation),
+                            this->instance.template Storage<U>().readComponents[index]);
+                    }
+                    if (newExists) {
+                        observerList.writeQueue->emplace_back(EventType::ADDED,
+                            Entity(index, newMetadata.generation),
+                            this->instance.template Storage<U>().writeComponents[index]);
+                    }
                 }
             } else {
-                (void)id; // Unreferenced parameter warning on MSVC
+                (void)newMetadata; // Unreferenced parameter warning on MSVC
+                (void)oldMetadata;
+                (void)index;
             }
         }
 
         template<typename U>
         inline void NotifyGlobalObservers() const {
             if constexpr (is_global_component<U>()) {
-                auto &oldBitset = this->instance.readValidGlobals;
-                auto &bitset = this->instance.writeValidGlobals;
-                if (this->instance.template BitsetHas<U>(bitset)) {
-                    if (!this->instance.template BitsetHas<U>(oldBitset)) {
+                auto &oldMetadata = this->instance.globalReadMetadata;
+                auto &newMetadata = this->instance.globalWriteMetadata;
+                if (this->instance.template BitsetHas<U>(newMetadata)) {
+                    if (!this->instance.template BitsetHas<U>(oldMetadata)) {
                         auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
                             Entity(),
                             this->instance.template Storage<U>().writeComponents[0]);
                     }
-                } else if (this->instance.template BitsetHas<U>(oldBitset)) {
+                } else if (this->instance.template BitsetHas<U>(oldMetadata)) {
                     auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
                     observerList.writeQueue->emplace_back(EventType::REMOVED,
                         Entity(),

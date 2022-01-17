@@ -59,14 +59,14 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         inline void StartTrace() {
             transactionTrace.StartTrace();
-            validIndex.traceInfo.StartTrace();
+            metadata.traceInfo.StartTrace();
             (Storage<Tn>().traceInfo.StartTrace(), ...);
         }
 
         inline PerformanceTrace StopTrace() {
             return PerformanceTrace{
                 transactionTrace.StopTrace(),             // transactionEvents
-                validIndex.traceInfo.StopTrace(),         // validIndexEvents
+                metadata.traceInfo.StopTrace(),           // metadataEvents
                 {Storage<Tn>().traceInfo.StopTrace()...}, // componentEvents
                 {GetComponentName<Tn>()...},              // componentNames
                 {},                                       // threadNames
@@ -101,24 +101,11 @@ namespace Tecs {
             }
         }
 
-        /**
-         * The name of each individual component type as returned by GetComponentName<T>().
-         */
-        inline static const std::array<std::string, sizeof...(Tn)> ComponentNames = {GetComponentName<Tn>()...};
-
-        /**
-         * The byte sizes of each individual component type.
-         */
-        static constexpr std::array<size_t, sizeof...(Tn)> ComponentSizes = {sizeof(Tn)...};
-
-        /**
-         * The total number of bytes allocated by the ECS per Entity.
-         */
-        static constexpr size_t TotalComponentSize = (sizeof(Tn) + ...);
+        inline static constexpr size_t GetBytesPerEntity() {
+            return (ComponentIndex<Tn>::GetBytesPerEntity() + ...);
+        }
 
     private:
-        using ValidBitset = std::bitset<1 + sizeof...(Tn)>;
-
         template<typename Event>
         struct ObserverList {
             std::vector<std::shared_ptr<std::deque<Event>>> observers;
@@ -147,9 +134,15 @@ namespace Tecs {
             }
         }
 
+        using ComponentBitset = std::bitset<1 + sizeof...(Tn)>;
+
+        struct EntityMetadata : public ComponentBitset {
+            TECS_ENTITY_GENERATION_TYPE generation = 0;
+        };
+
         template<typename... Un>
-        inline static constexpr bool BitsetHas(const ValidBitset &validBitset) {
-            return (validBitset[1 + GetComponentIndex<0, Un>()] && ...);
+        inline static constexpr bool BitsetHas(const ComponentBitset &bitset) {
+            return (bitset[1 + GetComponentIndex<0, Un>()] && ...);
         }
 
         template<typename T>
@@ -162,9 +155,9 @@ namespace Tecs {
             return std::get<ObserverList<Event>>(eventLists);
         }
 
-        ComponentIndex<ValidBitset> validIndex;
-        ValidBitset readValidGlobals;
-        ValidBitset writeValidGlobals;
+        ComponentIndex<EntityMetadata> metadata;
+        ComponentBitset globalReadMetadata;
+        ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
 

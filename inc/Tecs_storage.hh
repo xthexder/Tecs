@@ -205,7 +205,7 @@ namespace Tecs {
                     readComponents = writeComponents;
                 } else {
                     for (auto &valid : readValidEntities) {
-                        readComponents[valid.id] = writeComponents[valid.id];
+                        readComponents[valid.index] = writeComponents[valid.index];
                     }
                 }
             }
@@ -242,6 +242,10 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo traceInfo;
 #endif
+
+        inline static constexpr size_t GetBytesPerEntity() {
+            return sizeof(T) * 2 + sizeof(Entity) * 2 + sizeof(size_t);
+        }
 
     private:
         // Lock states
