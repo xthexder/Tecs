@@ -101,20 +101,9 @@ namespace Tecs {
             }
         }
 
-        /**
-         * The name of each individual component type as returned by GetComponentName<T>().
-         */
-        inline static const std::array<std::string, sizeof...(Tn)> ComponentNames = {GetComponentName<Tn>()...};
-
-        /**
-         * The byte sizes of each individual component type.
-         */
-        static constexpr std::array<size_t, sizeof...(Tn)> ComponentSizes = {sizeof(Tn)...};
-
-        /**
-         * The total number of bytes allocated by the ECS per Entity.
-         */
-        static constexpr size_t TotalComponentSize = (sizeof(Tn) + ...);
+        inline static constexpr size_t GetBytesPerEntity() {
+            return (std::get<ComponentIndex<Tn>>(indexes).GetBytesPerEntity() + ...);
+        }
 
     private:
         template<typename Event>

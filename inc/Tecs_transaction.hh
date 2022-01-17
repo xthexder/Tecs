@@ -34,10 +34,8 @@ namespace Tecs {
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class BaseTransaction {
-        using ECS = ECSType<AllComponentTypes...>;
-
     public:
-        BaseTransaction(ECS &instance) : instance(instance) {
+        BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
 #ifndef TECS_HEADER_ONLY
             for (size_t i = 0; i < activeTransactionsCount; i++) {
                 if (activeTransactions[i] == instance.ecsId)
@@ -61,9 +59,9 @@ namespace Tecs {
         }
 
     protected:
-        ECS &instance;
+        ECSType<AllComponentTypes...> &instance;
 
-        typename ECS::ComponentBitset writeAccessedFlags;
+        std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 
         template<typename T>
         inline void SetAccessFlag(bool value) {

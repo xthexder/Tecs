@@ -243,6 +243,10 @@ namespace Tecs {
         TraceInfo traceInfo;
 #endif
 
+        inline static constexpr size_t GetBytesPerEntity() {
+            return sizeof(T) * 2 + sizeof(Entity) * 2 + sizeof(size_t);
+        }
+
     private:
         // Lock states
         static const uint32_t WRITER_FREE = 0;
