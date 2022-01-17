@@ -102,7 +102,7 @@ namespace Tecs {
         }
 
         inline static constexpr size_t GetBytesPerEntity() {
-            return (std::get<ComponentIndex<Tn>>(indexes).GetBytesPerEntity() + ...);
+            return (ComponentIndex<Tn>::GetBytesPerEntity() + ...);
         }
 
     private:

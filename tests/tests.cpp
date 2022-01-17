@@ -20,6 +20,8 @@ static ECS ecs;
 int main(int /* argc */, char ** /* argv */) {
     std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
               << std::endl;
+    std::cout << ecs.GetBytesPerEntity() << " bytes per entity * N = " << (ecs.GetBytesPerEntity() * ENTITY_COUNT)
+              << " bytes total" << std::endl;
 
     Tecs::Observer<ECS, Tecs::EntityEvent> entityObserver;
     Tecs::Observer<ECS, Tecs::ComponentEvent<Transform>> transformObserver;
