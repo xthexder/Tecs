@@ -1,5 +1,6 @@
 add_executable(${PROJECT_NAME}-benchmark benchmark.cpp transform_component.cpp)
 target_link_libraries(${PROJECT_NAME}-benchmark ${PROJECT_NAME})
+target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_ENABLE_PERFORMANCE_TRACING)
 if(WIN32)
     # Link winmm library for timeBeginPeriod()
     target_link_libraries(${PROJECT_NAME}-benchmark winmm)

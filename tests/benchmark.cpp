@@ -19,6 +19,10 @@ using namespace Tecs;
 std::atomic_bool running;
 static testing::ECS ecs;
 
+static std::thread::id renderThreadId;
+static std::thread::id scriptThreadId;
+static std::thread::id transformThreadId;
+
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_ITERATIONS 100
 #define ADD_REMOVE_PER_LOOP 1000
@@ -29,6 +33,7 @@ static testing::ECS ecs;
 #define SCRIPT_DIVISOR 10
 
 void renderThread() {
+    renderThreadId = std::this_thread::get_id();
     MultiTimer timer1("RenderThread StartTransaction");
     MultiTimer timer2("RenderThread Run");
     MultiTimer timer3("RenderThread Unlock");
@@ -97,6 +102,7 @@ void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script
 
 #if SCRIPT_THREAD_COUNT > 0
 void scriptThread() {
+    scriptThreadId = std::this_thread::get_id();
     MultiTimer timer1("ScriptThread StartTransaction");
     MultiTimer timer2("ScriptThread Run");
     MultiTimer timer3("ScriptThread Unlock");
@@ -133,6 +139,7 @@ void scriptThread() {
 #endif
 
 void transformWorkerThread() {
+    transformThreadId = std::this_thread::get_id();
     MultiTimer timer1("TransformWorkerThread StartTransaction");
     MultiTimer timer2("TransformWorkerThread Run");
     MultiTimer timer3("TransformWorkerThread Commit");
@@ -264,7 +271,14 @@ int main(int /* argc */, char ** /* argv */) {
     }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-    ecs.StopTrace();
+    auto trace = ecs.StopTrace();
+    trace.SetThreadName("Main");
+    trace.SetThreadName("Render", renderThreadId);
+    trace.SetThreadName("Script", scriptThreadId);
+    trace.SetThreadName("Transform", transformThreadId);
+    std::ofstream traceFile("benchmark-trace.csv");
+    trace.SaveToCSV(traceFile);
+    traceFile.close();
 #endif
 
     std::vector<Transform> transforms;
