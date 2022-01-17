@@ -6,6 +6,7 @@
 #include <functional>
 #include <limits>
 #include <stdexcept>
+#include <string>
 
 #ifndef TECS_ENTITY_INDEX_TYPE
     #define TECS_ENTITY_INDEX_TYPE uint32_t

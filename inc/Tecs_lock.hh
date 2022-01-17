@@ -47,7 +47,7 @@ namespace Tecs {
 
         ECS &instance;
         std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
-        typename ECS::ComponentBitset permissions;
+        std::bitset<1 + sizeof...(AllComponentTypes)> permissions;
 
     public:
         // Start a new transaction
