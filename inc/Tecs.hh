@@ -147,11 +147,13 @@ namespace Tecs {
 
         template<typename T>
         inline constexpr ComponentIndex<T> &Storage() {
+            static_assert(contains<T, Tn...>(), "Component is not registered with Tecs");
             return std::get<ComponentIndex<T>>(indexes);
         }
 
         template<typename Event>
         inline constexpr ObserverList<Event> &Observers() {
+            static_assert(contains<Event, EntityEvent, ComponentEvent<Tn>...>(), "Event is not registered with Tecs");
             return std::get<ObserverList<Event>>(eventLists);
         }
 
