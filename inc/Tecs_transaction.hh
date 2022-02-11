@@ -82,6 +82,7 @@ namespace Tecs {
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(TransactionPermissions<Permissions...>::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
 #endif
 
@@ -151,9 +152,16 @@ namespace Tecs {
                     },
                     this->instance.eventLists);
             }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(TransactionPermissions<Permissions...>::Name());
+#endif
         }
 
         inline ~Transaction() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(TransactionPermissions<Permissions...>::Name());
+#endif
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
                 this->instance.metadata.writeValidEntities.clear();
@@ -216,6 +224,7 @@ namespace Tecs {
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(TransactionPermissions<Permissions...>::Name());
             this->instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
 #endif
         }

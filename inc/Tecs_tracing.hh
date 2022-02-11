@@ -15,7 +15,27 @@
     #define TECS_PERFORMANCE_TRACING_MAX_EVENTS 10000
 #endif
 
+#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTING
+    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(permissions)
+#endif
+#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTED
+    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(permissions)
+#endif
+#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDING
+    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(permissions)
+#endif
+#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDED
+    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(permissions)
+#endif
+
 namespace Tecs {
+    template<typename... Permissions>
+    struct TransactionPermissions {
+        static constexpr const char *Name() {
+            return __FUNCTION__;
+        }
+    };
+
     struct TraceEvent {
         enum class Type {
             Invalid = 0,
