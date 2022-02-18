@@ -52,7 +52,8 @@ namespace Tecs {
 
     public:
         // Start a new transaction
-        inline Lock(ECS &instance) : instance(instance), base(new Transaction<ECS, Permissions...>(instance)) {
+        inline Lock(ECS &instance) : instance(instance) {
+            base = std::make_shared<Transaction<ECS, Permissions...>>(instance);
             permissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
             ((
@@ -279,6 +280,10 @@ namespace Tecs {
                 "Lock types are not a subset of existing permissions.");
 
             return Lock<ECS, PermissionsSubset...>(*this);
+        }
+
+        long UseCount() const {
+            return base.use_count();
         }
 
     private:
