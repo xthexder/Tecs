@@ -117,9 +117,26 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!compInitialized, "Global component should be deconstructed immediately");
     }
     {
+        Timer t("Test simple add entity");
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        for (size_t i = 0; i < 100; i++) {
+            Tecs::Entity e = writeLock.NewEntity();
+            Assert(e.index == i,
+                "Expected Nth entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e));
+            Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 1,
+                "Expected Nth entity generation to be 1, was " + std::to_string(e));
+            Assert(Tecs::IdentifierFromGeneration(e.generation) == 1,
+                "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
+
+            e.Set<Transform>(writeLock, 0.0, 0.0, 0.0);
+            e.Set<Script>(writeLock, std::initializer_list<uint8_t>({1, 2, 3, 4}));
+            AssertHas<Transform, Script>(writeLock, e);
+        }
+    }
+    {
         Timer t("Test adding each component type");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        for (size_t i = 0; i < ENTITY_COUNT; i++) {
+        for (size_t i = 100; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.index == i, "Expected Nth entity index to be " + std::to_string(i) + ", was " + std::to_string(e));
             Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 1,
@@ -136,6 +153,7 @@ int main(int /* argc */, char ** /* argv */) {
             // Test making some changes to ensure values are copied
             value.pos[0] = 2.0;
             auto &transform = e.Get<Transform>(writeLock);
+            Assert(transform.pos[0] == 1.0, "Expected value not to be changed");
             transform.pos[0] = 0.0;
 
             e.Set<Renderable>(writeLock, "entity" + std::to_string(i));

@@ -181,7 +181,9 @@ namespace Tecs {
                             this->instance.metadata.writeValidEntities.size();
                         this->instance.metadata.writeValidEntities.emplace_back(index, newMetadata.generation);
                     } else {
-                        this->instance.freeEntities.emplace_back(index, newMetadata.generation + 1);
+                        this->instance.freeEntities.emplace_back(index,
+                            newMetadata.generation + 1,
+                            (TECS_ENTITY_ECS_IDENTIFIER_TYPE)this->instance.ecsId);
                     }
 
                     // Compare new and old metadata to notify observers
