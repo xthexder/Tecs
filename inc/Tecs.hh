@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_entity.hh"
 #include "Tecs_lock.hh"
 #include "Tecs_permissions.hh"
 #include "Tecs_storage.hh"
@@ -73,6 +74,10 @@ namespace Tecs {
             };
         }
 #endif
+
+        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
+            return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
+        }
 
         /**
          * Returns the index of a Component type for use in a bitset.

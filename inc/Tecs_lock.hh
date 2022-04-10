@@ -125,10 +125,11 @@ namespace Tecs {
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
-                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count), 1);
+                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count),
+                        1,
+                        (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
-                entity.index = (TECS_ENTITY_INDEX_TYPE)nextIndex;
-                entity.generation = 1;
+                entity = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
             } else {
                 entity = instance.freeEntities.front();
                 instance.freeEntities.pop_front();

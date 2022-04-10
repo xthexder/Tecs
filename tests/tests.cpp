@@ -122,7 +122,10 @@ int main(int /* argc */, char ** /* argv */) {
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.index == i, "Expected Nth entity index to be " + std::to_string(i) + ", was " + std::to_string(e));
-            Assert(e.generation == 1, "Expected Nth entity generation to be 1, was " + std::to_string(e));
+            Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 1,
+                "Expected Nth entity generation to be 1, was " + std::to_string(e));
+            Assert(Tecs::IdentifierFromGeneration(e.generation) == 1,
+                "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
             AssertHas<>(writeLock, e);
 
             // Test adding each component type
@@ -174,7 +177,10 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.index == ENTITY_COUNT + i,
                 "Expected Nth entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " + std::to_string(e));
-            Assert(e.generation == 1, "Expected Nth entity generation to be 1, was " + std::to_string(e));
+            Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 1,
+                "Expected Nth entity generation to be 1, was " + std::to_string(e));
+            Assert(Tecs::IdentifierFromGeneration(e.generation) == 1,
+                "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
             AssertHas<>(writeLock, e);
 
             e.Set<Transform>(writeLock, 1.0, 3.0, 3.0);
@@ -208,7 +214,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.index == ENTITY_COUNT + i,
                     "Expected Nth entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(e));
-                Assert(e.generation == 2, "Expected Nth entity generation to be 2, was " + std::to_string(e));
+                Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 2,
+                    "Expected Nth entity generation to be 2, was " + std::to_string(e));
+                Assert(Tecs::IdentifierFromGeneration(e.generation) == 1,
+                    "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
                 AssertHas<>(writeLock, e);
 
                 entityList.emplace_back(e);
@@ -243,7 +252,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.index == ENTITY_COUNT + i,
                     "Expected Nth entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(e));
-                Assert(e.generation == 3, "Expected Nth entity generation to be 3, was " + std::to_string(e));
+                Assert(Tecs::GenerationWithoutIdentifier(e.generation) == 3,
+                    "Expected Nth entity generation to be 3, was " + std::to_string(e));
+                Assert(Tecs::IdentifierFromGeneration(e.generation) == 1,
+                    "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
                 AssertHas<>(writeLock, e);
 
                 entityList.emplace_back(e);
@@ -330,8 +342,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.type == Tecs::EventType::ADDED, "Expected entity event type to be ADDED");
                 Assert(event.entity.index == i,
                     "Expected Entity index to be " + std::to_string(i) + ", was " + std::to_string(event.entity));
-                Assert(event.entity.generation == 1,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 1,
                     "Expected Entity generation to be 1, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
@@ -340,8 +354,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 2,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 2,
                     "Expected Entity generation to be 2, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
@@ -350,8 +366,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 2,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 2,
                     "Expected Entity generation to be 2, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
@@ -360,8 +378,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 3,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 3,
                     "Expected Entity generation to be 3, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
             }
             for (size_t i = 0; i < 100; i++) {
                 Assert(entityObserver.Poll(readLock, event),
@@ -370,8 +390,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 3,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 3,
                     "Expected Entity generation to be 3, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
             }
             Assert(!entityObserver.Poll(readLock, event), "Too many events triggered");
         }
@@ -382,8 +404,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.type == Tecs::EventType::ADDED, "Expected component event type to be ADDED");
                 Assert(event.entity.index == i,
                     "Expected Entity index to be " + std::to_string(i) + ", was " + std::to_string(event.entity));
-                Assert(event.entity.generation == 1,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 1,
                     "Expected Entity generation to be 1, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
                 Assert(event.component == Transform(0.0, 0.0, 0.0), "Expected component to be origin transform");
             }
             for (size_t i = 0; i < 100; i++) {
@@ -393,8 +417,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 2,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 2,
                     "Expected Entity generation to be 2, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
                 Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected component to be initial transform");
             }
             for (size_t i = 0; i < 100; i++) {
@@ -403,8 +429,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 2,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 2,
                     "Expected Entity generation to be 2, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
                 Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected renderable name to be updated transform");
             }
             for (size_t i = 0; i < 100; i++) {
@@ -414,8 +442,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 3,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 3,
                     "Expected Entity generation to be 3, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
                 Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected component to be initial transform");
             }
             for (size_t i = 0; i < 100; i++) {
@@ -424,8 +454,10 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(event.entity.index == ENTITY_COUNT + i,
                     "Expected Entity index to be " + std::to_string(ENTITY_COUNT + i) + ", was " +
                         std::to_string(event.entity));
-                Assert(event.entity.generation == 3,
+                Assert(Tecs::GenerationWithoutIdentifier(event.entity.generation) == 3,
                     "Expected Entity generation to be 3, was " + std::to_string(event.entity));
+                Assert(Tecs::IdentifierFromGeneration(event.entity.generation) == 1,
+                    "Expected Entity ecsId to be 1, was " + std::to_string(event.entity));
                 Assert(event.component == Transform(3.0, 1.0, 7.0), "Expected renderable name to be updated transform");
             }
             Assert(!transformObserver.Poll(readLock, event), "Too many events triggered");
