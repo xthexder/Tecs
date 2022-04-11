@@ -52,7 +52,10 @@ namespace Tecs {
     }
 
     struct Entity {
-        TECS_ENTITY_GENERATION_TYPE generation;
+        // Workaround for Clang so that std::atomic<Tecs::Entity> operations can be inlined as if uint64. See issue:
+        // https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs
+        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) +
+                sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_GENERATION_TYPE generation;
         TECS_ENTITY_INDEX_TYPE index;
 
         inline Entity() : generation(0), index(0) {}
