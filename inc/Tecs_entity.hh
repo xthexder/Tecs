@@ -15,6 +15,13 @@
     #define TECS_ENTITY_GENERATION_TYPE uint32_t
 #endif
 
+#ifndef TECS_ENTITY_ECS_IDENTIFIER_TYPE
+    #define TECS_ENTITY_ECS_IDENTIFIER_TYPE uint8_t
+#endif
+
+static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) > sizeof(TECS_ENTITY_ECS_IDENTIFIER_TYPE),
+    "TECS_ENTITY_ECS_IDENTIFIER_TYPE must fit within TECS_ENTITY_GENERATION_TYPE");
+
 namespace Tecs {
     struct Entity;
 };
@@ -24,13 +31,39 @@ namespace std {
 };
 
 namespace Tecs {
+    constexpr TECS_ENTITY_GENERATION_TYPE GenerationWithoutIdentifier(TECS_ENTITY_GENERATION_TYPE generation) {
+        constexpr size_t generationBits =
+            (sizeof(TECS_ENTITY_GENERATION_TYPE) - sizeof(TECS_ENTITY_ECS_IDENTIFIER_TYPE)) * 8;
+        constexpr auto generationMask = ((TECS_ENTITY_GENERATION_TYPE)1 << generationBits) - 1;
+        return generation & generationMask;
+    }
+
+    constexpr TECS_ENTITY_GENERATION_TYPE GenerationWithIdentifier(TECS_ENTITY_GENERATION_TYPE generation,
+        TECS_ENTITY_ECS_IDENTIFIER_TYPE ecsId) {
+        constexpr size_t generationBits =
+            (sizeof(TECS_ENTITY_GENERATION_TYPE) - sizeof(TECS_ENTITY_ECS_IDENTIFIER_TYPE)) * 8;
+        return GenerationWithoutIdentifier(generation) | ((TECS_ENTITY_GENERATION_TYPE)ecsId << generationBits);
+    }
+
+    constexpr TECS_ENTITY_ECS_IDENTIFIER_TYPE IdentifierFromGeneration(TECS_ENTITY_GENERATION_TYPE generation) {
+        constexpr size_t generationBits =
+            (sizeof(TECS_ENTITY_GENERATION_TYPE) - sizeof(TECS_ENTITY_ECS_IDENTIFIER_TYPE)) * 8;
+        return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)(generation >> generationBits);
+    }
+
     struct Entity {
-        TECS_ENTITY_GENERATION_TYPE generation;
+        // Workaround for Clang so that std::atomic<Tecs::Entity> operations can be inlined as if uint64. See issue:
+        // https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs
+        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) +
+                sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_GENERATION_TYPE generation;
         TECS_ENTITY_INDEX_TYPE index;
 
         inline Entity() : generation(0), index(0) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
             : generation(generation), index(index) {}
+        inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation,
+            TECS_ENTITY_ECS_IDENTIFIER_TYPE ecsId)
+            : generation(GenerationWithIdentifier(generation, ecsId)), index(index) {}
 
     public:
         template<typename LockType>
@@ -275,13 +308,21 @@ namespace std {
     template<>
     struct hash<Tecs::Entity> {
         std::size_t operator()(const Tecs::Entity &e) const {
-            return hash<decltype(e.index)>{}(e.index) ^ (hash<decltype(e.generation)>{}(e.generation) << 1);
+            return hash<TECS_ENTITY_INDEX_TYPE>{}(e.index) ^ (hash<TECS_ENTITY_GENERATION_TYPE>{}(e.generation) << 1);
         }
     };
 
     inline string to_string(const Tecs::Entity &ent) {
         if (ent) {
-            return "Entity(" + to_string(ent.generation) + ", " + to_string(ent.index) + ")";
+            auto ecsId = Tecs::IdentifierFromGeneration(ent.generation);
+            auto generation = Tecs::GenerationWithoutIdentifier(ent.generation);
+            if (ecsId == 1) {
+                // Simplify logging for the common case of 1 ECS instance.
+                return "Entity(gen " + to_string(generation) + ", index " + to_string(ent.index) + ")";
+            } else {
+                return "Entity(ecs " + to_string(ecsId) + ", gen " + to_string(generation) + ", index " +
+                       to_string(ent.index) + ")";
+            }
         } else {
             return "Entity(invalid)";
         }
