@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <future>
+#include <map>
 #include <mutex>
 
 using namespace testing;
@@ -1077,6 +1078,20 @@ int main(int /* argc */, char ** /* argv */) {
             for (auto &e : lock.Entities()) {
                 e.Destroy(lock);
             }
+        }
+    }
+    {
+        Timer t("Entities can be ordered map keys");
+        {
+            std::map<Tecs::Entity, int> theMap;
+
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            Tecs::Entity e = writeLock.NewEntity();
+            theMap[e] = 1;
+            Assert(theMap[e] == 1, "Expected value to be set");
+
+            e.generation++;
+            Assert(theMap[e] == 0, "Expected value to not be set");
         }
     }
 

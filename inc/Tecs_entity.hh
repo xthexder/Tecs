@@ -289,7 +289,7 @@ namespace Tecs {
         }
 
         inline bool operator<(const Entity &other) const {
-            return index < other.index;
+            return (index == other.index) ? (generation < other.generation) : (index < other.index);
         }
 
         inline bool operator!() const {
@@ -308,7 +308,9 @@ namespace std {
     template<>
     struct hash<Tecs::Entity> {
         std::size_t operator()(const Tecs::Entity &e) const {
-            return hash<TECS_ENTITY_INDEX_TYPE>{}(e.index) ^ (hash<TECS_ENTITY_GENERATION_TYPE>{}(e.generation) << 1);
+            const auto genBits = sizeof(TECS_ENTITY_GENERATION_TYPE) * 8;
+            uint64_t value = (uint64_t)e.index << genBits | e.generation;
+            return hash<uint64_t>{}(value);
         }
     };
 
