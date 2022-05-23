@@ -91,11 +91,9 @@ namespace Tecs {
         }
 
         /**
-         * Lock this Component type for writing. Only a single writer can be active at once. Readers are still allowed
-         * to hold locks until the write is being committed.
+         * Lock this Component type for writing. Only a single writer can be active at once.
+         * Readers are still allowed to hold locks until the write is being committed.
          * This function will block if another writer has already started.
-         *
-         * Once writing has completed CommitLock() must be called exactly once, followed by WriteUnlock().
          */
         inline bool WriteLock(bool block = true) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -136,13 +134,13 @@ namespace Tecs {
         }
 
         /**
-         * Commit changes made to this Component type so that readers will begin to see the written values.
+         * Transition from a write lock to a commit lock so that changes made to this Component type can be copied from
+         * the write buffer to the read buffer.
          *
          * Once this function is called, new reader locks will begin to block. When all existing readers have completed,
-         * the changes are applied to the reader buffer.
+         * this function will unblock, ensuring this thread has exclusive access to both the read and write buffers.
          *
-         * Once the commit is complete, both reader and writer locks will be free.
-         * Behavior is undefined if WriteLock() is not called first.
+         * A commit lock can only be acquired once per write lock, and must be followed by a WriteUnlock().
          */
         inline void CommitLock() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -187,6 +185,10 @@ namespace Tecs {
             }
         }
 
+        /**
+         * Unlock readers and transition from a commit lock back to a write lock.
+         * This should only be called between CommitLock() and WriteUnlock().
+         */
         inline void CommitUnlock() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             traceInfo.Trace(TraceEvent::Type::CommitUnlock);
@@ -215,8 +217,11 @@ namespace Tecs {
         }
 
         /**
-         * Copies the write buffer to the read buffer. This should only be called between CommitLock() and
-         * WriteUnlock(). The valid entity list is only copied if AllowAddRemove is true.
+         * Swaps the read and write buffers and copies any changes so the read and write buffers match.
+         * This should only be called once between CommitLock() and WriteUnlock().
+         * The valid entity list is only copied if AllowAddRemove is true.
+         *
+         * This function will automatically call CommitUnlock().
          */
         template<bool AllowAddRemove>
         inline void CommitEntities() {
