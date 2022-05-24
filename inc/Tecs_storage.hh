@@ -91,11 +91,9 @@ namespace Tecs {
         }
 
         /**
-         * Lock this Component type for writing. Only a single writer can be active at once. Readers are still allowed
-         * to hold locks until the write is being committed.
+         * Lock this Component type for writing. Only a single writer can be active at once.
+         * Readers are still allowed to hold locks until the write is being committed.
          * This function will block if another writer has already started.
-         *
-         * Once writing has completed CommitLock() must be called exactly once, followed by WriteUnlock().
          */
         inline bool WriteLock(bool block = true) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -136,13 +134,13 @@ namespace Tecs {
         }
 
         /**
-         * Commit changes made to this Component type so that readers will begin to see the written values.
+         * Transition from a write lock to a commit lock so that changes made to this Component type can be copied from
+         * the write buffer to the read buffer.
          *
          * Once this function is called, new reader locks will begin to block. When all existing readers have completed,
-         * the changes are applied to the reader buffer.
+         * this function will unblock, ensuring this thread has exclusive access to both the read and write buffers.
          *
-         * Once the commit is complete, both reader and writer locks will be free.
-         * Behavior is undefined if WriteLock() is not called first.
+         * A commit lock can only be acquired once per write lock, and must be followed by a WriteUnlock().
          */
         inline void CommitLock() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -152,10 +150,8 @@ namespace Tecs {
             uint32_t current = writer;
             if (current != WRITER_LOCKED) {
                 throw std::runtime_error("CommitLock called outside of WriteLock");
-            } else {
-                if (!writer.compare_exchange_strong(current, WRITER_COMMIT)) {
-                    throw std::runtime_error("CommitLock writer changed unexpectedly");
-                }
+            } else if (!writer.compare_exchange_strong(current, WRITER_COMMIT)) {
+                throw std::runtime_error("CommitLock writer changed unexpectedly");
             }
 
             int retry = 0;
@@ -190,22 +186,63 @@ namespace Tecs {
         }
 
         /**
-         * Copies the write buffer to the read buffer. This should only be called between CommitLock() and
-         * WriteUnlock(). The valid entity list is only copied if AllowAddRemove is true.
+         * Unlock readers and transition from a commit lock back to a write lock.
+         * This should only be called between CommitLock() and WriteUnlock().
+         */
+        inline void CommitUnlock() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            traceInfo.Trace(TraceEvent::Type::CommitUnlock);
+#endif
+
+            // Unlock read copies immediately after commit completion
+            uint32_t current = readers;
+            if (current == READER_LOCKED) {
+                if (!readers.compare_exchange_strong(current, READER_FREE)) {
+                    throw std::runtime_error("CommitUnlock readers changed unexpectedly");
+                }
+            }
+#if __cpp_lib_atomic_wait
+            readers.notify_all();
+#endif
+
+            current = writer;
+            if (current != WRITER_COMMIT) {
+                throw std::runtime_error("CommitUnlock called outside of CommitLock");
+            } else if (!writer.compare_exchange_strong(current, WRITER_LOCKED)) {
+                throw std::runtime_error("CommitUnlock writer changed unexpectedly");
+            }
+#if __cpp_lib_atomic_wait
+            writer.notify_all();
+#endif
+        }
+
+        /**
+         * Swaps the read and write buffers and copies any changes so the read and write buffers match.
+         * This should only be called once between CommitLock() and WriteUnlock().
+         * The valid entity list is only copied if AllowAddRemove is true.
+         *
+         * This function will automatically call CommitUnlock().
          */
         template<bool AllowAddRemove>
         inline void CommitEntities() {
             if (AllowAddRemove) {
                 // The number of components, or list of valid entities may have changed.
-                readComponents = writeComponents;
-                readValidEntities = writeValidEntities;
+                readComponents.swap(writeComponents);
+                readValidEntities.swap(writeValidEntities);
+                CommitUnlock();
+
+                writeComponents = readComponents;
+                writeValidEntities = readValidEntities;
             } else {
+                readComponents.swap(writeComponents);
+                CommitUnlock();
+
                 // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
                 if (readValidEntities.size() > writeComponents.size() / 6) {
-                    readComponents = writeComponents;
+                    writeComponents = readComponents;
                 } else {
                     for (auto &valid : readValidEntities) {
-                        readComponents[valid.index] = writeComponents[valid.index];
+                        writeComponents[valid.index] = readComponents[valid.index];
                     }
                 }
             }
@@ -230,8 +267,7 @@ namespace Tecs {
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");
-            }
-            if (!writer.compare_exchange_strong(current, WRITER_FREE)) {
+            } else if (!writer.compare_exchange_strong(current, WRITER_FREE)) {
                 throw std::runtime_error("WriteUnlock writer changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait

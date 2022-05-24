@@ -48,6 +48,7 @@ namespace Tecs {
             WriteLock,
             CommitLockWait,
             CommitLock,
+            CommitUnlock,
             WriteUnlock,
         };
 
@@ -68,6 +69,7 @@ namespace Tecs {
             "WriteLock",
             "CommitLockWait",
             "CommitLock",
+            "CommitUnlock",
             "WriteUnlock",
         };
         return out << eventTypeNames[(size_t)t];

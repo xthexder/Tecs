@@ -176,8 +176,12 @@ int main(int /* argc */, char ** /* argv */) {
     });
 #endif
     {
-        Timer t("Create entities");
+        MultiTimer timer1("Create entities Start");
+        MultiTimer timer2("Create entities Run");
+        MultiTimer timer3("Create entities Commit");
+        Timer t(timer1);
         auto writeLock = ecs.StartTransaction<AddRemove>();
+        t = timer2;
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Entity e = writeLock.NewEntity();
             if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0); }
@@ -186,6 +190,7 @@ int main(int /* argc */, char ** /* argv */) {
                 e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             }
         }
+        t = timer3;
     }
 
     struct RemovedEntity {
