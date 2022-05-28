@@ -209,15 +209,15 @@ namespace Tecs {
             CommitLockInOrder<AllComponentTypes...>();
             CommitUnlockInOrder<AllComponentTypes...>();
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
-                this->instance.metadata.template CommitEntities<true>();
-
                 // Commit observers
                 std::apply(
                     [](auto &...args) {
                         (args.Commit(), ...);
                     },
                     this->instance.eventLists);
+
+                this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
+                this->instance.metadata.template CommitEntities<true>();
             }
             if (is_add_remove_allowed<LockType>()) {
                 this->instance.metadata.WriteUnlock();
