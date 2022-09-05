@@ -130,7 +130,7 @@ namespace Tecs {
             }
 
             if (!lock.instance.template BitsetHas<CompType>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if (is_add_remove_allowed<LockType>() && !std::is_const<ReturnType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
                     // Reset value before allowing reading.
