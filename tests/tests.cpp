@@ -652,6 +652,84 @@ int main(int /* argc */, char ** /* argv */) {
             thread.join();
         }
     }
+    Tecs::Entity constGetEntity;
+    {
+        Timer t("Test const Get does not add component");
+        auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+
+        Tecs::Entity ent = lock.NewEntity();
+        Assert(!ent.Existed(lock), "New entity should not exist at start of transaction");
+        Assert(ent.Exists(lock), "New entity should exist");
+        Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
+        Assert(!ent.Had<Transform>(lock), "New entity should not have previous Transform");
+
+        try {
+            ent.Get<const Transform>(lock);
+            Assert(false, "Entity.Get<const>() on missing component should fail");
+        } catch (std::runtime_error &e) {
+            std::string msg = e.what();
+            Assert(msg == "Entity does not have a component of type: struct testing::Transform",
+                "Received wrong runtime_error: " + msg);
+        }
+        Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
+
+        ent.Get<Transform>(lock);
+        Assert(ent.Has<Transform>(lock), "Entity should have a new Transform");
+        Assert(!ent.Had<Transform>(lock), "Entity should not have previous Transform");
+
+        ent.Unset<Transform>(lock);
+        Assert(!ent.Has<Transform>(lock), "Entity should have Transform removed");
+        Assert(!ent.Had<Transform>(lock), "Entity should not have previous Transform");
+        constGetEntity = ent;
+    }
+    {
+        Timer t("Test const Get does not commit lock");
+        {
+            auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
+
+            std::thread addRemoveThread([&] {
+                // Try starting a noop write transaction while another read transaction is active.
+                auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+                Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+                try {
+                    constGetEntity.Get<const Transform>(writeLock);
+                    Assert(false, "Entity.Get<const>() on missing component should fail");
+                } catch (std::runtime_error &e) {
+                    std::string msg = e.what();
+                    Assert(msg == "Entity does not have a component of type: struct testing::Transform",
+                        "Received wrong runtime_error: " + msg);
+                }
+                Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+
+                // Commit should not occur since no write operations were done.
+                // Test would otherwise block on commit due to active read transaction.
+            });
+            addRemoveThread.join();
+
+            std::thread writeThread([&] {
+                // Try starting a noop write transaction while another read transaction is active.
+                auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
+                Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+                try {
+                    constGetEntity.Get<const Transform>(writeLock);
+                    Assert(false, "Entity.Get<const>() on missing component should fail");
+                } catch (std::runtime_error &e) {
+                    std::string msg = e.what();
+                    Assert(msg == "Entity does not have a component of type: struct testing::Transform",
+                        "Received wrong runtime_error: " + msg);
+                }
+                Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+
+                // Commit should not occur since no write operations were done.
+                // Test would otherwise block on commit due to active read transaction.
+            });
+            writeThread.join();
+        }
+    }
+    {
+        auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+        constGetEntity.Destroy(lock);
+    }
     {
         Timer t("Test add/remove entity priority");
         Tecs::Entity e;
@@ -709,7 +787,7 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
             auto previousValue = readId.Get<Script>(readLock).data[3];
 
-            std::thread readThread([readId, previousValue] {
+            std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
                 auto writeLock = ecs.StartTransaction<Tecs::Write<Script>>();
                 Assert(readId.GetPrevious<Script>(writeLock).data[3] == previousValue,
@@ -718,7 +796,7 @@ int main(int /* argc */, char ** /* argv */) {
                 // Commit should not occur since no write operations were done.
                 // Test would otherwise block on commit due to active read transaction.
             });
-            readThread.join();
+            writeThread.join();
         }
     }
     {
@@ -728,7 +806,7 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
             auto previousValue = readId.Get<Script>(readLock).data[3];
 
-            std::thread readThread([readId, previousValue] {
+            std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
                 auto writeLock = ecs.StartTransaction<Tecs::Write<Transform, Script>>();
                 Tecs::Entity writeId = writeLock.EntitiesWith<Transform>()[0];
@@ -740,7 +818,7 @@ int main(int /* argc */, char ** /* argv */) {
                 // Commit should only occur on Transform component
                 // Test would otherwise block on Transform commit due to active read transaction.
             });
-            readThread.join();
+            writeThread.join();
         }
     }
     {
@@ -750,7 +828,7 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Entity readId = readLock.EntitiesWith<Script>()[0];
             auto previousValue = readId.Get<Script>(readLock).data[3];
 
-            std::thread readThread([readId, previousValue] {
+            std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
                 auto addRemoveLock = ecs.StartTransaction<Tecs::AddRemove>();
 
@@ -760,7 +838,7 @@ int main(int /* argc */, char ** /* argv */) {
                 // Commit should not occur since no write operations were done.
                 // Test would otherwise block on commit due to active read transaction.
             });
-            readThread.join();
+            writeThread.join();
         }
     }
     {

@@ -184,8 +184,12 @@ int main(int /* argc */, char ** /* argv */) {
         t = timer2;
         for (size_t i = 0; i < ENTITY_COUNT; i++) {
             Entity e = writeLock.NewEntity();
-            if (i % TRANSFORM_DIVISOR == 0) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0); }
-            if (i % RENDERABLE_DIVISOR == 0) { e.Set<Renderable>(writeLock, "entity" + std::to_string(i)); }
+            if (i % TRANSFORM_DIVISOR == 0) {
+                e.Set<Transform>(writeLock, 0.0, 0.0, 0.0);
+            }
+            if (i % RENDERABLE_DIVISOR == 0) {
+                e.Set<Renderable>(writeLock, "entity" + std::to_string(i));
+            }
             if (i % SCRIPT_DIVISOR == 0) {
                 e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             }
@@ -235,8 +239,12 @@ int main(int /* argc */, char ** /* argv */) {
         t = timer2;
         for (auto removedEntity : removedList) {
             Entity e = writeLock.NewEntity();
-            if (removedEntity.components[0]) { e.Set<Transform>(writeLock, 0.0, 0.0, 0.0); }
-            if (removedEntity.components[1]) { e.Set<Renderable>(writeLock, removedEntity.name); }
+            if (removedEntity.components[0]) {
+                e.Set<Transform>(writeLock, 0.0, 0.0, 0.0);
+            }
+            if (removedEntity.components[1]) {
+                e.Set<Renderable>(writeLock, removedEntity.name);
+            }
             if (removedEntity.components[2]) {
                 e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             }
@@ -326,7 +334,9 @@ int main(int /* argc */, char ** /* argv */) {
                 valid++;
             }
         }
-        if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
+        if (invalid != 0) {
+            std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl;
+        }
         std::cout << entityList.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
@@ -356,7 +366,9 @@ int main(int /* argc */, char ** /* argv */) {
                 valid++;
             }
         }
-        if (invalid != 0) { std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl; }
+        if (invalid != 0) {
+            std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl;
+        }
         std::cout << transforms.size() << " total components (" << valid << " with value " << commonValue << ")"
                   << std::endl;
     }
