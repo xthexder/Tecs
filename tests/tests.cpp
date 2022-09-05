@@ -668,8 +668,8 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(false, "Entity.Get<const>() on missing component should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            Assert(msg == "Entity does not have a component of type: struct testing::Transform",
-                "Received wrong runtime_error: " + msg);
+            auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+            Assert(msg == compare, "Received wrong runtime_error: " + msg);
         }
         Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
 
@@ -696,8 +696,8 @@ int main(int /* argc */, char ** /* argv */) {
                     Assert(false, "Entity.Get<const>() on missing component should fail");
                 } catch (std::runtime_error &e) {
                     std::string msg = e.what();
-                    Assert(msg == "Entity does not have a component of type: struct testing::Transform",
-                        "Received wrong runtime_error: " + msg);
+                    auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+                    Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
 
@@ -715,8 +715,8 @@ int main(int /* argc */, char ** /* argv */) {
                     Assert(false, "Entity.Get<const>() on missing component should fail");
                 } catch (std::runtime_error &e) {
                     std::string msg = e.what();
-                    Assert(msg == "Entity does not have a component of type: struct testing::Transform",
-                        "Received wrong runtime_error: " + msg);
+                    auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+                    Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
 

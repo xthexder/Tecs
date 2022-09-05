@@ -1,6 +1,6 @@
 #include <Tecs.hh>
-#include <string>
 #include <iostream>
+#include <string>
 
 namespace example {
     // Define 4 Component types:
