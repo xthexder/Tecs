@@ -88,7 +88,9 @@ namespace Tecs {
 
         std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
             auto it = threadNames.find(threadId);
-            if (it != threadNames.end()) { return it->second; }
+            if (it != threadNames.end()) {
+                return it->second;
+            }
             std::stringstream ss;
             ss << threadId;
             return ss.str();
