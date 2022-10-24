@@ -6,7 +6,7 @@
     #include "Tecs_tracing.hh"
 #endif
 
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
     #include <Tracy.hpp>
 #endif
 
@@ -36,7 +36,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             bool runAfterLockShared = false;
             if (block) {
                 runAfterLockShared = tracyRead.BeforeLockShared();
@@ -54,7 +54,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::ReadLock);
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
                         if (block) {
                             if (runAfterLockShared) tracyRead.AfterLockShared();
                         } else {
@@ -66,7 +66,7 @@ namespace Tecs {
                 }
 
                 if (!block) {
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
                     tracyRead.AfterTryLockShared(false);
 #endif
                     return false;
@@ -110,7 +110,7 @@ namespace Tecs {
 #if __cpp_lib_atomic_wait
             readers.notify_all();
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             tracyRead.AfterUnlockShared();
 #endif
         }
@@ -124,7 +124,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             bool runAfterLock = false;
             if (block) {
                 runAfterLock = tracyWrite.BeforeLock();
@@ -140,7 +140,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::WriteLock);
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
                         if (block) {
                             if (runAfterLock) tracyWrite.AfterLock();
                         } else {
@@ -152,7 +152,7 @@ namespace Tecs {
                 }
 
                 if (!block) {
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
                     tracyWrite.AfterTryLock(false);
 #endif
                     return false;
@@ -189,7 +189,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             bool runAfterLock = tracyRead.BeforeLock();
 #endif
 
@@ -209,7 +209,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::CommitLock);
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
                         if (runAfterLock) tracyRead.AfterLock();
 #endif
                         return;
@@ -263,7 +263,7 @@ namespace Tecs {
 #if __cpp_lib_atomic_wait
             writer.notify_all();
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             tracyRead.AfterUnlock();
 #endif
         }
@@ -326,7 +326,7 @@ namespace Tecs {
             writer.notify_all();
 #endif
 
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
             tracyWrite.AfterUnlock();
 #endif
         }
@@ -334,7 +334,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo traceInfo;
 #endif
-#ifdef TECS_PERFORMANCE_TRACING_USE_TRACY
+#ifdef TECS_ENABLE_TRACY
         tracy::SharedLockableCtx tracyRead{[]() -> const tracy::SourceLocationData * {
             static const std::string lockName = std::string("Read ") + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};

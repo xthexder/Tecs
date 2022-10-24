@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_permissions.hh"
 #include "nonstd/span.hpp"
 
 #include <array>
@@ -29,13 +30,6 @@
 #endif
 
 namespace Tecs {
-    template<typename... Permissions>
-    struct TransactionPermissions {
-        static constexpr const char *Name() {
-            return __FUNCTION__;
-        }
-    };
-
     struct TraceEvent {
         enum class Type {
             Invalid = 0,

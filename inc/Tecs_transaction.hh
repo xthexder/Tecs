@@ -7,6 +7,10 @@
     #include "Tecs_tracing.hh"
 #endif
 
+#ifdef TECS_ENABLE_TRACY
+    #include <Tracy.hpp>
+#endif
+
 #include <array>
 #include <atomic>
 #include <bitset>
@@ -78,12 +82,32 @@ namespace Tecs {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
         using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
+        using FlatPermissions = FlattenPermissions<LockType, AllComponentTypes...>::type;
+
+#ifdef TECS_ENABLE_TRACY
+        static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {
+            static const tracy::SourceLocationData srcloc{"TecsTransaction",
+                FlatPermissions::Name(),
+                __FILE__,
+                __LINE__,
+                0};
+            return &srcloc;
+        };
+    #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
+        tracy::ScopedZone tracyZone{tracyCtx(), TRACY_CALLSTACK, true};
+    #else
+        tracy::ScopedZone tracyZone{tracyCtx(), true};
+    #endif
+#endif
 
     public:
         inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(TransactionPermissions<Permissions...>::Name());
+            TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
+#endif
+#ifdef TECS_ENABLE_TRACY
+            ZoneNamedN(tracyScope, "StartTransaction", true);
 #endif
 
             std::bitset<1 + sizeof...(AllComponentTypes)> acquired;
@@ -154,13 +178,16 @@ namespace Tecs {
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(TransactionPermissions<Permissions...>::Name());
+            TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(FlatPermissions::Name());
 #endif
         }
 
         inline ~Transaction() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(TransactionPermissions<Permissions...>::Name());
+            TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
+#endif
+#ifdef TECS_ENABLE_TRACY
+            ZoneNamedN(tracyScope, "EndTransaction", true);
 #endif
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
@@ -226,7 +253,7 @@ namespace Tecs {
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(TransactionPermissions<Permissions...>::Name());
+            TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(FlatPermissions::Name());
             this->instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
 #endif
         }

@@ -2,6 +2,7 @@
 
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace Tecs {
     template<typename... Tn>
@@ -158,4 +159,82 @@ namespace Tecs {
     struct is_write_allowed<T, AddRemove> : std::true_type {};
     template<>
     struct is_add_remove_allowed<AddRemove> : std::true_type {};
+
+    // Helpers for converting a lock type to a de-duplicated permission list
+    template<typename... Permissions>
+    struct TransactionPermissions {
+        static constexpr const char *Name() {
+            return __FUNCTION__;
+        }
+    };
+
+    template<typename>
+    struct tuple_to_read {
+        using type = Read<>;
+    };
+    template<typename... Tn>
+    struct tuple_to_read<std::tuple<Tn...>> {
+        using type = Read<std::remove_pointer_t<Tn>...>;
+    };
+
+    template<typename>
+    struct tuple_to_write {
+        using type = Write<>;
+    };
+    template<typename... Tn>
+    struct tuple_to_write<std::tuple<Tn...>> {
+        using type = Write<std::remove_pointer_t<Tn>...>;
+    };
+
+    template<typename LockType, typename... AllComponentTypes>
+    struct FlattenPermissions {
+        using AllTuple = std::tuple<AllComponentTypes...>;
+
+        template<size_t... Indices>
+        static constexpr auto flatten_read(std::index_sequence<Indices...>) {
+            // clang-format off
+            return std::tuple_cat(std::conditional_t<
+                is_read_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value
+                && !is_write_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
+                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                std::tuple<>
+            >{}...);
+            // clang-format on
+        }
+
+        template<size_t... Indices>
+        static constexpr auto flatten_write(std::index_sequence<Indices...>) {
+            // clang-format off
+            return std::tuple_cat(std::conditional_t<
+                is_write_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
+                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                std::tuple<>
+            >{}...);
+            // clang-format on
+        }
+
+        static constexpr auto flatten() {
+            if constexpr (is_add_remove_allowed<LockType>()) {
+                return TransactionPermissions<AddRemove>{};
+            } else {
+                using ReadPerm = decltype(flatten_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
+                using WritePerm = decltype(flatten_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
+                if constexpr (std::is_same_v<ReadPerm, std::tuple<>>) {
+                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                        return TransactionPermissions<>{};
+                    } else {
+                        return TransactionPermissions<tuple_to_write<WritePerm>::type>{};
+                    }
+                } else {
+                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                        return TransactionPermissions<tuple_to_read<ReadPerm>::type>{};
+                    } else {
+                        return TransactionPermissions<tuple_to_read<ReadPerm>::type, tuple_to_write<WritePerm>::type>{};
+                    }
+                }
+            }
+        }
+
+        using type = decltype(flatten());
+    };
 }; // namespace Tecs

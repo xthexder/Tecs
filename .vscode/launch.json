@@ -1,0 +1,63 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Tests (Debug / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Debug/Tecs-tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Debug",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Benchmark (Debug / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Debug/Tecs-benchmark.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Debug",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Tests (Release / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Release/Tecs-tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Release",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Benchmark (Release / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Release/Tecs-benchmark.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Release",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Benchmark (RelWithDebInfo / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/RelWithDebInfo/Tecs-benchmark.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/RelWithDebInfo",
+            "environment": [],
+            "console": "integratedTerminal"
+        }
+    ]
+}

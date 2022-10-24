@@ -3,7 +3,7 @@ project(Tecs VERSION 0.11.0)
 
 option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested transaction detection)" OFF)
 option(TECS_ENABLE_PERFORMANCE_TRACING "Include performance trace counters inside Tecs for debugging lock contention" OFF)
-option(TECS_PERFORMANCE_TRACING_USE_TRACY "Add Tracy C++ Profiler hooks for lock permissions" OFF)
+option(TECS_ENABLE_TRACY "Add Tracy C++ Profiler hooks for showing transactions and lock contention" OFF)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -58,8 +58,9 @@ endif()
 if(TECS_ENABLE_PERFORMANCE_TRACING)
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_PERFORMANCE_TRACING)
 endif()
-if(TECS_PERFORMANCE_TRACING_USE_TRACY)
-    target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_PERFORMANCE_TRACING_USE_TRACY)
+
+if(TECS_ENABLE_TRACY)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_TRACY)
 endif()
 
 if(UNIX)
@@ -78,6 +79,7 @@ install(
 
 # Build tests and examples if we are the root project
 if("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
+    add_subdirectory(extra/tracy)
     add_subdirectory(tests)
     add_subdirectory(examples)
 ENDIF ()
