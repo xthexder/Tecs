@@ -230,7 +230,8 @@ namespace Tecs {
                     if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
                         return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
                     } else {
-                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type, typename tuple_to_write<WritePerm>::type>{};
+                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type,
+                            typename tuple_to_write<WritePerm>::type>{};
                     }
                 }
             }
