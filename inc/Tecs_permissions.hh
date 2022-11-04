@@ -171,20 +171,20 @@ namespace Tecs {
 
     template<typename>
     struct tuple_to_read {
-        using type = Read<>;
+        using type = typename Read<>;
     };
     template<typename... Tn>
     struct tuple_to_read<std::tuple<Tn...>> {
-        using type = Read<std::remove_pointer_t<Tn>...>;
+        using type = typename Read<std::remove_pointer_t<Tn>...>;
     };
 
     template<typename>
     struct tuple_to_write {
-        using type = Write<>;
+        using type = typename Write<>;
     };
     template<typename... Tn>
     struct tuple_to_write<std::tuple<Tn...>> {
-        using type = Write<std::remove_pointer_t<Tn>...>;
+        using type = typename Write<std::remove_pointer_t<Tn>...>;
     };
 
     template<typename LockType, typename... AllComponentTypes>
