@@ -7,7 +7,7 @@ import glob
 import sys
 import subprocess
 
-include_paths = ["src/", "tests/", "examples/"]
+include_paths = ["src/", "inc/", "tests/", "examples/"]
 include_extenions = [".cc", ".hh", ".cpp", ".hpp"]
 version_pattern = re.compile("version ([0-9]+\.[0-9]+)\.[0-9]+")
 allowed_clangformat_versions = ["14.0"]
@@ -53,7 +53,7 @@ def main():
     validated = True
     for base_path in include_paths:
         for extension in include_extenions:
-            glob_path = os.path.join(project_root, base_path, '**/*' + extension)
+            glob_path = os.path.join(project_root, base_path, '*' + extension)
             for filepath in glob.iglob(glob_path, recursive=True):
                 if not run_clang_format(filepath, args.fix):
                     validated = False
