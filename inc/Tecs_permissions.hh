@@ -171,20 +171,20 @@ namespace Tecs {
 
     template<typename>
     struct tuple_to_read {
-        using type = typename Read<>;
+        using type = Read<>;
     };
     template<typename... Tn>
     struct tuple_to_read<std::tuple<Tn...>> {
-        using type = typename Read<std::remove_pointer_t<Tn>...>;
+        using type = Read<std::remove_pointer_t<Tn>...>;
     };
 
     template<typename>
     struct tuple_to_write {
-        using type = typename Write<>;
+        using type = Write<>;
     };
     template<typename... Tn>
     struct tuple_to_write<std::tuple<Tn...>> {
-        using type = typename Write<std::remove_pointer_t<Tn>...>;
+        using type = Write<std::remove_pointer_t<Tn>...>;
     };
 
     template<typename LockType, typename... AllComponentTypes>
@@ -224,13 +224,13 @@ namespace Tecs {
                     if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
                         return TransactionPermissions<>{};
                     } else {
-                        return TransactionPermissions<tuple_to_write<WritePerm>::type>{};
+                        return TransactionPermissions<typename tuple_to_write<WritePerm>::type>{};
                     }
                 } else {
                     if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
-                        return TransactionPermissions<tuple_to_read<ReadPerm>::type>{};
+                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
                     } else {
-                        return TransactionPermissions<tuple_to_read<ReadPerm>::type, tuple_to_write<WritePerm>::type>{};
+                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type, typename tuple_to_write<WritePerm>::type>{};
                     }
                 }
             }

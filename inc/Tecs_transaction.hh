@@ -82,7 +82,7 @@ namespace Tecs {
     private:
         using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
         using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
-        using FlatPermissions = FlattenPermissions<LockType, AllComponentTypes...>::type;
+        using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
 
 #ifdef TECS_ENABLE_TRACY
         static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {

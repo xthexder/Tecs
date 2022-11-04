@@ -5,6 +5,9 @@ target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_ENABLE_PERFORM
 set(TRACY_NO_EXIT ON CACHE BOOL "" FORCE)
 set(TRACY_ONLY_LOCALHOST ON CACHE BOOL "" FORCE)
 add_subdirectory(tracy)
+if(UNIX)
+target_compile_options(TracyClient PRIVATE -Wno-unused-private-field)
+endif()
 
 add_executable(${PROJECT_NAME}-benchmark-tracy benchmark.cpp transform_component.cpp)
 target_link_libraries(${PROJECT_NAME}-benchmark-tracy ${PROJECT_NAME} TracyClient)
