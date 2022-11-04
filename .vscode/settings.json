@@ -1,0 +1,10 @@
+{
+    "[cpp]": {
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true,
+        "editor.formatOnSave": true
+    },
+    "C_Cpp.files.exclude": {
+        "tests/tracy/server/": true
+    }
+}

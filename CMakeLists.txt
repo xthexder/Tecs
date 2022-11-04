@@ -3,6 +3,8 @@ project(Tecs VERSION 0.11.0)
 
 option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested transaction detection)" OFF)
 option(TECS_ENABLE_PERFORMANCE_TRACING "Include performance trace counters inside Tecs for debugging lock contention" OFF)
+# Note: Tracy only supports tracking locks up to 64 threads and will crash the client with more than 64 simultaneous transactions.
+option(TECS_ENABLE_TRACY "Add Tracy C++ Profiler hooks for showing transactions and lock contention" OFF)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -56,6 +58,10 @@ endif()
 
 if(TECS_ENABLE_PERFORMANCE_TRACING)
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_PERFORMANCE_TRACING)
+endif()
+
+if(TECS_ENABLE_TRACY)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_TRACY)
 endif()
 
 if(UNIX)

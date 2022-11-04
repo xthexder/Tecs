@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Tecs_permissions.hh"
 #include "nonstd/span.hpp"
 
 #include <array>
@@ -29,13 +30,6 @@
 #endif
 
 namespace Tecs {
-    template<typename... Permissions>
-    struct TransactionPermissions {
-        static constexpr const char *Name() {
-            return __FUNCTION__;
-        }
-    };
-
     struct TraceEvent {
         enum class Type {
             Invalid = 0,
@@ -88,7 +82,9 @@ namespace Tecs {
 
         std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
             auto it = threadNames.find(threadId);
-            if (it != threadNames.end()) { return it->second; }
+            if (it != threadNames.end()) {
+                return it->second;
+            }
             std::stringstream ss;
             ss << threadId;
             return ss.str();
@@ -169,7 +165,7 @@ namespace Tecs {
         inline nonstd::span<TraceEvent> StopTrace() {
             if (!traceEnabled) throw std::runtime_error("No trace has been started");
             traceEnabled = false;
-            return nonstd::span<TraceEvent>(events.begin(), std::min(events.size(), (size_t)nextEventIndex.load()));
+            return nonstd::span<TraceEvent>(events.data(), std::min(events.size(), (size_t)nextEventIndex.load()));
         }
 
     private:

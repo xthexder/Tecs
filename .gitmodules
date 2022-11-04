@@ -1,0 +1,3 @@
+[submodule "tests/tracy"]
+	path = tests/tracy
+	url = https://github.com/wolfpld/tracy.git
