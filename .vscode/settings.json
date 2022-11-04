@@ -5,6 +5,6 @@
         "editor.formatOnSave": true
     },
     "C_Cpp.files.exclude": {
-        "extra/tracy/*/": true
+        "tests/tracy/server/": true
     }
 }

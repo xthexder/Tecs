@@ -27,6 +27,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Launch Benchmark Tracy (Debug / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Debug/Tecs-benchmark-tracy.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Debug",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Launch Tests (Release / Windows)",
             "type": "cppvsdbg",
             "request": "launch",
@@ -42,6 +53,17 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Release/Tecs-benchmark.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/Release",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch Benchmark Tracy (Release / Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Release/Tecs-benchmark-tracy.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/tests/Release",

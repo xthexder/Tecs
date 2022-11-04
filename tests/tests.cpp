@@ -647,6 +647,10 @@ int main(int /* argc */, char ** /* argv */) {
         {
             auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
             Assert(counter < 100, "Writer lock did not take priority over readers");
+
+            auto ent = writeLock.EntitiesWith<Transform>()[0];
+            // Perform a dummy write to ensure the transaction commits
+            ent.Get<Transform>(writeLock) = ent.Get<Transform>(writeLock);
         }
         for (auto &thread : readThreads) {
             thread.join();
@@ -1173,6 +1177,7 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
 
+    std::cout << "Tests succeeded" << std::endl;
     return 0;
 }
 

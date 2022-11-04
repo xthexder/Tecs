@@ -8,7 +8,7 @@
 #endif
 
 #ifdef TECS_ENABLE_TRACY
-    #include <Tracy.hpp>
+    #include <tracy/Tracy.hpp>
 #endif
 
 #include <array>

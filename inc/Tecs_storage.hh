@@ -7,7 +7,7 @@
 #endif
 
 #ifdef TECS_ENABLE_TRACY
-    #include <Tracy.hpp>
+    #include <tracy/Tracy.hpp>
 #endif
 
 #include <atomic>
@@ -335,16 +335,18 @@ namespace Tecs {
         TraceInfo traceInfo;
 #endif
 #ifdef TECS_ENABLE_TRACY
-        tracy::SharedLockableCtx tracyRead{[]() -> const tracy::SourceLocationData * {
+        static inline const auto tracyReadCtx = []() -> const tracy::SourceLocationData * {
             static const std::string lockName = std::string("Read ") + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};
             return &srcloc;
-        }()};
-        tracy::LockableCtx tracyWrite{[]() -> const tracy::SourceLocationData * {
+        };
+        static inline const auto tracyWriteCtx = []() -> const tracy::SourceLocationData * {
             static const std::string lockName = std::string("Write ") + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};
             return &srcloc;
-        }()};
+        };
+        tracy::SharedLockableCtx tracyRead{tracyReadCtx()};
+        tracy::LockableCtx tracyWrite{tracyWriteCtx()};
 #endif
 
         inline static constexpr size_t GetBytesPerEntity() {

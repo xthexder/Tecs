@@ -13,6 +13,10 @@
     #include <windows.h>
 #endif
 
+#ifdef TECS_ENABLE_TRACY
+    #include <tracy/Tracy.hpp>
+#endif
+
 using namespace testing;
 using namespace Tecs;
 
@@ -71,6 +75,9 @@ void renderThread() {
 
             t = timer3;
         }
+#ifdef TECS_ENABLE_TRACY
+        FrameMark;
+#endif
         readCount++;
         badCount += bad.size();
         bad.clear();
