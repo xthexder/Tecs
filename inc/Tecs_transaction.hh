@@ -187,7 +187,7 @@ namespace Tecs {
             TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
 #endif
 #ifdef TECS_ENABLE_TRACY
-            ZoneNamedN(tracyScope, "EndTransaction", true);
+            ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
@@ -242,38 +242,49 @@ namespace Tecs {
                 }(),
                 ...);
 
-            // Acquire commit locks for all write-accessed components
-            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.metadata.CommitLock();
-            }
-            ( // For each AllComponentTypes
-                [this]() {
-                    if (is_write_allowed<AllComponentTypes, LockType>() &&
-                        this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
-                        this->instance.template Storage<AllComponentTypes>().CommitLock();
-                    }
-                }(),
-                ...);
+            {
 
-            // Swap read and write storage for all held commit locks
-            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                this->instance.metadata.readComponents.swap(this->instance.metadata.writeComponents);
-                this->instance.metadata.readValidEntities.swap(this->instance.metadata.writeValidEntities);
-            }
-            ( // For each AllComponentTypes
-                [this]() {
-                    if (is_write_allowed<AllComponentTypes, LockType>() &&
-                        this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
-                        auto &storage = this->instance.template Storage<AllComponentTypes>();
-
-                        storage.readComponents.swap(storage.writeComponents);
-                        if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                            storage.readValidEntities.swap(storage.writeValidEntities);
+#ifdef TECS_ENABLE_TRACY
+                ZoneNamedN(tracyCommitScope1, "CommitLock", true);
+#endif
+                // Acquire commit locks for all write-accessed components
+                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                    this->instance.metadata.CommitLock();
+                }
+                ( // For each AllComponentTypes
+                    [this]() {
+                        if (is_write_allowed<AllComponentTypes, LockType>() &&
+                            this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                            this->instance.template Storage<AllComponentTypes>().CommitLock();
                         }
-                        storage.CommitUnlock();
-                    }
-                }(),
-                ...);
+                    }(),
+                    ...);
+            }
+            {
+#ifdef TECS_ENABLE_TRACY
+                ZoneNamedN(tracyCommitScope2, "Commit", true);
+#endif
+                // Swap read and write storage for all held commit locks
+                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                    this->instance.metadata.readComponents.swap(this->instance.metadata.writeComponents);
+                    this->instance.metadata.readValidEntities.swap(this->instance.metadata.writeValidEntities);
+                    this->instance.metadata.CommitUnlock();
+                }
+                ( // For each AllComponentTypes
+                    [this]() {
+                        if (is_write_allowed<AllComponentTypes, LockType>() &&
+                            this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                            auto &storage = this->instance.template Storage<AllComponentTypes>();
+
+                            storage.readComponents.swap(storage.writeComponents);
+                            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                                storage.readValidEntities.swap(storage.writeValidEntities);
+                            }
+                            storage.CommitUnlock();
+                        }
+                    }(),
+                    ...);
+            }
 
             ( // For each AllComponentTypes
                 [this]() {
