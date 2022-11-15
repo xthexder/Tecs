@@ -266,8 +266,16 @@ namespace Tecs {
 #endif
                 // Swap read and write storage for all held commit locks
                 if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                    // Commit observers
+                    std::apply(
+                        [](auto &...args) {
+                            (args.Commit(), ...);
+                        },
+                        this->instance.eventLists);
+
                     this->instance.metadata.readComponents.swap(this->instance.metadata.writeComponents);
                     this->instance.metadata.readValidEntities.swap(this->instance.metadata.writeValidEntities);
+                    this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
                     this->instance.metadata.CommitUnlock();
                 }
                 ( // For each AllComponentTypes
@@ -313,14 +321,6 @@ namespace Tecs {
                 }(),
                 ...);
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                // Commit observers
-                std::apply(
-                    [](auto &...args) {
-                        (args.Commit(), ...);
-                    },
-                    this->instance.eventLists);
-
-                this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
                 this->instance.metadata.writeComponents = this->instance.metadata.readComponents;
                 this->instance.metadata.writeValidEntities = this->instance.metadata.readValidEntities;
             }
