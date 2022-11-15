@@ -229,12 +229,78 @@ namespace Tecs {
                 }
                 (NotifyGlobalObservers<AllComponentTypes>(), ...);
             }
-            UnlockIfNoCommit<AllComponentTypes...>();
+            ( // For each AllComponentTypes
+                [this]() {
+                    // Unlock any Noop Writes or Read locks early
+                    if (is_write_allowed<AllComponentTypes, LockType>()) {
+                        if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                            this->instance.template Storage<AllComponentTypes>().WriteUnlock();
+                        }
+                    } else if (is_read_allowed<AllComponentTypes, LockType>()) {
+                        this->instance.template Storage<AllComponentTypes>().ReadUnlock();
+                    }
+                }(),
+                ...);
+
+            // Acquire commit locks for all write-accessed components
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 this->instance.metadata.CommitLock();
             }
-            CommitLockInOrder<AllComponentTypes...>();
-            CommitUnlockInOrder<AllComponentTypes...>();
+            ( // For each AllComponentTypes
+                [this]() {
+                    if (is_write_allowed<AllComponentTypes, LockType>() &&
+                        this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                        this->instance.template Storage<AllComponentTypes>().CommitLock();
+                    }
+                }(),
+                ...);
+
+            // Swap read and write storage for all held commit locks
+            if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                this->instance.metadata.readComponents.swap(this->instance.metadata.writeComponents);
+                this->instance.metadata.readValidEntities.swap(this->instance.metadata.writeValidEntities);
+            }
+            ( // For each AllComponentTypes
+                [this]() {
+                    if (is_write_allowed<AllComponentTypes, LockType>() &&
+                        this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                        auto &storage = this->instance.template Storage<AllComponentTypes>();
+
+                        storage.readComponents.swap(storage.writeComponents);
+                        if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                            storage.readValidEntities.swap(storage.writeValidEntities);
+                        }
+                        storage.CommitUnlock();
+                    }
+                }(),
+                ...);
+
+            ( // For each AllComponentTypes
+                [this]() {
+                    if (is_write_allowed<AllComponentTypes, LockType>() &&
+                        this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+                        auto &storage = this->instance.template Storage<AllComponentTypes>();
+
+                        if (is_global_component<AllComponentTypes>()) {
+                            storage.writeComponents = storage.readComponents;
+                        } else if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                            storage.writeComponents = storage.readComponents;
+                            storage.writeValidEntities = storage.readValidEntities;
+                        } else {
+                            // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components
+                            // are valid.
+                            if (storage.readValidEntities.size() > storage.writeComponents.size() / 6) {
+                                storage.writeComponents = storage.readComponents;
+                            } else {
+                                for (auto &valid : storage.readValidEntities) {
+                                    storage.writeComponents[valid.index] = storage.readComponents[valid.index];
+                                }
+                            }
+                        }
+                        storage.WriteUnlock();
+                    }
+                }(),
+                ...);
             if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
                 // Commit observers
                 std::apply(
@@ -244,7 +310,8 @@ namespace Tecs {
                     this->instance.eventLists);
 
                 this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
-                this->instance.metadata.template CommitEntities<true>();
+                this->instance.metadata.writeComponents = this->instance.metadata.readComponents;
+                this->instance.metadata.writeValidEntities = this->instance.metadata.readValidEntities;
             }
             if (is_add_remove_allowed<LockType>()) {
                 this->instance.metadata.WriteUnlock();
@@ -325,41 +392,6 @@ namespace Tecs {
                         this->instance.template Storage<U>().readComponents[0]);
                 }
             }
-        }
-
-        // Call lock operations on Permissions in the same order they are defined in AllComponentTypes
-        // This is accomplished by filtering AllComponentTypes by Permissions
-        template<typename U, typename... Un>
-        inline void UnlockIfNoCommit() const {
-            if (is_write_allowed<U, LockType>()) {
-                if (!this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                    this->instance.template Storage<U>().WriteUnlock();
-                }
-            } else if (is_read_allowed<U, LockType>()) {
-                this->instance.template Storage<U>().ReadUnlock();
-            }
-            if constexpr (sizeof...(Un) > 0) UnlockIfNoCommit<Un...>();
-        }
-
-        template<typename U, typename... Un>
-        inline void CommitLockInOrder() const {
-            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                this->instance.template Storage<U>().CommitLock();
-            }
-            if constexpr (sizeof...(Un) > 0) CommitLockInOrder<Un...>();
-        }
-
-        template<typename U, typename... Un>
-        inline void CommitUnlockInOrder() const {
-            if (is_write_allowed<U, LockType>() && this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
-                if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                    this->instance.template Storage<U>().template CommitEntities<true>();
-                } else {
-                    this->instance.template Storage<U>().template CommitEntities<is_global_component<U>::value>();
-                }
-                this->instance.template Storage<U>().WriteUnlock();
-            }
-            if constexpr (sizeof...(Un) > 0) CommitUnlockInOrder<Un...>();
         }
     };
 }; // namespace Tecs

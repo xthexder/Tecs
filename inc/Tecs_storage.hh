@@ -268,38 +268,6 @@ namespace Tecs {
 #endif
         }
 
-        /**
-         * Swaps the read and write buffers and copies any changes so the read and write buffers match.
-         * This should only be called once between CommitLock() and WriteUnlock().
-         * The valid entity list is only copied if AllowAddRemove is true.
-         *
-         * This function will automatically call CommitUnlock().
-         */
-        template<bool AllowAddRemove>
-        inline void CommitEntities() {
-            if (AllowAddRemove) {
-                // The number of components, or list of valid entities may have changed.
-                readComponents.swap(writeComponents);
-                readValidEntities.swap(writeValidEntities);
-                CommitUnlock();
-
-                writeComponents = readComponents;
-                writeValidEntities = readValidEntities;
-            } else {
-                readComponents.swap(writeComponents);
-                CommitUnlock();
-
-                // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
-                if (readValidEntities.size() > writeComponents.size() / 6) {
-                    writeComponents = readComponents;
-                } else {
-                    for (auto &valid : readValidEntities) {
-                        writeComponents[valid.index] = readComponents[valid.index];
-                    }
-                }
-            }
-        }
-
         inline void WriteUnlock() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             traceInfo.Trace(TraceEvent::Type::WriteUnlock);
