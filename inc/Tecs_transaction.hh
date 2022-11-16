@@ -308,7 +308,7 @@ namespace Tecs {
                         } else {
                             // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components
                             // are valid.
-                            if (storage.readValidEntities.size() > storage.writeComponents.size() / 6) {
+                            if (storage.readValidEntities.size() > storage.readComponents.size() / 6) {
                                 storage.writeComponents = storage.readComponents;
                             } else {
                                 for (auto &valid : storage.readValidEntities) {

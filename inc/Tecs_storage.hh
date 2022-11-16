@@ -245,10 +245,10 @@ namespace Tecs {
 
             // Unlock read copies immediately after commit completion
             uint32_t current = readers;
-            if (current == READER_LOCKED) {
-                if (!readers.compare_exchange_strong(current, READER_FREE)) {
-                    throw std::runtime_error("CommitUnlock readers changed unexpectedly");
-                }
+            if (current != READER_LOCKED) {
+                throw std::runtime_error("CommitUnlock called outside of CommitLock");
+            } else if (!readers.compare_exchange_strong(current, READER_FREE)) {
+                throw std::runtime_error("CommitUnlock readers changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait
             readers.notify_all();
