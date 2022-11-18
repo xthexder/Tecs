@@ -245,10 +245,10 @@ namespace Tecs {
 
             // Unlock read copies immediately after commit completion
             uint32_t current = readers;
-            if (current == READER_LOCKED) {
-                if (!readers.compare_exchange_strong(current, READER_FREE)) {
-                    throw std::runtime_error("CommitUnlock readers changed unexpectedly");
-                }
+            if (current != READER_LOCKED) {
+                throw std::runtime_error("CommitUnlock called outside of CommitLock");
+            } else if (!readers.compare_exchange_strong(current, READER_FREE)) {
+                throw std::runtime_error("CommitUnlock readers changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait
             readers.notify_all();
@@ -266,38 +266,6 @@ namespace Tecs {
 #ifdef TECS_ENABLE_TRACY
             tracyRead.AfterUnlock();
 #endif
-        }
-
-        /**
-         * Swaps the read and write buffers and copies any changes so the read and write buffers match.
-         * This should only be called once between CommitLock() and WriteUnlock().
-         * The valid entity list is only copied if AllowAddRemove is true.
-         *
-         * This function will automatically call CommitUnlock().
-         */
-        template<bool AllowAddRemove>
-        inline void CommitEntities() {
-            if (AllowAddRemove) {
-                // The number of components, or list of valid entities may have changed.
-                readComponents.swap(writeComponents);
-                readValidEntities.swap(writeValidEntities);
-                CommitUnlock();
-
-                writeComponents = readComponents;
-                writeValidEntities = readValidEntities;
-            } else {
-                readComponents.swap(writeComponents);
-                CommitUnlock();
-
-                // Based on benchmarks, it is faster to bulk copy if more than roughly 1/6 of the components are valid.
-                if (readValidEntities.size() > writeComponents.size() / 6) {
-                    writeComponents = readComponents;
-                } else {
-                    for (auto &valid : readValidEntities) {
-                        writeComponents[valid.index] = readComponents[valid.index];
-                    }
-                }
-            }
         }
 
         inline void WriteUnlock() {
