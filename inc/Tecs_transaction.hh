@@ -197,7 +197,7 @@ namespace Tecs {
             }
 
             ( // For each AllComponentTypes, unlock any Noop Writes or Read locks early
-                [this] {
+                [&] {
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
                             this->instance.template Storage<AllComponentTypes>().WriteUnlock();
@@ -216,7 +216,7 @@ namespace Tecs {
                     if (this->writeAccessedFlags[0]) this->instance.metadata.CommitLock();
                 }
                 ( // For each AllComponentTypes
-                    [this] {
+                    [&] {
                         if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                             if (this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
                                 this->instance.template Storage<AllComponentTypes>().CommitLock();
@@ -245,7 +245,7 @@ namespace Tecs {
                     }
                 }
                 ( // For each AllComponentTypes
-                    [this] {
+                    [&] {
                         if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                             // Skip if no write accesses were made
                             if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) return;
@@ -264,7 +264,7 @@ namespace Tecs {
             }
 
             ( // For each AllComponentTypes, reset the write storage to match read.
-                [this] {
+                [&] {
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         // Skip if no write accesses were made
                         if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) return;
