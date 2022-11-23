@@ -107,6 +107,11 @@ namespace Tecs {
             }
         }
 
+        /**
+         * Creates a new entity with AddRemove lock permissions.
+         *
+         * Note: This function invalidates all references to components if a storage resize occurs.
+         */
         inline Entity NewEntity() const {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
             base->writeAccessedFlags[0] = true;
