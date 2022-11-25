@@ -51,8 +51,8 @@ namespace Tecs {
                     uint32_t next = currentReaders + 1;
                     if (readers.compare_exchange_weak(currentReaders,
                             next,
-                            std::memory_order::acquire,
-                            std::memory_order::relaxed)) {
+                            std::memory_order_acquire,
+                            std::memory_order_relaxed)) {
                         // Lock aquired
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::ReadLock);
@@ -109,7 +109,7 @@ namespace Tecs {
             if (current == READER_FREE || current == READER_LOCKED) {
                 throw std::runtime_error("ReadUnlock called outside of ReadLock");
             }
-            readers.fetch_sub(1, std::memory_order::release);
+            readers.fetch_sub(1, std::memory_order_release);
 #if __cpp_lib_atomic_wait
             readers.notify_all();
 #endif
@@ -140,8 +140,8 @@ namespace Tecs {
                 if (current == WRITER_FREE) {
                     if (writer.compare_exchange_weak(current,
                             WRITER_LOCKED,
-                            std::memory_order::acquire,
-                            std::memory_order::relaxed)) {
+                            std::memory_order_acquire,
+                            std::memory_order_relaxed)) {
                         // Lock aquired
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::WriteLock);
@@ -202,7 +202,7 @@ namespace Tecs {
             uint32_t current = writer;
             if (current != WRITER_LOCKED) {
                 throw std::runtime_error("CommitLock called outside of WriteLock");
-            } else if (!writer.compare_exchange_strong(current, WRITER_COMMIT, std::memory_order::acquire)) {
+            } else if (!writer.compare_exchange_strong(current, WRITER_COMMIT, std::memory_order_acquire)) {
                 throw std::runtime_error("CommitLock writer changed unexpectedly");
             }
 
@@ -212,8 +212,8 @@ namespace Tecs {
                 if (current == READER_FREE) {
                     if (readers.compare_exchange_weak(current,
                             READER_LOCKED,
-                            std::memory_order::acquire,
-                            std::memory_order::relaxed)) {
+                            std::memory_order_acquire,
+                            std::memory_order_relaxed)) {
                         // Lock aquired
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::CommitLock);
@@ -256,7 +256,7 @@ namespace Tecs {
             uint32_t current = readers;
             if (current != READER_LOCKED) {
                 throw std::runtime_error("CommitUnlock called outside of CommitLock");
-            } else if (!readers.compare_exchange_strong(current, READER_FREE, std::memory_order::release)) {
+            } else if (!readers.compare_exchange_strong(current, READER_FREE, std::memory_order_release)) {
                 throw std::runtime_error("CommitUnlock readers changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait
@@ -266,7 +266,7 @@ namespace Tecs {
             current = writer;
             if (current != WRITER_COMMIT) {
                 throw std::runtime_error("CommitUnlock called outside of CommitLock");
-            } else if (!writer.compare_exchange_strong(current, WRITER_LOCKED, std::memory_order::release)) {
+            } else if (!writer.compare_exchange_strong(current, WRITER_LOCKED, std::memory_order_release)) {
                 throw std::runtime_error("CommitUnlock writer changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait
@@ -285,7 +285,7 @@ namespace Tecs {
             // Unlock read and write copies
             uint32_t current = readers;
             if (current == READER_LOCKED) {
-                if (!readers.compare_exchange_strong(current, READER_FREE, std::memory_order::release)) {
+                if (!readers.compare_exchange_strong(current, READER_FREE, std::memory_order_release)) {
                     throw std::runtime_error("WriteUnlock readers changed unexpectedly");
                 }
             }
@@ -296,7 +296,7 @@ namespace Tecs {
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");
-            } else if (!writer.compare_exchange_strong(current, WRITER_FREE, std::memory_order::release)) {
+            } else if (!writer.compare_exchange_strong(current, WRITER_FREE, std::memory_order_release)) {
                 throw std::runtime_error("WriteUnlock writer changed unexpectedly");
             }
 #if __cpp_lib_atomic_wait
