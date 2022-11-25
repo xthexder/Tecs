@@ -6,5 +6,6 @@
     },
     "C_Cpp.files.exclude": {
         "tests/tracy/server/": true
-    }
+    },
+    "C_Cpp.autoAddFileAssociations": false
 }
