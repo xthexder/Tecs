@@ -1130,6 +1130,76 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
+        Timer t("Test AddRemove commit lock metadata race");
+        for (size_t i = 0; i < 10; i++) {
+            Tecs::Entity entity;
+            std::thread writeThreadTransform;
+            std::thread writeThreadRenderable;
+            std::thread writeThreadScript;
+            {
+                auto addLock = ecs.StartTransaction<Tecs::AddRemove>();
+                entity = addLock.NewEntity();
+                entity.Set<Transform>(addLock, 42.0, 64.0, 128.0);
+                entity.Set<Renderable>(addLock, "test_value");
+                entity.Set<Script>(addLock, std::initializer_list<uint8_t>({56, 45, 34}));
+
+                writeThreadTransform = std::thread([&] {
+                    // Start a write transaction during the AddRemove so it starts immediately after
+                    auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
+                    Assert(entity.Exists(writeLock), "Expected new entity to exist after commit");
+                    Assert(entity.Has<Transform>(writeLock), "Expected new entity to have a Transform after commit");
+
+                    try {
+                        auto &transform = entity.Get<const Transform>(writeLock);
+                        Assert(transform.pos[0] == 42.0, "Expected new Transform to have correct value");
+                        Assert(transform.pos[1] == 64.0, "Expected new Transform to have correct value");
+                        Assert(transform.pos[2] == 128.0, "Expected new Transform to have correct value");
+                    } catch (std::runtime_error &e) {
+                        std::string msg = e.what();
+                        Assert(false, "Received unexpected runtime_error: " + msg);
+                    }
+                });
+
+                writeThreadRenderable = std::thread([&] {
+                    // Start a write transaction during the AddRemove so it starts immediately after
+                    auto writeLock = ecs.StartTransaction<Tecs::Write<Renderable>>();
+                    try {
+                        auto &renderable = entity.Get<Renderable>(writeLock);
+                        Assert(renderable.name == "test_value", "Expected new Renderable to have correct value");
+                    } catch (std::runtime_error &e) {
+                        std::string msg = e.what();
+                        Assert(false, "Received unexpected runtime_error: " + msg);
+                    }
+                });
+
+                writeThreadScript = std::thread([&] {
+                    // Start a write transaction during the AddRemove so it starts immediately after
+                    auto writeLock = ecs.StartTransaction<Tecs::Write<Script>>();
+                    try {
+                        auto &script = entity.Set<Script>(writeLock, std::initializer_list<uint8_t>({12, 23, 34}));
+                        Assert(script.data.size() == 3.0, "Expected new Script to have correct size");
+                        Assert(script.data[0] == 12, "Expected new Script to have correct value");
+                        Assert(script.data[1] == 23, "Expected new Script to have correct value");
+                        Assert(script.data[2] == 34, "Expected new Script to have correct value");
+                    } catch (std::runtime_error &e) {
+                        std::string msg = e.what();
+                        Assert(false, "Received unexpected runtime_error: " + msg);
+                    }
+                });
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            writeThreadTransform.join();
+            writeThreadRenderable.join();
+            writeThreadScript.join();
+
+            {
+                auto removeLock = ecs.StartTransaction<Tecs::AddRemove>();
+                entity.Destroy(removeLock);
+            }
+        }
+    }
+    {
         Timer t("Test nested transactions");
         try {
             auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
