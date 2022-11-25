@@ -181,11 +181,13 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->template SetAccessFlag<T>(true);
 
-            if (index >= lock.instance.metadata.writeComponents.size()) {
+            auto &metadataList =
+                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            if (index >= metadataList.size()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
 
-            auto &metadata = lock.instance.metadata.writeComponents[index];
+            auto &metadata = metadataList[index];
             if (!metadata[0] || metadata.generation != generation) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
@@ -212,11 +214,13 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->template SetAccessFlag<T>(true);
 
-            if (index >= lock.instance.metadata.writeComponents.size()) {
+            auto &metadataList =
+                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            if (index >= metadataList.size()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
 
-            auto &metadata = lock.instance.metadata.writeComponents[index];
+            auto &metadata = metadataList[index];
             if (!metadata[0] || metadata.generation != generation) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
