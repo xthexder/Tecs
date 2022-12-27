@@ -30,7 +30,7 @@ static std::thread::id transformThreadId;
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_ITERATIONS 100
 #define ADD_REMOVE_PER_LOOP 1000
-#define SCRIPT_THREAD_COUNT 1
+#define SCRIPT_THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
 #define RENDERABLE_DIVISOR 3
