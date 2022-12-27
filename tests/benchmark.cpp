@@ -95,8 +95,7 @@ void renderThread() {
     std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
 }
 
-void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock,
-    nonstd::span<Entity> entities) {
+void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock, EntityView entities) {
     Timer t(*workerTimer);
     for (auto &e : entities) {
         auto &script = e.Get<Script>(lock);
@@ -129,8 +128,7 @@ void scriptThread() {
             size_t workPerThread = entities.size() / SCRIPT_THREAD_COUNT;
             size_t workOffset = 0;
             for (size_t i = 0; i < SCRIPT_THREAD_COUNT; i++) {
-                nonstd::span<Entity> subspan =
-                    entities.subspan(workOffset, std::min(workPerThread, entities.size() - workOffset));
+                EntityView subspan = entities.subview(workOffset, workPerThread);
                 workers[i] = std::async(&scriptWorkerThread, &workerTimers[i], lock, subspan);
                 workOffset += workPerThread;
             }
