@@ -621,15 +621,23 @@ int main(int /* argc */, char ** /* argv */) {
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         auto &entities = writeLock.EntitiesWith<Transform>();
         size_t prevSize = entities.size();
-        for (size_t i = 0; i < 100; i++) {
+        Tecs::Entity startingEntity = entities[0];
+        // Add enough entities to overflow current vector capacity
+        for (size_t i = 0; i < 10000; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
+            Assert(entities[0] == startingEntity, "Expected entity list to be stable when adding entities.");
 
             e.Set<Transform>(writeLock, 1.0, 0.0, 0.0);
             Assert(entities.size() == prevSize, "Entity list should not change size during iteration.");
+            Assert(entities[0] == startingEntity, "Expected entity list to be stable when adding entities.");
         }
-        Assert(writeLock.EntitiesWith<Transform>().size() == prevSize + 100,
-            "Entity list should be updated for later calls.");
+
+        auto &entities2 = writeLock.EntitiesWith<Transform>();
+        Assert(entities2.size() == prevSize + 10000, "Entity list should be updated for later calls.");
+        for (size_t i = 0; i < 9900; i++) {
+            entities2[prevSize + i].Destroy(writeLock);
+        }
     }
     {
         Timer t("Test write priority");

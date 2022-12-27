@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Tecs_entity.hh"
+#include "Tecs_entity_view.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
 #include "Tecs_transaction.hh"
-#include "nonstd/span.hpp"
 
 #include <bitset>
 #include <cstddef>
@@ -78,14 +78,14 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline constexpr const nonstd::span<Entity> PreviousEntitiesWith() const {
+        inline constexpr const EntityView PreviousEntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             return instance.template Storage<T>().readValidEntities;
         }
 
         template<typename T>
-        inline constexpr const nonstd::span<Entity> EntitiesWith() const {
+        inline constexpr const EntityView EntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             if (permissions[0]) {
@@ -95,11 +95,11 @@ namespace Tecs {
             }
         }
 
-        inline constexpr const nonstd::span<Entity> PreviousEntities() const {
+        inline constexpr const EntityView PreviousEntities() const {
             return instance.metadata.readValidEntities;
         }
 
-        inline constexpr const nonstd::span<Entity> Entities() const {
+        inline constexpr const EntityView Entities() const {
             if (permissions[0]) {
                 return instance.metadata.writeValidEntities;
             } else {

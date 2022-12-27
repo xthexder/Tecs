@@ -259,7 +259,7 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        inline void Destroy(LockType &lock) {
+        inline void Destroy(LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
             lock.base->writeAccessedFlags[0] = true;
 
@@ -280,6 +280,14 @@ namespace Tecs {
             lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];
             lock.instance.metadata.writeValidEntities[validIndex] = Entity();
+        }
+
+        template<typename LockType>
+        inline void Destroy(LockType &lock) {
+            static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
+
+            ((const Entity *)this)->Destroy(lock);
+
             generation = 0;
             index = 0;
         }
