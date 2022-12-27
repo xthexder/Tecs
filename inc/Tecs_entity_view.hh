@@ -109,9 +109,8 @@ namespace Tecs {
 
         typedef std::reverse_iterator<iterator> reverse_iterator;
 
-        constexpr EntityView() {}
-        constexpr EntityView(const std::vector<Entity> &storage)
-            : storage(&storage), start_index(0), end_index(storage.size()) {}
+        EntityView() {}
+        EntityView(const std::vector<Entity> &storage) : storage(&storage), start_index(0), end_index(storage.size()) {}
         EntityView(const std::vector<Entity> &storage, size_t start, size_t end)
             : storage(&storage), start_index(start), end_index(end) {
             if (start > storage.size()) {
