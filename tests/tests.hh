@@ -29,6 +29,9 @@ namespace testing {
         }
     }
 
+    void TestAmbiguousLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);
+    void TestAmbiguousLock(Tecs::Lock<ECS, Tecs::Write<Transform>> lock);
+
     void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock);
     void TestWriteLock(Tecs::Lock<ECS, Tecs::Write<Transform>> lock);
     void TestAddRemoveLock(Tecs::Lock<ECS, Tecs::AddRemove> lock);

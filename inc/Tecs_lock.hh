@@ -62,16 +62,20 @@ namespace Tecs {
             // clang-format on
         }
 
-        // Reference an existing transaction
         template<typename... PermissionsSource>
-        inline Lock(const Lock<ECS, PermissionsSource...> &source)
-            : instance(source.instance), base(source.base), permissions(source.permissions) {
+        static constexpr bool has_all_permissions() {
             using SourceLockType = Lock<ECS, PermissionsSource...>;
-            static_assert(is_add_remove_allowed<SourceLockType>() || !is_add_remove_allowed<LockType>(),
-                "AddRemove permission is missing.");
-            static_assert(std::conjunction<is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>(),
-                "Lock types are not a subset of existing permissions.");
+            if constexpr (is_add_remove_allowed<LockType>() && !is_add_remove_allowed<SourceLockType>()) {
+                return false;
+            } else {
+                return std::conjunction<is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>();
+            }
         }
+
+        // Reference an existing transaction
+        template<typename... PermissionsSource, std::enable_if_t<has_all_permissions<PermissionsSource...>(), int> = 0>
+        inline Lock(const Lock<ECS, PermissionsSource...> &source)
+            : instance(source.instance), base(source.base), permissions(source.permissions) {}
 
         inline constexpr ECS &GetInstance() const {
             return instance;
