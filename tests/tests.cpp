@@ -946,6 +946,7 @@ int main(int /* argc */, char ** /* argv */) {
             }
         }
         TestReadLock(readLockAll);
+        TestAmbiguousLock(readLockAll);
     }
     {
         Timer t("Test component write lock typecasting");
@@ -990,6 +991,7 @@ int main(int /* argc */, char ** /* argv */) {
         }
         TestReadLock(writeLockAll);
         TestWriteLock(writeLockAll);
+        TestAmbiguousLock((Tecs::Lock<ECS, Tecs::Read<Transform>>)writeLockAll);
     }
     {
         Timer t("Test entity write lock typecasting");
@@ -1260,6 +1262,18 @@ int main(int /* argc */, char ** /* argv */) {
 }
 
 namespace testing {
+    void TestAmbiguousLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
+        for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+            Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
+        }
+    }
+
+    void TestAmbiguousLock(Tecs::Lock<ECS, Tecs::Write<Transform>> lock) {
+        for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
+            Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
+        }
+    }
+
     void TestReadLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
         for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
             Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
