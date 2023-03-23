@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -21,6 +22,9 @@
 static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
 
 namespace Tecs {
+    template<typename, typename...>
+    class DynamicLock;
+
     /**
      * Lock<ECS, Permissions...> is a reference to lock permissions held by an active Transaction.
      *
@@ -49,6 +53,11 @@ namespace Tecs {
         ECS &instance;
         std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
         std::bitset<1 + sizeof...(AllComponentTypes)> permissions;
+
+        // Private constructor for DynamicLock to Lock conversion
+        template<typename... PermissionsSource>
+        inline Lock(ECS &instance, decltype(base) base, decltype(permissions) permissions)
+            : instance(instance), base(base), permissions(permissions) {}
 
     public:
         // Start a new transaction
@@ -347,6 +356,48 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
+        template<typename, typename...>
+        friend class DynamicLock;
         friend struct Entity;
+    };
+
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... StaticPermissions>
+    class DynamicLock<ECSType<AllComponentTypes...>, StaticPermissions...>
+        : public Lock<ECSType<AllComponentTypes...>, StaticPermissions...> {
+    private:
+        using ECS = ECSType<AllComponentTypes...>;
+
+        std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+
+    public:
+        template<typename LockType>
+        DynamicLock(const LockType &lock) : Lock<ECS, StaticPermissions...>(lock) {
+            readPermissions[0] = true;
+            ((readPermissions[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
+                     is_read_allowed<AllComponentTypes, LockType>()),
+                ...);
+        }
+
+        template<typename... DynamicPermissions>
+        std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
+            if constexpr (Lock<ECS, DynamicPermissions...>::template has_all_permissions<StaticPermissions...>()) {
+                return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+            } else {
+                std::bitset<1 + sizeof...(AllComponentTypes)> requestedRead, requestedWrite;
+                requestedRead[0] = true;
+                requestedWrite[1] = Tecs::is_add_remove_allowed<DynamicPermissions...>();
+                ((requestedRead[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
+                         is_read_allowed<AllComponentTypes, DynamicPermissions...>()),
+                    ...);
+                ((requestedWrite[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
+                         is_write_allowed<AllComponentTypes, DynamicPermissions...>()),
+                    ...);
+                if ((requestedRead & readPermissions) == requestedRead &&
+                    (requestedWrite & this->permissions) == requestedWrite) {
+                    return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+                }
+                return {};
+            }
+        }
     };
 }; // namespace Tecs

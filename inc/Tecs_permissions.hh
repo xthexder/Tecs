@@ -11,6 +11,8 @@ namespace Tecs {
     template<typename, typename...>
     class Lock {};
     template<typename, typename...>
+    class DynamicLock {};
+    template<typename, typename...>
     class Transaction {};
 
     /**
@@ -108,22 +110,34 @@ namespace Tecs {
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
 
-    // Lock<Permissions...> specializations
+    // Lock<Permissions...> and DynamicLock<Permissions...> specializations
     // clang-format off
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
 
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
 
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<const DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
     // clang-format on
 
     // Check SubLock <= Lock for component type T
