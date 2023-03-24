@@ -27,6 +27,7 @@ namespace Tecs {
     extern thread_local std::array<size_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
     extern thread_local size_t activeTransactionsCount;
     extern std::atomic_size_t nextEcsId;
+    extern std::atomic_size_t nextTransactionId;
 #endif
 
     /**
@@ -41,6 +42,7 @@ namespace Tecs {
     public:
         BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
 #ifndef TECS_HEADER_ONLY
+            transactionId = ++nextTransactionId;
             for (size_t i = 0; i < activeTransactionsCount; i++) {
                 if (activeTransactions[i] == instance.ecsId)
                     throw std::runtime_error("Nested transactions are not allowed");
@@ -64,6 +66,9 @@ namespace Tecs {
 
     protected:
         ECSType<AllComponentTypes...> &instance;
+#ifndef TECS_HEADER_ONLY
+        size_t transactionId;
+#endif
 
         std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 

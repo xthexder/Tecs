@@ -97,6 +97,12 @@ namespace Tecs {
             return instance;
         }
 
+#ifndef TECS_HEADER_ONLY
+        inline size_t GetTransactionId() const {
+            return base->transactionId;
+        }
+#endif
+
         template<typename T>
         inline const EntityView PreviousEntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
