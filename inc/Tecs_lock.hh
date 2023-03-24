@@ -71,18 +71,25 @@ namespace Tecs {
             // clang-format on
         }
 
+        // Returns true if this lock type can be constructed from a lock with the specified source permissions
         template<typename... PermissionsSource>
-        static constexpr bool has_all_permissions() {
+        static constexpr bool is_lock_subset() {
             using SourceLockType = Lock<ECS, PermissionsSource...>;
             if constexpr (is_add_remove_allowed<LockType>() && !is_add_remove_allowed<SourceLockType>()) {
                 return false;
             } else {
-                return std::conjunction<is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>();
+                return std::conjunction<Tecs::is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>();
             }
         }
 
+        // Returns true if this lock type has all of the requested permissions
+        template<typename... RequestedPermissions>
+        static constexpr bool has_permissions() {
+            return Lock<ECS, RequestedPermissions...>::template is_lock_subset<LockType>();
+        }
+
         // Reference an existing transaction
-        template<typename... PermissionsSource, std::enable_if_t<has_all_permissions<PermissionsSource...>(), int> = 0>
+        template<typename... PermissionsSource, std::enable_if_t<is_lock_subset<PermissionsSource...>(), int> = 0>
         inline Lock(const Lock<ECS, PermissionsSource...> &source)
             : instance(source.instance), base(source.base), permissions(source.permissions) {}
 
@@ -293,10 +300,7 @@ namespace Tecs {
         template<typename... PermissionsSubset>
         inline Lock<ECS, PermissionsSubset...> Subset() const {
             using NewLockType = Lock<ECS, PermissionsSubset...>;
-            static_assert(is_add_remove_allowed<LockType>() || !is_add_remove_allowed<NewLockType>(),
-                "AddRemove permission is missing.");
-            static_assert(std::conjunction<is_lock_subset<AllComponentTypes, NewLockType, LockType>...>(),
-                "Lock types are not a subset of existing permissions.");
+            static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
 
             return Lock<ECS, PermissionsSubset...>(*this);
         }
@@ -367,31 +371,40 @@ namespace Tecs {
     private:
         using ECS = ECSType<AllComponentTypes...>;
 
-        std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+        const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+
+        template<typename... Permissions>
+        static const auto generateReadBitset() {
+            std::bitset<1 + sizeof...(AllComponentTypes)> result;
+            result[0] = true;
+            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_read_allowed<AllComponentTypes, Permissions...>()),
+                ...);
+            return result;
+        }
+
+        template<typename... Permissions>
+        static const auto generateWriteBitset() {
+            std::bitset<1 + sizeof...(AllComponentTypes)> result;
+            result[0] = Tecs::is_add_remove_allowed<Permissions...>();
+            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_write_allowed<AllComponentTypes, Permissions...>()),
+                ...);
+            return result;
+        }
 
     public:
         template<typename LockType>
-        DynamicLock(const LockType &lock) : Lock<ECS, StaticPermissions...>(lock) {
-            readPermissions[0] = true;
-            ((readPermissions[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
-                     is_read_allowed<AllComponentTypes, LockType>()),
-                ...);
-        }
+        DynamicLock(const LockType &lock)
+            : Lock<ECS, StaticPermissions...>(lock), readPermissions(generateReadBitset<LockType>()) {}
 
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
-            if constexpr (Lock<ECS, DynamicPermissions...>::template has_all_permissions<StaticPermissions...>()) {
+            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicPermissions...>()) {
                 return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
             } else {
-                std::bitset<1 + sizeof...(AllComponentTypes)> requestedRead, requestedWrite;
-                requestedRead[0] = true;
-                requestedWrite[1] = Tecs::is_add_remove_allowed<DynamicPermissions...>();
-                ((requestedRead[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
-                         is_read_allowed<AllComponentTypes, DynamicPermissions...>()),
-                    ...);
-                ((requestedWrite[1 + this->instance.template GetComponentIndex<AllComponentTypes>()] =
-                         is_write_allowed<AllComponentTypes, DynamicPermissions...>()),
-                    ...);
+                static const auto requestedRead = generateReadBitset<DynamicPermissions...>();
+                static const auto requestedWrite = generateWriteBitset<DynamicPermissions...>();
                 if ((requestedRead & readPermissions) == requestedRead &&
                     (requestedWrite & this->permissions) == requestedWrite) {
                     return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
