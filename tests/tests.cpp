@@ -24,6 +24,8 @@ int main(int /* argc */, char ** /* argv */) {
     std::cout << ecs.GetBytesPerEntity() << " bytes per entity * N = " << (ecs.GetBytesPerEntity() * ENTITY_COUNT)
               << " bytes total" << std::endl;
 
+    Assert(Tecs::nextTransactionId == 0, "Expected next transaction id to be 0");
+
     Tecs::Observer<ECS, Tecs::EntityEvent> entityObserver;
     Tecs::Observer<ECS, Tecs::ComponentEvent<Transform>> transformObserver;
     Tecs::Observer<ECS, Tecs::ComponentEvent<GlobalComponent>> globalCompObserver;
@@ -33,7 +35,10 @@ int main(int /* argc */, char ** /* argv */) {
         entityObserver = writeLock.Watch<Tecs::EntityEvent>();
         transformObserver = writeLock.Watch<Tecs::ComponentEvent<Transform>>();
         globalCompObserver = writeLock.Watch<Tecs::ComponentEvent<GlobalComponent>>();
+
+        Assert(writeLock.GetTransactionId() == 1, "Expected transaction id to be 1");
     }
+    Assert(Tecs::nextTransactionId == 1, "Expected next transaction id to be 1");
     bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");
@@ -56,6 +61,8 @@ int main(int /* argc */, char ** /* argv */) {
         auto &gc2 = writeLock.Get<GlobalComponent>();
         Assert(gc2.globalCounter == 1, "Global counter should be read back as 1");
         Assert(globalComponentInitialized, "Global component should be initialized");
+
+        Assert(writeLock.GetTransactionId() == 2, "Expected transaction id to be 2");
     }
     {
         Timer t("Test update global counter");
@@ -945,6 +952,20 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Script>(readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
         }
+        { // Test DynamicLock typecast method
+            Tecs::Lock<ECS, Tecs::Read<Transform, Renderable, Script>> readLockSubset = readLockAll;
+            Tecs::DynamicLock<ECS, Tecs::Read<Transform>> dynamicLock = readLockSubset;
+            for (Tecs::Entity e : dynamicLock.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(dynamicLock).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto readLockScript = dynamicLock.TryLock<Tecs::Read<Script, Renderable>>();
+            Assert(readLockScript.has_value(), "Expected readLockScript to be valid");
+            for (Tecs::Entity e : readLockScript->EntitiesWith<Script>()) {
+                Assert(e.Get<Script>(*readLockScript).data[0] == 1, "Expected script[0] to be 1");
+            }
+            auto readLockGlobalCompoennt = dynamicLock.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalCompoennt.has_value(), "Expected readLockGlobalCompoennt to be invalid");
+        }
         TestReadLock(readLockAll);
         TestAmbiguousLock(readLockAll);
     }
@@ -1254,6 +1275,14 @@ int main(int /* argc */, char ** /* argv */) {
 
             e.generation++;
             Assert(theMap[e] == 0, "Expected value to not be set");
+        }
+    }
+    {
+        Timer t("Test total transaction count via transaction id");
+        {
+            auto readLock = ecs.StartTransaction<>();
+            std::cout << "Total test transactions: " << readLock.GetTransactionId() << std::endl;
+            Assert(readLock.GetTransactionId() == 335, "Expected transaction id to be 335");
         }
     }
 
