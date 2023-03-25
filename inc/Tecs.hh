@@ -106,6 +106,14 @@ namespace Tecs {
             }
         }
 
+        /**
+         * Returns true if the Component type is part of this ECS.
+         */
+        template<typename U>
+        inline static constexpr bool IsComponent() {
+            return contains<U, Tn...>();
+        }
+
         inline static constexpr size_t GetBytesPerEntity() {
             return (ComponentIndex<Tn>::GetBytesPerEntity() + ...);
         }
