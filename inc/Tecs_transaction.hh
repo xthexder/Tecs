@@ -38,9 +38,40 @@ namespace Tecs {
      * Once a Transaction is deconstructed, all Locks referencing its permissions become invalid.
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
-    class BaseTransaction {
+    class Transaction<ECSType<AllComponentTypes...>> {
+    private:
+        using ECS = ECSType<AllComponentTypes...>;
+        using EntityMetadata = typename ECS::EntityMetadata;
+        // using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
+
+#ifdef TECS_ENABLE_TRACY
+        //     static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {
+        //         static const tracy::SourceLocationData srcloc{"TecsTransaction",
+        //             FlatPermissions::Name(),
+        //             __FILE__,
+        //             __LINE__,
+        //             0};
+        //         return &srcloc;
+        //     };
+        // #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
+        //     tracy::ScopedZone tracyZone{tracyCtx(), TRACY_CALLSTACK, true};
+        // #else
+        //     tracy::ScopedZone tracyZone{tracyCtx(), true};
+        // #endif
+#endif
+
+        ECS &instance;
+#ifndef TECS_HEADER_ONLY
+        size_t transactionId;
+#endif
+
+        std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions, writePermissions, writeAccessedFlags;
+        std::array<uint32_t, 1 + sizeof...(AllComponentTypes)> readLockReferences, writeLockReferences;
+
     public:
-        BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
+        template<typename LockType>
+        inline Transaction(LockType &lock)
+            : instance(lock.instance), readLockReferences({0}), writeLockReferences({0}) {
 #ifndef TECS_HEADER_ONLY
             transactionId = ++nextTransactionId;
             for (size_t i = 0; i < activeTransactionsCount; i++) {
@@ -53,99 +84,58 @@ namespace Tecs {
             }
             activeTransactions[activeTransactionsCount++] = instance.ecsId;
 #endif
-        }
-        // Delete copy constructor
-        BaseTransaction(const BaseTransaction &) = delete;
-
-        virtual ~BaseTransaction() {
-#ifndef TECS_HEADER_ONLY
-            auto start = activeTransactions.begin();
-            activeTransactionsCount = std::remove(start, start + activeTransactionsCount, instance.ecsId) - start;
-#endif
-        }
-
-    protected:
-        ECSType<AllComponentTypes...> &instance;
-#ifndef TECS_HEADER_ONLY
-        size_t transactionId;
-#endif
-
-        std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
-
-        template<typename T>
-        inline void SetAccessFlag(bool value) {
-            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
-        }
-
-        template<typename, typename...>
-        friend class Lock;
-        friend struct Entity;
-    };
-
-    template<typename... AllComponentTypes, typename... Permissions>
-    class Transaction<ECS<AllComponentTypes...>, Permissions...> : public BaseTransaction<ECS, AllComponentTypes...> {
-    private:
-        using LockType = Lock<ECS<AllComponentTypes...>, Permissions...>;
-        using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
-        using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
-
-#ifdef TECS_ENABLE_TRACY
-        static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {
-            static const tracy::SourceLocationData srcloc{"TecsTransaction",
-                FlatPermissions::Name(),
-                __FILE__,
-                __LINE__,
-                0};
-            return &srcloc;
-        };
-    #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
-        tracy::ScopedZone tracyZone{tracyCtx(), TRACY_CALLSTACK, true};
-    #else
-        tracy::ScopedZone tracyZone{tracyCtx(), true};
-    #endif
-#endif
-
-    public:
-        inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
+            // TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
 #endif
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyScope, "StartTransaction", true);
 #endif
 
+            readPermissions[0] = true;
+            writePermissions[0] = is_add_remove_allowed<LockType>();
+            // clang-format off
+            ((
+                readPermissions[1 + instance.template GetComponentIndex<AllComponentTypes>()] = is_read_allowed<AllComponentTypes, LockType>()
+            ), ...);
+            ((
+                writePermissions[1 + instance.template GetComponentIndex<AllComponentTypes>()] = is_write_allowed<AllComponentTypes, LockType>()
+            ), ...);
+            // clang-format on
+
             std::bitset<1 + sizeof...(AllComponentTypes)> acquired;
             // Templated lambda functions for Lock/Unlock so they can be looped over at runtime.
             std::array<std::function<bool(bool)>, acquired.size()> lockFuncs = {
-                [&instance](bool block) {
-                    if (is_add_remove_allowed<LockType>()) {
+                [&](bool block) {
+                    if constexpr (is_add_remove_allowed<LockType>()) {
                         return instance.metadata.WriteLock(block);
                     } else {
                         return instance.metadata.ReadLock(block);
                     }
                 },
-                [&instance](bool block) {
-                    if (is_write_allowed<AllComponentTypes, LockType>()) {
+                [&](bool block) {
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         return instance.template Storage<AllComponentTypes>().WriteLock(block);
-                    } else if (is_read_allowed<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
                         return instance.template Storage<AllComponentTypes>().ReadLock(block);
+                    } else {
+                        (void)block; // Unreferenced parameter warning on MSVC
+                        // This component type isn't part of the lock, skip.
+                        return true;
                     }
-                    // This component type isn't part of the lock, skip.
-                    return true;
                 }...};
             std::array<std::function<void()>, acquired.size()> unlockFuncs = {
-                [&instance]() {
-                    if (is_add_remove_allowed<LockType>()) {
+                [&]() {
+                    if constexpr (is_add_remove_allowed<LockType>()) {
                         return instance.metadata.WriteUnlock();
                     } else {
                         return instance.metadata.ReadUnlock();
                     }
                 },
-                [&instance]() {
-                    if (is_write_allowed<AllComponentTypes, LockType>()) {
+                [&]() {
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         instance.template Storage<AllComponentTypes>().WriteUnlock();
-                    } else if (is_read_allowed<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
                         instance.template Storage<AllComponentTypes>().ReadUnlock();
                     }
                     // This component type isn't part of the lock, skip.
@@ -173,42 +163,98 @@ namespace Tecs {
                 }
             }
 
-            if (is_add_remove_allowed<LockType>()) {
+            if constexpr (is_add_remove_allowed<LockType>()) {
                 // Init observer event queues
                 std::apply(
                     [](auto &...args) {
                         (args.Init(), ...);
                     },
-                    this->instance.eventLists);
+                    instance.eventLists);
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(FlatPermissions::Name());
+            // TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(FlatPermissions::Name());
 #endif
+        }
+
+        // Delete copy constructor
+        Transaction(const Transaction &) = delete;
+
+        template<typename T>
+        inline void SetAccessFlag(bool value) {
+            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
+        }
+
+        template<typename LockType, typename CompType>
+        inline void AcquireLockReference() {
+            if constexpr (is_write_allowed<CompType, LockType>()) {
+                readLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
+                writeLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
+            } else if constexpr (is_read_allowed<CompType, LockType>()) {
+                readLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
+            }
+        }
+
+        template<typename LockType, typename CompType>
+        inline void ReleaseLockReference() {
+            if constexpr (is_write_allowed<CompType, LockType>()) {
+                if (!writePermissions[1 + instance.template GetComponentIndex<CompType>()]) {
+                    throw std::runtime_error("Write lock not acquired");
+                }
+                if (!readPermissions[1 + instance.template GetComponentIndex<CompType>()]) {
+                    throw std::runtime_error("Read lock not acquired");
+                }
+                auto writers = --writeLockReferences[1 + instance.template GetComponentIndex<CompType>()];
+                auto readers = --readLockReferences[1 + instance.template GetComponentIndex<CompType>()];
+                if (writeAccessedFlags[0] || writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()]) {
+                    return;
+                }
+                if (writers == 0) {
+                    writePermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
+                    if (readers == 0) {
+                        readPermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
+                        instance.template Storage<CompType>().WriteUnlock();
+                    } else {
+                        instance.template Storage<CompType>().WriteToReadLock();
+                    }
+                }
+            } else if constexpr (is_read_allowed<CompType, LockType>()) {
+                if (!readPermissions[1 + instance.template GetComponentIndex<CompType>()]) {
+                    throw std::runtime_error("Read lock not acquired");
+                }
+                auto writers = writeLockReferences[1 + instance.template GetComponentIndex<CompType>()];
+                auto readers = --readLockReferences[1 + instance.template GetComponentIndex<CompType>()];
+                if (writeAccessedFlags[0] || writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()]) {
+                    return;
+                }
+                if (writers == 0 && readers == 0) {
+                    readPermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
+                    instance.template Storage<CompType>().ReadUnlock();
+                }
+            }
         }
 
         inline ~Transaction() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
+            // TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
 #endif
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
-            if constexpr (is_add_remove_allowed<LockType>()) {
-                if (this->writeAccessedFlags[0]) {
-                    PreCommitAddRemoveMetadata();
-                    (PreCommitAddRemove<AllComponentTypes>(), ...);
-                }
+            // If an AddRemove was performed, update the entity validity metadata
+            if (writeAccessedFlags[0]) {
+                PreCommitAddRemoveMetadata();
+                (PreCommitAddRemove<AllComponentTypes>(), ...);
             }
 
             ( // For each AllComponentTypes, unlock any Noop Writes or Read locks early
-                [&] {
-                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-                        if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
-                            this->instance.template Storage<AllComponentTypes>().WriteUnlock();
+                [this] {
+                    if (instance.template BitsetHas<AllComponentTypes>(writePermissions)) {
+                        if (!instance.template BitsetHas<AllComponentTypes>(writeAccessedFlags)) {
+                            instance.template Storage<AllComponentTypes>().WriteUnlock();
                         }
-                    } else if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
-                        this->instance.template Storage<AllComponentTypes>().ReadUnlock();
+                    } else if (instance.template BitsetHas<AllComponentTypes>(readPermissions)) {
+                        instance.template Storage<AllComponentTypes>().ReadUnlock();
                     }
                 }(),
                 ...);
@@ -217,15 +263,13 @@ namespace Tecs {
 #ifdef TECS_ENABLE_TRACY
                 ZoneNamedN(tracyCommitScope1, "CommitLock", true);
 #endif
-                if constexpr (is_add_remove_allowed<LockType>()) {
-                    if (this->writeAccessedFlags[0]) this->instance.metadata.CommitLock();
+                if (writeAccessedFlags[0]) { // If AddRemove performed
+                    instance.metadata.CommitLock();
                 }
                 ( // For each AllComponentTypes
-                    [&] {
-                        if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-                            if (this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
-                                this->instance.template Storage<AllComponentTypes>().CommitLock();
-                            }
+                    [this] {
+                        if (instance.template BitsetHas<AllComponentTypes>(writeAccessedFlags)) {
+                            instance.template Storage<AllComponentTypes>().CommitLock();
                         }
                     }(),
                     ...);
@@ -234,33 +278,28 @@ namespace Tecs {
 #ifdef TECS_ENABLE_TRACY
                 ZoneNamedN(tracyCommitScope2, "Commit", true);
 #endif
-                if constexpr (is_add_remove_allowed<LockType>()) {
-                    if (this->writeAccessedFlags[0]) {
-                        // Commit observers
-                        std::apply(
-                            [](auto &...args) {
-                                (args.Commit(), ...);
-                            },
-                            this->instance.eventLists);
+                if (writeAccessedFlags[0]) { // If AddRemove performed
+                    // Commit observers
+                    std::apply(
+                        [](auto &...args) {
+                            (args.Commit(), ...);
+                        },
+                        instance.eventLists);
 
-                        this->instance.metadata.readComponents.swap(this->instance.metadata.writeComponents);
-                        this->instance.metadata.readValidEntities.swap(this->instance.metadata.writeValidEntities);
-                        this->instance.globalReadMetadata = this->instance.globalWriteMetadata;
-                        this->instance.metadata.CommitUnlock();
-                    }
+                    instance.metadata.readComponents.swap(instance.metadata.writeComponents);
+                    instance.metadata.readValidEntities.swap(instance.metadata.writeValidEntities);
+                    instance.globalReadMetadata = instance.globalWriteMetadata;
+                    instance.metadata.CommitUnlock();
                 }
-                ( // For each AllComponentTypes
-                    [&] {
-                        if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-                            // Skip if no write accesses were made
-                            if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) return;
-                            auto &storage = this->instance.template Storage<AllComponentTypes>();
+                ( // For each modified component type, swap read and write storage, and release commit lock.
+                    [this] {
+                        using CompType = AllComponentTypes;
+                        if (instance.template BitsetHas<CompType>(writeAccessedFlags)) {
+                            auto &storage = instance.template Storage<CompType>();
 
                             storage.readComponents.swap(storage.writeComponents);
-                            if constexpr (is_add_remove_allowed<LockType>()) {
-                                if (this->writeAccessedFlags[0]) {
-                                    storage.readValidEntities.swap(storage.writeValidEntities);
-                                }
+                            if (writeAccessedFlags[0]) { // If AddRemove performed
+                                storage.readValidEntities.swap(storage.writeValidEntities);
                             }
                             storage.CommitUnlock();
                         }
@@ -268,16 +307,15 @@ namespace Tecs {
                     ...);
             }
 
-            ( // For each AllComponentTypes, reset the write storage to match read.
-                [&] {
-                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-                        // Skip if no write accesses were made
-                        if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) return;
-                        auto &storage = this->instance.template Storage<AllComponentTypes>();
+            ( // For each modified component type, reset the write storage to match read.
+                [this] {
+                    using CompType = AllComponentTypes;
+                    if (instance.template BitsetHas<CompType>(writeAccessedFlags)) {
+                        auto &storage = instance.template Storage<CompType>();
 
-                        if constexpr (is_global_component<AllComponentTypes>()) {
+                        if (is_global_component<CompType>()) {
                             storage.writeComponents = storage.readComponents;
-                        } else if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
+                        } else if (writeAccessedFlags[0]) { // If AddRemove performed
                             storage.writeComponents = storage.readComponents;
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
@@ -295,21 +333,24 @@ namespace Tecs {
                     }
                 }(),
                 ...);
-            if constexpr (is_add_remove_allowed<LockType>()) {
-                if (this->writeAccessedFlags[0]) {
-                    this->instance.metadata.writeComponents = this->instance.metadata.readComponents;
-                    this->instance.metadata.writeValidEntities = this->instance.metadata.readValidEntities;
+
+            if (writePermissions[0]) {       // If AddRemove allowed
+                if (writeAccessedFlags[0]) { // If AddRemove performed
+                    instance.metadata.writeComponents = instance.metadata.readComponents;
+                    instance.metadata.writeValidEntities = instance.metadata.readValidEntities;
                 }
-            }
-            if constexpr (is_add_remove_allowed<LockType>()) {
-                this->instance.metadata.WriteUnlock();
+                instance.metadata.WriteUnlock();
             } else {
-                this->instance.metadata.ReadUnlock();
+                instance.metadata.ReadUnlock();
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(FlatPermissions::Name());
-            this->instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
+            // TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(FlatPermissions::Name());
+            instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
+#endif
+#ifndef TECS_HEADER_ONLY
+            auto start = activeTransactions.begin();
+            activeTransactionsCount = std::remove(start, start + activeTransactionsCount, instance.ecsId) - start;
 #endif
         }
 
@@ -318,30 +359,29 @@ namespace Tecs {
 
         inline void PreCommitAddRemoveMetadata() const {
             // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
-            this->instance.metadata.writeValidEntities.clear();
-            this->instance.freeEntities.clear();
+            instance.metadata.writeValidEntities.clear();
+            instance.freeEntities.clear();
 
-            const auto &writeMetadataList = this->instance.metadata.writeComponents;
+            const auto &writeMetadataList = instance.metadata.writeComponents;
             for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
                 const auto &newMetadata = writeMetadataList[index];
-                const auto &oldMetadata = index >= this->instance.metadata.readComponents.size()
+                const auto &oldMetadata = index >= instance.metadata.readComponents.size()
                                               ? emptyMetadata
-                                              : this->instance.metadata.readComponents[index];
+                                              : instance.metadata.readComponents[index];
 
                 // If this index exists, add it to the valid entity lists.
                 if (newMetadata[0]) {
-                    this->instance.metadata.validEntityIndexes[index] =
-                        this->instance.metadata.writeValidEntities.size();
-                    this->instance.metadata.writeValidEntities.emplace_back(index, newMetadata.generation);
+                    instance.metadata.validEntityIndexes[index] = instance.metadata.writeValidEntities.size();
+                    instance.metadata.writeValidEntities.emplace_back(index, newMetadata.generation);
                 } else {
-                    this->instance.freeEntities.emplace_back(index,
+                    instance.freeEntities.emplace_back(index,
                         newMetadata.generation + 1,
-                        (TECS_ENTITY_ECS_IDENTIFIER_TYPE)this->instance.ecsId);
+                        (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
 
                 // Compare new and old metadata to notify observers
                 if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
-                    auto &observerList = this->instance.template Observers<EntityEvent>();
+                    auto &observerList = instance.template Observers<EntityEvent>();
                     if (oldMetadata[0]) {
                         observerList.writeQueue->emplace_back(EventType::REMOVED,
                             Entity(index, oldMetadata.generation));
@@ -356,46 +396,46 @@ namespace Tecs {
         template<typename U>
         inline void PreCommitAddRemove() const {
             if constexpr (is_global_component<U>()) {
-                const auto &oldMetadata = this->instance.globalReadMetadata;
-                const auto &newMetadata = this->instance.globalWriteMetadata;
-                if (this->instance.template BitsetHas<U>(newMetadata)) {
-                    if (!this->instance.template BitsetHas<U>(oldMetadata)) {
-                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                const auto &oldMetadata = instance.globalReadMetadata;
+                const auto &newMetadata = instance.globalWriteMetadata;
+                if (instance.template BitsetHas<U>(newMetadata)) {
+                    if (!instance.template BitsetHas<U>(oldMetadata)) {
+                        auto &observerList = instance.template Observers<ComponentEvent<U>>();
                         observerList.writeQueue->emplace_back(EventType::ADDED,
                             Entity(),
-                            this->instance.template Storage<U>().writeComponents[0]);
+                            instance.template Storage<U>().writeComponents[0]);
                     }
-                } else if (this->instance.template BitsetHas<U>(oldMetadata)) {
-                    auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                } else if (instance.template BitsetHas<U>(oldMetadata)) {
+                    auto &observerList = instance.template Observers<ComponentEvent<U>>();
                     observerList.writeQueue->emplace_back(EventType::REMOVED,
                         Entity(),
-                        this->instance.template Storage<U>().readComponents[0]);
+                        instance.template Storage<U>().readComponents[0]);
                 }
             } else {
-                auto &storage = this->instance.template Storage<U>();
+                auto &storage = instance.template Storage<U>();
 
                 // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
                 storage.writeValidEntities.clear();
 
-                const auto &writeMetadataList = this->instance.metadata.writeComponents;
+                const auto &writeMetadataList = instance.metadata.writeComponents;
                 for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
                     const auto &newMetadata = writeMetadataList[index];
-                    const auto &oldMetadata = index >= this->instance.metadata.readComponents.size()
+                    const auto &oldMetadata = index >= instance.metadata.readComponents.size()
                                                   ? emptyMetadata
-                                                  : this->instance.metadata.readComponents[index];
+                                                  : instance.metadata.readComponents[index];
 
                     // If this index exists, add it to the valid entity lists.
-                    if (newMetadata[0] && this->instance.template BitsetHas<U>(newMetadata)) {
+                    if (newMetadata[0] && instance.template BitsetHas<U>(newMetadata)) {
 
                         storage.validEntityIndexes[index] = storage.writeValidEntities.size();
                         storage.writeValidEntities.emplace_back(index, newMetadata.generation);
                     }
 
                     // Compare new and old metadata to notify observers
-                    bool newExists = this->instance.template BitsetHas<U>(newMetadata);
-                    bool oldExists = this->instance.template BitsetHas<U>(oldMetadata);
+                    bool newExists = instance.template BitsetHas<U>(newMetadata);
+                    bool oldExists = instance.template BitsetHas<U>(oldMetadata);
                     if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
-                        auto &observerList = this->instance.template Observers<ComponentEvent<U>>();
+                        auto &observerList = instance.template Observers<ComponentEvent<U>>();
                         if (oldExists) {
                             observerList.writeQueue->emplace_back(EventType::REMOVED,
                                 Entity(index, oldMetadata.generation),
@@ -410,5 +450,13 @@ namespace Tecs {
                 }
             }
         }
+
+        template<typename, typename...>
+        friend class Lock;
+        template<typename, typename...>
+        friend class DynamicLock;
+        template<typename, typename...>
+        friend class EntityLock;
+        friend struct Entity;
     };
 }; // namespace Tecs

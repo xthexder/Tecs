@@ -44,6 +44,7 @@ namespace Tecs {
             CommitLock,
             CommitUnlock,
             WriteUnlock,
+            WriteToReadLock,
         };
 
         Type type = Type::Invalid;
@@ -65,6 +66,7 @@ namespace Tecs {
             "CommitLock",
             "CommitUnlock",
             "WriteUnlock",
+            "WriteToReadLock",
         };
         return out << eventTypeNames[(size_t)t];
     }

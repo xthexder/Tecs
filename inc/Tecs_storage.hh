@@ -282,17 +282,18 @@ namespace Tecs {
             traceInfo.Trace(TraceEvent::Type::WriteUnlock);
 #endif
 
-            // Unlock read and write copies
+            // Release exclusive read lock if a commit lock is held
             uint32_t current = readers;
             if (current == READER_LOCKED) {
                 if (!readers.compare_exchange_strong(current, READER_FREE, std::memory_order_release)) {
                     throw std::runtime_error("WriteUnlock readers changed unexpectedly");
                 }
-            }
 #if __cpp_lib_atomic_wait
-            readers.notify_all();
+                readers.notify_all();
 #endif
+            }
 
+            // Relase write lock
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");
@@ -308,17 +309,59 @@ namespace Tecs {
 #endif
         }
 
+        // Transitions between a write lock acquired state to a read lock acquired state.
+        // Read locks cannot transitioned to write locks without starting a new transaction.
+        inline void WriteToReadLock() {
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+            traceInfo.Trace(TraceEvent::Type::WriteToReadLock);
+#endif
+
+            // Acquire a shared read lock, releasing the exclusive read lock if a commit lock is held
+            uint32_t current = readers;
+            if (current == READER_LOCKED) {
+                if (!readers.compare_exchange_strong(current, READER_FREE + 1, std::memory_order_release)) {
+                    throw std::runtime_error("WriteToReadLock readers changed unexpectedly");
+                }
+            } else {
+                current = readers.fetch_add(1, std::memory_order_acquire);
+                if (current == READER_LOCKED) {
+                    throw std::runtime_error("WriteToReadLock read lock acquire conflict");
+                }
+            }
+#if __cpp_lib_atomic_wait
+            readers.notify_all();
+#endif
+#ifdef TECS_ENABLE_TRACY
+            tracyRead.AfterTryLockShared(true);
+#endif
+
+            // Release write lock
+            current = writer;
+            if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
+                throw std::runtime_error("WriteToReadLock called outside of WriteLock");
+            } else if (!writer.compare_exchange_strong(current, WRITER_FREE, std::memory_order_release)) {
+                throw std::runtime_error("WriteToReadLock writer changed unexpectedly");
+            }
+#if __cpp_lib_atomic_wait
+            writer.notify_all();
+#endif
+
+#ifdef TECS_ENABLE_TRACY
+            tracyWrite.AfterUnlock();
+#endif
+        }
+
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo traceInfo;
 #endif
 #ifdef TECS_ENABLE_TRACY
         static inline const auto tracyReadCtx = []() -> const tracy::SourceLocationData * {
-            static const std::string lockName = std::string("Read ") + typeid(T *).name();
+            static const std::string lockName = "Read "s + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};
             return &srcloc;
         };
         static inline const auto tracyWriteCtx = []() -> const tracy::SourceLocationData * {
-            static const std::string lockName = std::string("Write ") + typeid(T *).name();
+            static const std::string lockName = "Write "s + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};
             return &srcloc;
         };
@@ -349,7 +392,7 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
         friend struct Entity;
     };
