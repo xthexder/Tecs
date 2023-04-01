@@ -1117,9 +1117,11 @@ int main(int /* argc */, char ** /* argv */) {
             for (Tecs::Entity e : entLock.EntitiesWith<Transform>()) {
                 Assert(e.Get<Transform>(entLock).pos[0] == 1, "Expected position.x to be 1");
             }
-        }
-        { // Test EntityLock to Lock typecast
-          // TODO
+
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = entLock;
+            for (Tecs::Entity e : readLockTransform.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+            }
         }
         TestReadLock(readLockAll);
         TestAmbiguousLock(readLockAll);
@@ -1185,10 +1187,62 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Transform>(optionalLock3).pos[0] == 1, "Expected position.x to be 1");
             }
         }
+        auto testEntity = *writeLockAll.EntitiesWith<Transform>().begin();
+        { // Test EntityLock
+            Tecs::EntityLock<ECS, Tecs::Write<Transform, Renderable>> entSubLock(writeLockAll, testEntity);
+            Assert(entSubLock.Get<Transform>().pos[0] == 1, "Expected position.x to be 1");
+            Assert(entSubLock.Get<const Transform>().pos[0] == 1, "Expected position.x to be 1");
+            for (Tecs::Entity e : entSubLock.EntitiesWith<Transform>().subview(0, 10)) {
+                if (e == testEntity) {
+                    Assert(e.Get<const Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                    Assert(e.Get<Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                } else {
+                    Assert(e.Get<const Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                    try {
+                        e.Get<Transform>(entSubLock);
+                        Assert(false, "Transform write access should not succeed.");
+                    } catch (std::runtime_error &err) {
+                        std::string msg = err.what();
+                        auto compare = "Entity is not locked for writing: " + std::to_string(e) + " lock is for " +
+                                       std::to_string(testEntity);
+                        Assert(msg == compare, "Received wrong runtime_error: " + msg);
+                    }
+                }
+            }
+            Tecs::EntityLock<ECS, Tecs::Write<Transform>> entLock = entSubLock;
+            auto &transform = entLock.Get<Transform>();
+            Assert(transform.pos[0] == 1, "Expected position.x to be 1");
+            transform.pos[0] = 2;
+            Assert(entLock.Get<const Transform>().pos[0] == 2, "Expected position.x to be 1");
+            Assert(entLock.Get<Transform>().pos[0] == 2, "Expected position.x to be 1");
+            for (Tecs::Entity e : entLock.EntitiesWith<Transform>().subview(0, 10)) {
+                if (e == testEntity) {
+                    Assert(e.Get<const Transform>(entLock).pos[0] == 2, "Expected position.x to be 1");
+                    Assert(e.Get<Transform>(entLock).pos[0] == 2, "Expected position.x to be 1");
+                } else {
+                    Assert(e.Get<const Transform>(entLock).pos[0] == 1, "Expected position.x to be 1");
+                    try {
+                        e.Get<Transform>(entLock);
+                        Assert(false, "Transform write access should not succeed.");
+                    } catch (std::runtime_error &err) {
+                        std::string msg = err.what();
+                        auto compare = "Entity is not locked for writing: " + std::to_string(e) + " lock is for " +
+                                       std::to_string(testEntity);
+                        Assert(msg == compare, "Received wrong runtime_error: " + msg);
+                    }
+                }
+            }
+
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = entLock;
+            for (Tecs::Entity e : readLockTransform.EntitiesWith<Transform>()) {
+                // Conversion from EntityLock to Lock hides entity writes.
+                Assert(e.Get<Transform>(readLockTransform).pos[0] == 1, "Expected position.x to be 1");
+            }
+            transform.pos[0] = 1; // Reset positon for next test
+        }
         TestReadLock(writeLockAll);
         TestWriteLock(writeLockAll);
         TestAmbiguousLock((Tecs::Lock<ECS, Tecs::Read<Transform>>)writeLockAll);
-        auto testEntity = *writeLockAll.EntitiesWith<Transform>().begin();
         TestReadEntityLock(Tecs::EntityLock<ECS, Tecs::Read<Transform>>(writeLockAll, testEntity));
         TestWriteEntityLock(Tecs::EntityLock<ECS, Tecs::Write<Transform>>(writeLockAll, testEntity));
     }

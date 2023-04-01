@@ -116,7 +116,7 @@ namespace Tecs {
                                  (!is_write_allowed<AllComponentTypes, LockType>() && ...),
                 int> = 0>
         inline Lock(const EntityLock<ECS, SourcePermissions...> &source)
-            : instance(source.instance), base(source.base), readAliasesWriteStorage({}) {
+            : instance(source.lock.instance), base(source.lock.base), readAliasesWriteStorage({}) {
             base->template AcquireLockReference<LockType>();
         }
 
@@ -607,6 +607,8 @@ namespace Tecs {
             return lock.base.use_count();
         }
 
+        template<typename, typename...>
+        friend class Lock;
         template<typename, typename...>
         friend class EntityLock;
         friend struct Entity;

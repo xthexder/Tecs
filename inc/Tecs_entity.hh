@@ -197,10 +197,16 @@ namespace Tecs {
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
             if (*this == lock.entity) {
                 return Get<T>(lock.lock);
-            } else if constexpr (std::is_const_v<ReturnType>) {
-                return GetPrevious<T>(lock.lock);
+            } else if constexpr (is_read_allowed<CompType, Permissions...>()) {
+                if constexpr (!std::is_const_v<ReturnType> && (is_write_allowed<CompType, Permissions...>() ||
+                                                                  is_write_optional<CompType, Permissions...>())) {
+                    throw std::runtime_error("Entity is not locked for writing: " + std::to_string(*this) +
+                                             " lock is for " + std::to_string(lock.entity));
+                } else {
+                    return GetPrevious<T>(lock.lock);
+                }
             } else {
-                throw std::runtime_error("Entity is not locked for writing: " + std::to_string(*this) +
+                throw std::runtime_error("Entity is not locked for reading: " + std::to_string(*this) +
                                          " lock is for " + std::to_string(lock.entity));
             }
         }
