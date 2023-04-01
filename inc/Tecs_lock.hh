@@ -95,7 +95,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes, copy the source permissions
                 [&] {
-                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         readAliasesWriteStorage[compIndex] = true;
                     } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
@@ -401,7 +401,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
                         if constexpr (!is_write_allowed<AllComponentTypes, LockType>()) {
                             if constexpr (is_write_optional<AllComponentTypes, LockType>()) {

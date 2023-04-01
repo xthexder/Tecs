@@ -196,7 +196,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         writeLockReferences[compIndex]++;
@@ -224,7 +224,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         writeLockReferences[compIndex]--;
