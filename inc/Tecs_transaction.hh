@@ -70,8 +70,8 @@ namespace Tecs {
 
     public:
         template<typename LockType>
-        inline Transaction(LockType &lock)
-            : instance(lock.instance), readLockReferences({0}), writeLockReferences({0}) {
+        inline Transaction(ECS &instance, const LockType &)
+            : instance(instance), readLockReferences({0}), writeLockReferences({0}) {
 #ifndef TECS_HEADER_ONLY
             transactionId = ++nextTransactionId;
             for (size_t i = 0; i < activeTransactionsCount; i++) {
@@ -185,53 +185,84 @@ namespace Tecs {
             writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
         }
 
-        template<typename LockType, typename CompType>
+        template<typename LockType>
         inline void AcquireLockReference() {
-            if constexpr (is_write_allowed<CompType, LockType>()) {
-                readLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
-                writeLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
-            } else if constexpr (is_read_allowed<CompType, LockType>()) {
-                readLockReferences[1 + instance.template GetComponentIndex<CompType>()]++;
+            readLockReferences[0]++;
+            if constexpr (is_add_remove_allowed<LockType>()) {
+                if (!writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
+                writeLockReferences[0]++;
+            } else if constexpr (is_add_remove_optional<LockType>()) {
+                if (writePermissions[0]) writeLockReferences[0]++;
             }
+            ( // For each AllComponentTypes
+                [&] {
+                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                        if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                        writeLockReferences[compIndex]++;
+                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                        if (writePermissions[compIndex]) writeLockReferences[compIndex]++;
+                    }
+                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                        if (!readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                        readLockReferences[compIndex]++;
+                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                        if (readPermissions[compIndex]) readLockReferences[compIndex]++;
+                    }
+                }(),
+                ...);
         }
 
-        template<typename LockType, typename CompType>
-        inline void ReleaseLockReference() {
-            if constexpr (is_write_allowed<CompType, LockType>()) {
-                if (!writePermissions[1 + instance.template GetComponentIndex<CompType>()]) {
-                    throw std::runtime_error("Write lock not acquired");
-                }
-                if (!readPermissions[1 + instance.template GetComponentIndex<CompType>()]) {
-                    throw std::runtime_error("Read lock not acquired");
-                }
-                auto writers = --writeLockReferences[1 + instance.template GetComponentIndex<CompType>()];
-                auto readers = --readLockReferences[1 + instance.template GetComponentIndex<CompType>()];
-                if (writeAccessedFlags[0] || writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()]) {
-                    return;
-                }
-                if (writers == 0) {
-                    writePermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
-                    if (readers == 0) {
-                        readPermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
-                        instance.template Storage<CompType>().WriteUnlock();
-                    } else {
-                        instance.template Storage<CompType>().WriteToReadLock();
-                    }
-                }
-            } else if constexpr (is_read_allowed<CompType, LockType>()) {
-                if (!readPermissions[1 + instance.template GetComponentIndex<CompType>()]) {
-                    throw std::runtime_error("Read lock not acquired");
-                }
-                auto writers = writeLockReferences[1 + instance.template GetComponentIndex<CompType>()];
-                auto readers = --readLockReferences[1 + instance.template GetComponentIndex<CompType>()];
-                if (writeAccessedFlags[0] || writeAccessedFlags[1 + instance.template GetComponentIndex<CompType>()]) {
-                    return;
-                }
-                if (writers == 0 && readers == 0) {
-                    readPermissions[1 + instance.template GetComponentIndex<CompType>()] = false;
-                    instance.template Storage<CompType>().ReadUnlock();
-                }
+        template<typename LockType>
+        void ReleaseLockReference() {
+            readLockReferences[0]--;
+            if constexpr (is_add_remove_allowed<LockType>()) {
+                if (!writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
+                writeLockReferences[0]--;
+            } else if constexpr (is_add_remove_optional<LockType>()) {
+                if (writePermissions[0]) writeLockReferences[0]--;
             }
+            ( // For each AllComponentTypes
+                [&] {
+                    constexpr auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                        if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                        writeLockReferences[compIndex]--;
+                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                        if (writePermissions[compIndex]) {
+                            if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                            writeLockReferences[compIndex]--;
+                        }
+                    }
+                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                        if (!readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                        readLockReferences[compIndex]--;
+                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                        if (readPermissions[compIndex]) {
+                            if (!readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                            readLockReferences[compIndex]--;
+                        }
+                    }
+
+                    if (writeAccessedFlags[0] || writeAccessedFlags[compIndex]) return;
+                    if (writePermissions[compIndex]) {
+                        if (writeLockReferences[compIndex] == 0) {
+                            writePermissions[compIndex] = false;
+                            if (readLockReferences[compIndex] == 0) {
+                                readPermissions[compIndex] = false;
+                                instance.template Storage<AllComponentTypes>().WriteUnlock();
+                            } else {
+                                instance.template Storage<AllComponentTypes>().WriteToReadLock();
+                            }
+                        }
+                    } else if (readPermissions[compIndex]) {
+                        if (readLockReferences[compIndex] == 0) {
+                            readPermissions[compIndex] = false;
+                            instance.template Storage<AllComponentTypes>().ReadUnlock();
+                        }
+                    }
+                }(),
+                ...);
         }
 
         inline ~Transaction() {
@@ -453,10 +484,6 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
-        friend class DynamicLock;
-        template<typename, typename...>
-        friend class EntityLock;
         friend struct Entity;
     };
 }; // namespace Tecs

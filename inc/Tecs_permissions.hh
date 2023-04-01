@@ -10,8 +10,6 @@ namespace Tecs {
     class ECS;
     template<typename, typename...>
     class Lock {};
-    template<typename, typename...>
-    class DynamicLock {};
     template<typename>
     class Transaction {};
 
@@ -42,6 +40,32 @@ namespace Tecs {
     struct Write {};
     struct WriteAll {};
     struct AddRemove {};
+
+    /**
+     * Lock permissions can be checked at runtime by wrapping permissions in an Optional<> type.
+     *
+     * Examples:
+     * Lock<ECSType, Read<A, B>, Write<C>> lock = ecs.StartTransaction<Read<A, B>, Write<C>>();
+     * // Optional locks can be created from existing required permissions.
+     * Lock<ECSType, Read<A, Optional<B>>, Optional<Write<C>>> optionalLock = lock;
+     *
+     * // Required permissions will override optional permissions if they overlap.
+     * Lock<ECSType, Read<A, B>, Optional<Read<B>>> == Lock<ECSType, Read<A, B>>;
+     *
+     * // Only required permissions can be accessed statically.
+     * Lock<ECSType, Read<A>> lockA = optionalLock; // Valid
+     * Lock<ECSType, Read<A, B>> lockAB = optionalLock; // Invalid
+     *
+     * // Optional permissions can be accessed at runtime using the TryLock() method.
+     * std::optional<Lock<ECSType, Read<A, B>>> runtimeLock = optionalLock.TryLock<Read<A, B>>();
+     * if (runtimeLock) {
+     *     // Lock is available.
+     * } else {
+     *     // Lock is not available.
+     * }
+     */
+    template<typename... OptionalPermissions>
+    struct Optional {};
 
     /**
      * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
@@ -110,35 +134,57 @@ namespace Tecs {
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
 
-    // Lock<Permissions...> and DynamicLock<Permissions...> specializations
+    template<typename T, typename Lock>
+    struct is_optional : std::false_type {};
+    template<typename T, typename Lock>
+    struct is_read_optional : std::false_type {};
+    template<typename T, typename Lock>
+    struct is_write_optional : std::false_type {};
+    template<typename Lock>
+    struct is_add_remove_optional : std::false_type {};
+
+    // Lock<Permissions...> specializations
     // clang-format off
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
 
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
 
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
+
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
+
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_optional<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<const DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_optional<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
     // clang-format on
+
+    // Optional<Permissions...> specializations
+    template<typename T, typename... OptionalTypes>
+    struct is_optional<T, Optional<OptionalTypes...>> : contains<T, OptionalTypes...> {};
+    template<typename T, typename... Permissions>
+    struct is_read_optional<T, Optional<Permissions...>> : is_read_allowed<T, Permissions...> {};
+    template<typename T, typename... Permissions>
+    struct is_write_optional<T, Optional<Permissions...>> : is_write_allowed<T, Permissions...> {};
+    template<typename... Permissions>
+    struct is_add_remove_optional<Optional<Permissions...>> : is_add_remove_allowed<Permissions...> {};
 
     // Check SubLock <= Lock for component type T
     template<typename T, typename SubLock, typename Lock>
@@ -151,6 +197,11 @@ namespace Tecs {
     template<typename T, typename... LockedTypes>
     struct is_read_allowed<T, Read<LockedTypes...>> : contains<T, LockedTypes...> {};
 
+    template<typename T, typename... LockedTypes>
+    struct is_read_optional<T, Read<LockedTypes...>>
+        : std::conjunction<std::negation<is_read_allowed<T, Read<LockedTypes...>>>,
+              std::disjunction<is_optional<T, LockedTypes>...>> {};
+
     // ReadAll specialization
     template<typename T>
     struct is_read_allowed<T, ReadAll> : std::true_type {};
@@ -160,6 +211,15 @@ namespace Tecs {
     struct is_read_allowed<T, Write<LockedTypes...>> : contains<T, LockedTypes...> {};
     template<typename T, typename... LockedTypes>
     struct is_write_allowed<T, Write<LockedTypes...>> : contains<T, LockedTypes...> {};
+
+    template<typename T, typename... LockedTypes>
+    struct is_read_optional<T, Write<LockedTypes...>>
+        : std::conjunction<std::negation<is_read_allowed<T, Write<LockedTypes...>>>,
+              std::disjunction<is_optional<T, LockedTypes>...>> {};
+    template<typename T, typename... LockedTypes>
+    struct is_write_optional<T, Write<LockedTypes...>>
+        : std::conjunction<std::negation<is_write_allowed<T, Write<LockedTypes...>>>,
+              std::disjunction<is_optional<T, LockedTypes>...>> {};
 
     // WriteAll specialization
     template<typename T>
