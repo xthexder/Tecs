@@ -190,7 +190,8 @@ namespace Tecs {
         template<typename T, typename ECSType, typename... Permissions>
         inline const std::remove_cv_t<T> &Get(EntityLock<ECSType, Permissions...> &lock) const {
             using CompType = std::remove_cv_t<T>;
-            static_assert(is_read_allowed<CompType, Permissions...>(), "Component is not locked for reading.");
+            static_assert(is_read_allowed<CompType, Lock<ECSType, Permissions...>>(),
+                "Component is not locked for reading.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
             if (*this == lock.entity) {
                 return Get<const CompType>(lock.lock);
@@ -224,7 +225,8 @@ namespace Tecs {
         template<typename T, typename ECSType, typename... Permissions>
         inline const T &GetPrevious(EntityLock<ECSType, Permissions...> &lock) const {
             using CompType = std::remove_cv_t<T>;
-            static_assert(is_read_allowed<CompType, Permissions...>(), "Component is not locked for reading.");
+            static_assert(is_read_allowed<CompType, Lock<ECSType, Permissions...>>(),
+                "Component is not locked for reading.");
             static_assert(!is_global_component<CompType>(),
                 "Global components must be accessed through lock.GetPrevious()");
             return GetPrevious<T>(lock.lock);
@@ -264,7 +266,7 @@ namespace Tecs {
 
         template<typename T, typename ECSType, typename... Permissions>
         inline T &Set(EntityLock<ECSType, Permissions...> &lock, T &value) const {
-            static_assert(is_write_allowed<T, Permissions...>(), "Component is not locked for writing.");
+            static_assert(is_write_allowed<T, Lock<ECSType, Permissions...>>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             if (*this == lock.entity) {
                 return Set<T>(lock.lock, value);
@@ -308,7 +310,7 @@ namespace Tecs {
 
         template<typename T, typename ECSType, typename... Permissions, typename... Args>
         inline T &Set(EntityLock<ECSType, Permissions...> &lock, Args... args) const {
-            static_assert(is_write_allowed<T, Permissions...>(), "Component is not locked for writing.");
+            static_assert(is_write_allowed<T, Lock<ECSType, Permissions...>>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             if (*this == lock.entity) {
                 return Set<T>(lock.lock, std::forward<Args>(args)...);

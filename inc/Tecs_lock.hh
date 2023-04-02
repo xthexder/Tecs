@@ -358,7 +358,7 @@ namespace Tecs {
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
             if constexpr (has_permissions<DynamicPermissions...>()) {
                 return Lock<ECS, DynamicPermissions...>(*this);
-            } else if constexpr (is_add_remove_allowed<DynamicPermissions...>()) {
+            } else if constexpr (is_add_remove_allowed<Lock<ECS, DynamicPermissions...>>()) {
                 if constexpr (is_add_remove_optional<LockType>()) {
                     if (base->writePermissions[0]) {
                         return Lock<ECS, DynamicPermissions...>(instance, base, readAliasesWriteStorage);
@@ -370,13 +370,13 @@ namespace Tecs {
                 }
             } else {
                 bool hasPermissions = ([&]() -> bool {
-                    if constexpr (is_write_allowed<AllComponentTypes, DynamicPermissions...>()) {
+                    if constexpr (is_write_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
                         if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
                             return instance.template BitsetHas<AllComponentTypes>(base->writePermissions);
                         } else {
                             return is_write_allowed<AllComponentTypes, LockType>();
                         }
-                    } else if constexpr (is_read_allowed<AllComponentTypes, DynamicPermissions...>()) {
+                    } else if constexpr (is_read_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
                         if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
                             return instance.template BitsetHas<AllComponentTypes>(base->readPermissions);
                         } else {
@@ -502,8 +502,7 @@ namespace Tecs {
         template<typename... SourcePermissions>
         inline EntityLock(const Lock<ECS, SourcePermissions...> &source, const Entity &entity)
             : lock(source), entity(entity) {
-            static_assert(!is_add_remove_allowed<Permissions...>(),
-                "EntityLock with AddRemove permissions is not supported");
+            static_assert(!is_add_remove_allowed<LockType>(), "EntityLock with AddRemove permissions is not supported");
         }
 
         // Reference a subset of an existing EntityLock
@@ -622,7 +621,7 @@ namespace Tecs {
 
         template<typename... DynamicPermissions>
         std::optional<EntityLock<ECS, DynamicPermissions...>> TryLock() const {
-            static_assert(!is_add_remove_allowed<DynamicPermissions...>(),
+            static_assert(!is_add_remove_allowed<Lock<ECS, DynamicPermissions...>>(),
                 "EntityLock with AddRemove permissions is not supported");
             if constexpr (LockType::template has_permissions<DynamicPermissions...>()) {
                 return EntityLock<ECS, DynamicPermissions...>(*this);

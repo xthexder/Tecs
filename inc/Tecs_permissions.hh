@@ -174,17 +174,17 @@ namespace Tecs {
     struct is_add_remove_optional<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_optional<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
-    // clang-format on
 
     // Optional<Permissions...> specializations
     template<typename T, typename... OptionalTypes>
     struct is_optional<T, Optional<OptionalTypes...>> : contains<T, OptionalTypes...> {};
     template<typename T, typename... Permissions>
-    struct is_read_optional<T, Optional<Permissions...>> : is_read_allowed<T, Permissions...> {};
+    struct is_read_optional<T, Optional<Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename... Permissions>
-    struct is_write_optional<T, Optional<Permissions...>> : is_write_allowed<T, Permissions...> {};
+    struct is_write_optional<T, Optional<Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
     template<typename... Permissions>
-    struct is_add_remove_optional<Optional<Permissions...>> : is_add_remove_allowed<Permissions...> {};
+    struct is_add_remove_optional<Optional<Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
+    // clang-format on
 
     // Check SubLock <= Lock for component type T
     template<typename T, typename SubLock, typename Lock>
