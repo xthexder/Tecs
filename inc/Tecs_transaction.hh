@@ -15,6 +15,7 @@
 #include <atomic>
 #include <bitset>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 
 namespace Tecs {
