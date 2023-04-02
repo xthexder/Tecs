@@ -186,28 +186,16 @@ namespace Tecs {
             }
         }
 
-        template<typename T, typename ECSType, typename... Permissions,
-            typename ReturnType =
-                std::conditional_t<is_write_allowed<std::remove_cv_t<T>, Permissions...>::value, T, const T>>
-        inline ReturnType &Get(EntityLock<ECSType, Permissions...> &lock) const {
+        // EntityLock writes must be done through EntityLock::Get().
+        template<typename T, typename ECSType, typename... Permissions>
+        inline const std::remove_cv_t<T> &Get(EntityLock<ECSType, Permissions...> &lock) const {
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, Permissions...>(), "Component is not locked for reading.");
-            static_assert(is_write_allowed<CompType, Permissions...>() || std::is_const<ReturnType>(),
-                "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
             if (*this == lock.entity) {
-                return Get<T>(lock.lock);
-            } else if constexpr (is_read_allowed<CompType, Permissions...>()) {
-                if constexpr (!std::is_const_v<ReturnType> && (is_write_allowed<CompType, Permissions...>() ||
-                                                                  is_write_optional<CompType, Permissions...>())) {
-                    throw std::runtime_error("Entity is not locked for writing: " + std::to_string(*this) +
-                                             " lock is for " + std::to_string(lock.entity));
-                } else {
-                    return GetPrevious<T>(lock.lock);
-                }
+                return Get<const CompType>(lock.lock);
             } else {
-                throw std::runtime_error("Entity is not locked for reading: " + std::to_string(*this) +
-                                         " lock is for " + std::to_string(lock.entity));
+                return GetPrevious<CompType>(lock.lock);
             }
         }
 

@@ -188,6 +188,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
+        template<typename, typename...>
+        friend class EntityLock;
         template<typename>
         friend class Transaction;
         friend struct Entity;

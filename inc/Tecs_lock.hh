@@ -49,6 +49,7 @@ namespace Tecs {
     private:
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
+        using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
 
         ECS &instance;
         std::shared_ptr<Transaction<ECS>> base;
@@ -58,6 +59,18 @@ namespace Tecs {
         // Start a new transaction
         inline Lock(ECS &instance) : instance(instance) {
             base = std::make_shared<Transaction<ECS>>(instance, *this);
+#ifdef TECS_ENABLE_TRACY
+            static const tracy::SourceLocationData srcloc{"TecsTransaction",
+                FlatPermissions::Name(),
+                __FILE__,
+                __LINE__,
+                0};
+    #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
+            base->tracyZone.emplace(&srcloc, TRACY_CALLSTACK, true);
+    #else
+            base->tracyZone.emplace(&srcloc, true);
+    #endif
+#endif
             readAliasesWriteStorage = base->writePermissions;
             base->template AcquireLockReference<LockType>();
         }
@@ -90,12 +103,12 @@ namespace Tecs {
         inline Lock(const Lock<ECS, SourcePermissions...> &source) : instance(source.instance), base(source.base) {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 readAliasesWriteStorage[0] = true;
-            } else if constexpr (is_add_remove_optional<LockType>()) {
+            } else {
                 readAliasesWriteStorage[0] = source.readAliasesWriteStorage[0];
             }
             ( // For each AllComponentTypes, copy the source permissions
                 [&] {
-                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         readAliasesWriteStorage[compIndex] = true;
                     } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
@@ -344,7 +357,7 @@ namespace Tecs {
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
             if constexpr (has_permissions<DynamicPermissions...>()) {
-                return Lock<ECS, DynamicPermissions...>(instance, base, readAliasesWriteStorage);
+                return Lock<ECS, DynamicPermissions...>(*this);
             } else if constexpr (is_add_remove_allowed<DynamicPermissions...>()) {
                 if constexpr (is_add_remove_optional<LockType>()) {
                     if (base->writePermissions[0]) {
@@ -401,7 +414,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
                         if constexpr (!is_write_allowed<AllComponentTypes, LockType>()) {
                             if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
@@ -493,9 +506,13 @@ namespace Tecs {
                 "EntityLock with AddRemove permissions is not supported");
         }
 
+        // Reference a subset of an existing EntityLock
         template<typename... SourcePermissions>
         inline EntityLock(const EntityLock<ECS, SourcePermissions...> &source)
-            : lock(source.lock), entity(source.entity) {}
+            : lock(source.lock), entity(source.entity) {
+            static_assert(LockType::template is_lock_subset<SourcePermissions...>(),
+                "EntityLock must have be a subset of the source EntityLock");
+        }
 
         inline constexpr ECS &GetInstance() const {
             return lock.instance;
@@ -601,6 +618,22 @@ namespace Tecs {
                 "Lock types are not a subset of existing permissions.");
 
             return EntityLock<ECS, PermissionsSubset...>(*this);
+        }
+
+        template<typename... DynamicPermissions>
+        std::optional<EntityLock<ECS, DynamicPermissions...>> TryLock() const {
+            static_assert(!is_add_remove_allowed<DynamicPermissions...>(),
+                "EntityLock with AddRemove permissions is not supported");
+            if constexpr (LockType::template has_permissions<DynamicPermissions...>()) {
+                return EntityLock<ECS, DynamicPermissions...>(*this);
+            } else {
+                auto optionalLock = lock.template TryLock<DynamicPermissions...>();
+                if (optionalLock) {
+                    return EntityLock<ECS, DynamicPermissions...>(*optionalLock, entity);
+                } else {
+                    return {};
+                }
+            }
         }
 
         long UseCount() const {

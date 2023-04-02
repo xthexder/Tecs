@@ -42,22 +42,9 @@ namespace Tecs {
     private:
         using ECS = ECSType<AllComponentTypes...>;
         using EntityMetadata = typename ECS::EntityMetadata;
-        // using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
 
 #ifdef TECS_ENABLE_TRACY
-        //     static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {
-        //         static const tracy::SourceLocationData srcloc{"TecsTransaction",
-        //             FlatPermissions::Name(),
-        //             __FILE__,
-        //             __LINE__,
-        //             0};
-        //         return &srcloc;
-        //     };
-        // #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
-        //     tracy::ScopedZone tracyZone{tracyCtx(), TRACY_CALLSTACK, true};
-        // #else
-        //     tracy::ScopedZone tracyZone{tracyCtx(), true};
-        // #endif
+        std::optional<tracy::ScopedZone> tracyZone;
 #endif
 
         ECS &instance;
@@ -85,7 +72,6 @@ namespace Tecs {
             activeTransactions[activeTransactionsCount++] = instance.ecsId;
 #endif
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            // TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
 #endif
 #ifdef TECS_ENABLE_TRACY
@@ -171,10 +157,6 @@ namespace Tecs {
                     },
                     instance.eventLists);
             }
-
-#ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            // TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(FlatPermissions::Name());
-#endif
         }
 
         // Delete copy constructor
@@ -196,7 +178,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         writeLockReferences[compIndex]++;
@@ -224,7 +206,7 @@ namespace Tecs {
             }
             ( // For each AllComponentTypes
                 [&] {
-                    const auto compIndex = 1 + instance.template GetComponentIndex<AllComponentTypes>();
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
                         if (!writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         writeLockReferences[compIndex]--;
@@ -266,9 +248,6 @@ namespace Tecs {
         }
 
         inline ~Transaction() {
-#ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            // TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
-#endif
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
@@ -376,7 +355,6 @@ namespace Tecs {
             }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            // TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
 #endif
 #ifndef TECS_HEADER_ONLY
@@ -484,6 +462,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
+        template<typename, typename...>
+        friend class EntityLock;
         friend struct Entity;
     };
 }; // namespace Tecs
