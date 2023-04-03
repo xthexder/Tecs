@@ -10,6 +10,8 @@ namespace Tecs {
     class ECS;
     template<typename, typename...>
     class Lock {};
+    template<typename, typename...>
+    class EntityLock {};
     template<typename>
     class Transaction {};
 
@@ -114,6 +116,11 @@ namespace Tecs {
     struct Tecs::component_name<ComponentType> {                                                                       \
         static constexpr char value[] = (ComponentName);                                                               \
     };
+
+    template<typename T>
+    struct is_entity_lock : std::false_type {};
+    template<typename ECSType, typename... Permissions>
+    struct is_entity_lock<EntityLock<ECSType, Permissions...>> : std::true_type {};
 
     // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>
