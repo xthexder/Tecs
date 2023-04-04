@@ -16,19 +16,6 @@
     #define TECS_PERFORMANCE_TRACING_MAX_EVENTS 10000
 #endif
 
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTING
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTED
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDING
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDED
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(permissions)
-#endif
-
 namespace Tecs {
     struct TraceEvent {
         enum class Type {
@@ -44,6 +31,7 @@ namespace Tecs {
             CommitLock,
             CommitUnlock,
             WriteUnlock,
+            WriteToReadLock,
         };
 
         Type type = Type::Invalid;
@@ -65,6 +53,7 @@ namespace Tecs {
             "CommitLock",
             "CommitUnlock",
             "WriteUnlock",
+            "WriteToReadLock",
         };
         return out << eventTypeNames[(size_t)t];
     }

@@ -7,12 +7,13 @@
 #include <Tecs.hh>
 #include <chrono>
 #include <condition_variable>
-#include <cstring>
 #include <future>
 #include <map>
 #include <mutex>
+#include <string>
 
 using namespace testing;
+using namespace std::string_literals;
 
 static ECS ecs;
 
@@ -170,10 +171,6 @@ int main(int /* argc */, char ** /* argv */) {
             e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             AssertHas<Transform, Renderable, Script>(writeLock, e);
 
-            // Test removing a component
-            e.Unset<Renderable>(writeLock);
-            AssertHas<Transform, Script>(writeLock, e);
-
             // Test references work after Set()
             auto &script = e.Get<Script>(writeLock);
             Assert(script.data.size() == 8, "Script component should have size 8");
@@ -187,13 +184,21 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(script.data[7] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, 0, (0)]");
 
             e.Set<Script>(writeLock, std::initializer_list<uint8_t>({1, 2, 3, 4}));
-            AssertHas<Transform, Script>(writeLock, e);
+            AssertHas<Transform, Renderable, Script>(writeLock, e);
 
             Assert(script.data.size() == 4, "Script component should have size 4");
             Assert(script.data[0] == 1, "Script component should have value [(1), 2, 3, 4]");
             Assert(script.data[1] == 2, "Script component should have value [1, (2), 3, 4]");
             Assert(script.data[2] == 3, "Script component should have value [1, 2, (3), 4]");
             Assert(script.data[3] == 4, "Script component should have value [1, 2, 3, (4)]");
+
+            // Test removing some components
+            if (i % 2 == 0) {
+                e.Unset<Renderable>(writeLock);
+                AssertHas<Transform, Script>(writeLock, e);
+            } else {
+                AssertHas<Transform, Script, Renderable>(writeLock, e);
+            }
         }
     }
     {
@@ -235,6 +240,7 @@ int main(int /* argc */, char ** /* argv */) {
         std::vector<Tecs::Entity> entityList;
         {
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLock = writeLock;
             for (size_t i = 0; i < 100; i++) {
                 Tecs::Entity e = writeLock.NewEntity();
                 Assert(e.index == ENTITY_COUNT + i,
@@ -255,6 +261,10 @@ int main(int /* argc */, char ** /* argv */) {
                 e.Set<Transform>(writeLock, 3.0, 1.0, 7.0);
 
                 Assert(!e.Existed(writeLock), "Entity shouldn't exist before transaction");
+                Assert(!e.Existed(readLock), "Entity shouldn't exist before transaction");
+                Assert(e.Exists(readLock), "Entity should be visible to sub lock");
+                AssertHas<Transform>(writeLock, e);
+                AssertHas<Transform>(readLock, e);
             }
         }
         {
@@ -578,9 +588,14 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test read lock reference write transaction can see changes");
         auto transaction = ecs.StartTransaction<Tecs::Write<Script>>();
         Tecs::Entity e = transaction.EntitiesWith<Script>()[0];
+        Tecs::Lock<ECS, Tecs::Read<Script>> lock1 = transaction;
+        auto &script = e.Get<Script>(lock1);
+        Assert(script.data[3] == 99, "Script data should be set to 99");
         e.Get<Script>(transaction).data[3] = 88;
-        Tecs::Lock<ECS, Tecs::Read<Script>> lock = transaction;
-        Assert(e.Get<Script>(lock).data[3] == 88, "Script data should be set to 88");
+        Tecs::Lock<ECS, Tecs::Read<Script>> lock2 = transaction;
+        Assert(script.data[3] == 88, "Script data should be set to 88");
+        Assert(e.Get<Script>(lock1).data[3] == 88, "Script data should be set to 88");
+        Assert(e.Get<Script>(lock2).data[3] == 88, "Script data should be set to 88");
     }
     {
         Timer t("Test reading observers again");
@@ -687,7 +702,7 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(false, "Entity.Get<const>() on missing component should fail");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
-            auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+            auto compare = "Entity does not have a component of type: "s + typeid(Transform).name();
             Assert(msg == compare, "Received wrong runtime_error: " + msg);
         }
         Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
@@ -715,7 +730,7 @@ int main(int /* argc */, char ** /* argv */) {
                     Assert(false, "Entity.Get<const>() on missing component should fail");
                 } catch (std::runtime_error &e) {
                     std::string msg = e.what();
-                    auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+                    auto compare = "Entity does not have a component of type: "s + typeid(Transform).name();
                     Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
@@ -734,7 +749,7 @@ int main(int /* argc */, char ** /* argv */) {
                     Assert(false, "Entity.Get<const>() on missing component should fail");
                 } catch (std::runtime_error &e) {
                     std::string msg = e.what();
-                    auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
+                    auto compare = "Entity does not have a component of type: "s + typeid(Transform).name();
                     Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
@@ -861,6 +876,116 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
+        using ReadLock = Tecs::Lock<ECS, Tecs::Read<Transform>>;
+        using WriteLock = Tecs::Lock<ECS, Tecs::Write<Transform, Script>, Tecs::Read<Renderable>>;
+        using OptionalLock = Tecs::Lock<ECS, ReadLock, Tecs::Optional<WriteLock>>;
+        // Test optional type permissions nesting
+        static_assert(Tecs::is_read_allowed<Transform, OptionalLock>(), "Lock should allow Read<Transform>");
+        static_assert(Tecs::is_read_optional<Transform, OptionalLock>(), "Lock should have optional Read<Transform>");
+        static_assert(!Tecs::is_write_allowed<Transform, OptionalLock>(), "Lock should not allow Write<Transform>");
+        static_assert(Tecs::is_write_optional<Transform, OptionalLock>(), "Lock should have optional Write<Transform>");
+
+        static_assert(!Tecs::is_read_allowed<Script, OptionalLock>(), "Lock should not allow Read<Script>");
+        static_assert(Tecs::is_read_optional<Script, OptionalLock>(), "Lock should have optional Read<Script>");
+        static_assert(!Tecs::is_write_allowed<Script, OptionalLock>(), "Lock should not allow Write<Script>");
+        static_assert(Tecs::is_write_optional<Script, OptionalLock>(), "Lock should have optional Write<Script>");
+
+        static_assert(!Tecs::is_read_allowed<Renderable, OptionalLock>(), "Lock should not allow Read<Renderable>");
+        static_assert(Tecs::is_read_optional<Renderable, OptionalLock>(), "Lock should have optional Read<Renderable>");
+        static_assert(!Tecs::is_write_allowed<Renderable, OptionalLock>(), "Lock should not allow Write<Renderable>");
+        static_assert(!Tecs::is_write_optional<Renderable, OptionalLock>(),
+            "Lock should not have optional Write<Renderable>");
+
+        Timer t("Test early lock release optimizations");
+        {
+            std::optional<ReadLock> readLock;
+            std::optional<WriteLock> writeLock;
+            {
+                auto writeAllLock = ecs.StartTransaction<Tecs::WriteAll>();
+                writeLock.emplace(writeAllLock);
+            }
+            // GlobalComponent should not be accessible since it was not captured by Optional<>.
+            Assert(!writeLock->TryLock<Tecs::Write<GlobalComponent>>(),
+                "GlobalComponent should not be write accessible.");
+            Assert(!writeLock->TryLock<Tecs::Read<GlobalComponent>>(),
+                "GlobalComponent should not be read accessible.");
+
+            // Start a write transaction that overlaps with WriteAll but not WriteLock.
+            std::thread([&writeLock] {
+                auto writeComponentLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
+                Assert(!writeComponentLock.Has<GlobalComponent>(), "GlobalComponent should not exist yet.");
+                // Thread should complete while writeLock is active.
+                Assert(writeLock.has_value(), "Write lock should not be released yet.");
+            }).join();
+            std::thread blockingWriteThread;
+
+            Tecs::Entity testEntity = writeLock->EntitiesWith<Script>()[0];
+            // Write to the Script component so that it stays locked.
+            auto newScriptValue = ++testEntity.Get<Script>(*writeLock).data[3];
+            readLock.emplace(*writeLock);
+            writeLock.reset();
+            {
+                OptionalLock optionalLock = *readLock;
+                readLock.reset();
+
+                Assert(!optionalLock.TryLock<Tecs::Write<Transform>>(), "Transform should not be write accessible.");
+                auto readTransformLock = optionalLock.TryLock<Tecs::Read<Transform>>();
+                Assert(readTransformLock.has_value(), "Transform should be read accessible.");
+
+                auto &transform1 = testEntity.Get<Transform>(*readTransformLock);
+                Assert(std::is_const_v<std::remove_reference_t<decltype(transform1)>>,
+                    "Transform should be const accessible.");
+                auto &transform2 = testEntity.Get<const Transform>(*readTransformLock);
+                Assert(&transform1 == &transform2, "Transform reference should be the same.");
+
+                // Script should be accessible but not Renderable.
+                Assert(!optionalLock.TryLock<Tecs::Write<Renderable>>(), "Renderable should not be write accessible.");
+                Assert(!optionalLock.TryLock<Tecs::Read<Renderable>>(), "Renderable should not be read accessible.");
+
+                auto writeScriptLock = optionalLock.TryLock<Tecs::Write<Script>>();
+                Assert(writeScriptLock.has_value(), "Script should be write accessible.");
+                auto readScriptLock = optionalLock.TryLock<Tecs::Read<Script>>();
+                Assert(readScriptLock.has_value(), "Script should be read accessible.");
+
+                auto &script1 = testEntity.Get<Script>(*writeScriptLock);
+                Assert(!std::is_const_v<std::remove_reference_t<decltype(script1)>>,
+                    "Script should be const accessible.");
+                auto &script2 = testEntity.Get<const Script>(*writeScriptLock);
+                auto &script3 = testEntity.Get<Script>(*readScriptLock);
+                Assert(std::is_const_v<std::remove_reference_t<decltype(script3)>>,
+                    "Script should be const accessible.");
+                auto &script4 = testEntity.Get<const Script>(*readScriptLock);
+
+                Assert(&script1 == &script2, "Script reference should be the same.");
+                Assert(&script1 == &script3, "Script reference should be the same.");
+                Assert(&script1 == &script4, "Script reference should be the same.");
+
+                // Start some write transactions that overlap with WriteLock but not ReadLock.
+                std::atomic_bool complete = false;
+                std::thread([&] {
+                    // Renderable should be early-unlocked since it was not written to.
+                    auto writeRenderableLock = ecs.StartTransaction<Tecs::Write<Renderable>>();
+                    auto &r = writeRenderableLock.EntitiesWith<Renderable>()[0].Get<Renderable>(writeRenderableLock);
+                    Assert(r.name == "entity101", "Renderable name should be entity101.");
+                    // Thread should complete while readLock is active.
+                    Assert(!complete.load(), "Read lock should not be released yet.");
+                }).join();
+                blockingWriteThread = std::thread([&] {
+                    // Script should be stay locked since it has been write-accessed.
+                    auto writeScriptLock = ecs.StartTransaction<Tecs::Write<Script>>();
+                    auto testValue = testEntity.Get<Script>(writeScriptLock).data[3]--;
+                    Assert(testValue == newScriptValue, "Script value should be the same.");
+                    // Thread should not complete while readLock is active.
+                    Assert(complete.load(), "Read lock should be released by now.");
+                });
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                complete = true;
+            }
+            blockingWriteThread.join();
+        }
+    }
+    {
         Timer t("Test overlapping commit transactions don't deadlock");
         Tecs::Entity readIdA, readIdB;
         double previousValueA;
@@ -952,25 +1077,66 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Script>(readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
         }
-        { // Test DynamicLock typecast method
+        { // Test optional permission typecast
             Tecs::Lock<ECS, Tecs::Read<Transform, Renderable, Script>> readLockSubset = readLockAll;
-            Tecs::DynamicLock<ECS, Tecs::Read<Transform>> dynamicLock = readLockSubset;
-            for (Tecs::Entity e : dynamicLock.EntitiesWith<Transform>()) {
-                Assert(e.Get<Transform>(dynamicLock).pos[0] == 1, "Expected position.x to be 1");
+            Tecs::Lock<ECS,
+                Tecs::Read<Transform, Renderable, Tecs::Optional<Script>>,
+                Tecs::Optional<Tecs::Read<GlobalComponent>>>
+                optionalLock1 = readLockSubset;
+            Tecs::Lock<ECS, Tecs::Read<Transform>, Tecs::Optional<Tecs::Read<Script, GlobalComponent>>> optionalLock2 =
+                optionalLock1;
+            Tecs::Lock<ECS, Tecs::Read<Transform, Tecs::Optional<Script, Renderable>>> optionalLock3 = optionalLock2;
+            for (Tecs::Entity e : optionalLock1.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock1).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto readLockScript = dynamicLock.TryLock<Tecs::Read<Script, Renderable>>();
+            for (Tecs::Entity e : optionalLock2.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock2).pos[0] == 1, "Expected position.x to be 1");
+            }
+            for (Tecs::Entity e : optionalLock3.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock3).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto readLockScript = optionalLock2.TryLock<Tecs::Read<Transform, Script>>();
             Assert(readLockScript.has_value(), "Expected readLockScript to be valid");
             for (Tecs::Entity e : readLockScript->EntitiesWith<Script>()) {
                 Assert(e.Get<Script>(*readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
-            auto readLockGlobalCompoennt = dynamicLock.TryLock<Tecs::Read<GlobalComponent>>();
-            Assert(!readLockGlobalCompoennt.has_value(), "Expected readLockGlobalCompoennt to be invalid");
+            auto readLockScript2 = optionalLock3.TryLock<Tecs::Read<Transform, Script>>();
+            Assert(readLockScript2.has_value(), "Expected readLockScript2 to be valid");
+            for (Tecs::Entity e : readLockScript2->EntitiesWith<Script>()) {
+                Assert(e.Get<Script>(*readLockScript2).data[0] == 1, "Expected script[0] to be 1");
+            }
+            auto readLockGlobalComponent1 = optionalLock2.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalComponent1.has_value(), "Expected readLockGlobalComponent1 to be invalid");
+            auto readLockGlobalComponent2 = optionalLock3.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalComponent2.has_value(), "Expected readLockGlobalComponent2 to be invalid");
+        }
+        auto testEntity = *readLockAll.EntitiesWith<Transform>().begin();
+        { // Test EntityLock
+            Tecs::EntityLock<ECS, Tecs::Read<Transform, Renderable, Tecs::Optional<Script>>> entSubLock(readLockAll,
+                testEntity);
+            Assert(entSubLock.Get<Transform>().pos[0] == 1, "Expected position.x to be 1");
+            for (Tecs::Entity e : entSubLock.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto optionalLock = entSubLock.TryLock<Tecs::Read<Script>>();
+            Assert(optionalLock.has_value(), "Expected EntityLock::TryLock to be valid");
+            Tecs::EntityLock<ECS, Tecs::Read<Transform>> entLock = entSubLock;
+            Assert(entLock.Get<Transform>().pos[0] == 1, "Expected position.x to be 1");
+            for (Tecs::Entity e : entLock.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(entLock).pos[0] == 1, "Expected position.x to be 1");
+            }
+
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = entLock;
+            for (Tecs::Entity e : readLockTransform.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+            }
         }
         TestReadLock(readLockAll);
         TestAmbiguousLock(readLockAll);
+        TestReadEntityLock(Tecs::EntityLock<ECS, Tecs::Read<Transform>>(readLockAll, testEntity));
     }
     {
-        Timer t("Test component write lock typecasting");
+        Timer t("Test write lock typecasting");
         auto writeLockAll = ecs.StartTransaction<Tecs::Write<Transform, Renderable, Script>>();
         { // Test Subset() method
             auto readLockTransform = writeLockAll.Subset<Tecs::Read<Transform>>();
@@ -1010,12 +1176,79 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Script>(writeLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
         }
+        { // Test optional permission typecast
+            Tecs::Lock<ECS, Tecs::Write<Transform, Renderable, Script>> writeLockSubset = writeLockAll;
+            Tecs::Lock<ECS,
+                Tecs::Write<Transform, Renderable, Tecs::Optional<Script>>,
+                Tecs::Optional<Tecs::Write<GlobalComponent>>>
+                optionalLock1 = writeLockSubset;
+            for (Tecs::Entity e : optionalLock1.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock1).pos[0] == 1, "Expected position.x to be 1");
+            }
+            Tecs::Lock<ECS, Tecs::Write<Transform>, Tecs::Optional<Tecs::Write<Script, GlobalComponent>>>
+                optionalLock2 = optionalLock1;
+            for (Tecs::Entity e : optionalLock2.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock2).pos[0] == 1, "Expected position.x to be 1");
+            }
+            Tecs::Lock<ECS, Tecs::Write<Transform, Tecs::Optional<Script, Renderable>>> optionalLock3 = optionalLock2;
+            for (Tecs::Entity e : optionalLock3.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock3).pos[0] == 1, "Expected position.x to be 1");
+            }
+        }
+        auto testEntity = *writeLockAll.EntitiesWith<Transform>().begin();
+        { // Test EntityLock
+            Tecs::EntityLock<ECS, Tecs::Write<Transform, Renderable, Tecs::Optional<Script>>> entSubLock(writeLockAll,
+                testEntity);
+            Assert(entSubLock.Get<Transform>().pos[0] == 1, "Expected position.x to be 1");
+            Assert(entSubLock.Get<const Transform>().pos[0] == 1, "Expected position.x to be 1");
+            for (Tecs::Entity e : entSubLock.EntitiesWith<Transform>()) {
+                if (e == testEntity) {
+                    Assert(e.Get<const Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                    Assert(e.Get<Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                } else {
+                    Assert(e.Get<const Transform>(entSubLock).pos[0] == 1, "Expected position.x to be 1");
+                    auto &transform = e.Get<Transform>(entSubLock);
+                    static_assert(std::is_const_v<std::remove_reference_t<decltype(transform)>>,
+                        "Expected EntityLock::Get to return const ref");
+                }
+            }
+            auto optionalEntLock1 = entSubLock.TryLock<Tecs::Read<Script>>();
+            Assert(optionalEntLock1.has_value(), "Expected EntityLock::TryLock to succeed with Read<Script>");
+            auto optionalEntLock2 = entSubLock.TryLock<Tecs::Write<Script>>();
+            Assert(optionalEntLock2.has_value(), "Expected EntityLock::TryLock to succeed with Write<Script>");
+            Tecs::EntityLock<ECS, Tecs::Write<Transform>> entLock = entSubLock;
+            auto &transform = entLock.Get<Transform>();
+            Assert(transform.pos[0] == 1, "Expected position.x to be 1");
+            transform.pos[0] = 2;
+            Assert(entLock.Get<const Transform>().pos[0] == 2, "Expected position.x to be 1");
+            Assert(entLock.Get<Transform>().pos[0] == 2, "Expected position.x to be 1");
+            for (Tecs::Entity e : entLock.EntitiesWith<Transform>()) {
+                if (e == testEntity) {
+                    Assert(e.Get<const Transform>(entLock).pos[0] == 2, "Expected position.x to be 1");
+                    Assert(e.Get<Transform>(entLock).pos[0] == 2, "Expected position.x to be 1");
+                } else {
+                    Assert(e.Get<const Transform>(entLock).pos[0] == 1, "Expected position.x to be 1");
+                    auto &transform2 = e.Get<Transform>(entLock);
+                    static_assert(std::is_const_v<std::remove_reference_t<decltype(transform2)>>,
+                        "Expected EntityLock::Get to return const ref");
+                }
+            }
+
+            Tecs::Lock<ECS, Tecs::Read<Transform>> readLockTransform = entLock;
+            for (Tecs::Entity e : readLockTransform.EntitiesWith<Transform>()) {
+                // Conversion from EntityLock to Lock hides entity writes.
+                Assert(e.Get<Transform>(readLockTransform).pos[0] == 1, "Expected position.x to be 1");
+            }
+            transform.pos[0] = 1; // Reset positon for next test
+        }
         TestReadLock(writeLockAll);
         TestWriteLock(writeLockAll);
         TestAmbiguousLock((Tecs::Lock<ECS, Tecs::Read<Transform>>)writeLockAll);
+        TestReadEntityLock(Tecs::EntityLock<ECS, Tecs::Read<Transform>>(writeLockAll, testEntity));
+        TestWriteEntityLock(Tecs::EntityLock<ECS, Tecs::Write<Transform>>(writeLockAll, testEntity));
     }
     {
-        Timer t("Test entity write lock typecasting");
+        Timer t("Test addremove lock typecasting");
         auto writeLockAll = ecs.StartTransaction<Tecs::AddRemove>();
         { // Test Subset() method
             auto readLockTransform = writeLockAll.Subset<Tecs::Read<Transform>>();
@@ -1058,6 +1291,9 @@ int main(int /* argc */, char ** /* argv */) {
         TestReadLock(writeLockAll);
         TestWriteLock(writeLockAll);
         TestAddRemoveLock(writeLockAll);
+        auto testEntity = *writeLockAll.EntitiesWith<Transform>().begin();
+        TestReadEntityLock(Tecs::EntityLock<ECS, Tecs::Read<Transform>>(writeLockAll, testEntity));
+        TestWriteEntityLock(Tecs::EntityLock<ECS, Tecs::Write<Transform>>(writeLockAll, testEntity));
     }
     {
         Timer t("Test reading observers again");
@@ -1282,7 +1518,7 @@ int main(int /* argc */, char ** /* argv */) {
         {
             auto readLock = ecs.StartTransaction<>();
             std::cout << "Total test transactions: " << readLock.GetTransactionId() << std::endl;
-            Assert(readLock.GetTransactionId() == 335, "Expected transaction id to be 335");
+            Assert(readLock.GetTransactionId() == 339, "Expected final transaction id to be 339");
         }
     }
 
@@ -1291,6 +1527,104 @@ int main(int /* argc */, char ** /* argv */) {
 }
 
 namespace testing {
+    void TestReadEntityLock(Tecs::EntityLock<ECS, Tecs::Read<Transform>> entLock) {
+        auto entityView = entLock.EntitiesWith<Transform>().subview(0, 10);
+        for (Tecs::Entity ent : entityView) {
+            auto &transform1 = ent.Get<Transform>(entLock);
+            auto &transform2 = ent.Get<const Transform>(entLock);
+            auto &transform3 = ent.GetPrevious<Transform>(entLock);
+            auto &transform4 = ent.GetPrevious<const Transform>(entLock);
+            static_assert(std::is_const_v<std::remove_reference_t<decltype(transform1)>>,
+                "Expected read only transform reference");
+            static_assert(std::is_same_v<decltype(transform1), decltype(transform2)>, "Expected transfomr2 to match");
+            static_assert(std::is_same_v<decltype(transform1), decltype(transform3)>, "Expected transfomr3 to match");
+            static_assert(std::is_same_v<decltype(transform1), decltype(transform4)>, "Expected transfomr4 to match");
+            Assert(transform1.pos[0] == 1, "Expected position.x to be 1");
+            Assert(&transform1 == &transform2, "Expected Get<Transform> to be same as Get<const Transform>");
+            Assert(&transform3 == &transform4,
+                "Expected GetPrevious<Transform> to be same as GetPrevious<const Transform>");
+            if (ent == entLock.entity) {
+                auto &lockTransform1 = entLock.Get<Transform>();
+                auto &lockTransform2 = entLock.Get<const Transform>();
+                auto &lockTransform3 = entLock.GetPrevious<Transform>();
+                auto &lockTransform4 = entLock.GetPrevious<const Transform>();
+                static_assert(std::is_same_v<decltype(transform1), decltype(lockTransform1)>,
+                    "Expected lockTransform1 to match");
+                static_assert(std::is_same_v<decltype(transform1), decltype(lockTransform2)>,
+                    "Expected lockTransform2 to match");
+                static_assert(std::is_same_v<decltype(transform1), decltype(lockTransform3)>,
+                    "Expected lockTransform3 to match");
+                static_assert(std::is_same_v<decltype(transform1), decltype(lockTransform4)>,
+                    "Expected lockTransform4 to match");
+                Assert(&lockTransform1 == &lockTransform2,
+                    "Expected Get<Transform> to be same as Get<const Transform>");
+                Assert(&lockTransform3 == &lockTransform4,
+                    "Expected GetPrevious<Transform> to be same as GetPrevious<const Transform>");
+                Assert(&transform1 == &lockTransform1, "Expected Get<Transform> to match EntityLock");
+                Assert(&transform3 == &lockTransform3, "Expected Get<Transform> to match EntityLock");
+            } else {
+                Assert(&transform1 == &transform3, "Expected Get<Transform> to be same as GetPrevious<Transform>");
+            }
+        }
+    }
+
+    void TestWriteEntityLock(Tecs::EntityLock<ECS, Tecs::Write<Transform>> entLock) {
+        auto entityView = entLock.EntitiesWith<Transform>().subview(0, 10);
+        Tecs::Lock<ECS, Tecs::Read<Transform>> readLock = entLock;
+        for (Tecs::Entity ent : entityView) {
+            auto &constTransform1 = ent.Get<const Transform>(readLock);
+            auto &constTransform2 = ent.Get<const Transform>(entLock);
+            static_assert(std::is_const_v<std::remove_reference_t<decltype(constTransform1)>>,
+                "Expected read only transform reference");
+            static_assert(std::is_const_v<std::remove_reference_t<decltype(constTransform2)>>,
+                "Expected read only transform reference");
+            Assert(constTransform1.pos[0] == 1, "Expected position.x to be 1");
+            if (ent == entLock.entity) {
+                Assert(&constTransform1 != &constTransform2,
+                    "Expected Lock::Get<const T> not to see EntityLock changes");
+                auto &transform1 = entLock.Get<Transform>();
+                auto &transform2 = entLock.Get<const Transform>();
+                auto &transform3 = ent.Get<Transform>(entLock);
+                auto &transform4 = ent.Get<Transform>(readLock);
+                auto &transform5 = ent.Get<const Transform>(readLock);
+                static_assert(!std::is_const_v<std::remove_reference_t<decltype(transform1)>>,
+                    "Expected writable transform reference");
+                static_assert(std::is_const_v<std::remove_reference_t<decltype(transform2)>>,
+                    "Expected read only transform reference");
+                static_assert(std::is_same_v<decltype(transform2), decltype(transform3)>,
+                    "Expected transfomr2 to match transform3");
+                static_assert(std::is_same_v<decltype(transform2), decltype(transform4)>,
+                    "Expected transfomr2 to match transform4");
+                static_assert(std::is_same_v<decltype(transform2), decltype(transform5)>,
+                    "Expected transfomr2 to match transform5");
+                Assert(transform1.pos[0] == 1, "Expected position.x to be 1");
+                Assert(&transform1 == &constTransform2, "Expected EntityLock::Get<T> to match write reference");
+                Assert(&transform2 == &constTransform2, "Expected EntityLock::Get<const T> to match write reference");
+                Assert(&transform3 == &constTransform2, "Expected Entity::Get<T>(EntityLock) to match write reference");
+                Assert(&transform4 == &constTransform1, "Expected Entity::Get<T>(Lock) to match read-only reference");
+                Assert(&transform5 == &constTransform1,
+                    "Expected Entity::Get<const T>(Lock) to match read-only reference");
+            } else {
+                Assert(&constTransform1 == &constTransform2,
+                    "Expected EntityLock::Get<T> not to see changes of other entities");
+                auto &transform1 = ent.Get<Transform>(entLock);
+                auto &transform2 = ent.Get<Transform>(readLock);
+                auto &transform3 = ent.Get<const Transform>(readLock);
+                static_assert(std::is_const_v<std::remove_reference_t<decltype(transform1)>>,
+                    "Expected read only transform reference");
+                static_assert(std::is_same_v<decltype(transform1), decltype(transform2)>,
+                    "Expected transfomr1 to match transform2");
+                static_assert(std::is_same_v<decltype(transform1), decltype(transform3)>,
+                    "Expected transfomr1 to match transform3");
+                Assert(&transform1 == &constTransform1,
+                    "Expected Entity::Get<T>(EntityLock) to match read only reference");
+                Assert(&transform2 == &constTransform1, "Expected Entity::Get<T>(Lock) to match read only reference");
+                Assert(&transform3 == &constTransform1,
+                    "Expected Entity::Get<const T>(Lock) to match read only reference");
+            }
+        }
+    }
+
     void TestAmbiguousLock(Tecs::Lock<ECS, Tecs::Read<Transform>> lock) {
         for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
             Assert(e.Get<Transform>(lock).pos[0] == 1, "Expected position.x to be 1");
