@@ -13,6 +13,7 @@
 #include <deque>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace Tecs {
@@ -154,8 +155,34 @@ namespace Tecs {
         };
 
         template<typename... Un>
-        inline static constexpr bool BitsetHas(const ComponentBitset &bitset) {
+        static constexpr bool BitsetHas(const ComponentBitset &bitset) {
             return (bitset[1 + GetComponentIndex<0, Un>()] && ...);
+        }
+
+        template<typename SetLockType, size_t... Is>
+        static constexpr ComponentBitset ReadBitset(std::index_sequence<Is...>) {
+            ComponentBitset result;
+            result[0] = true;
+            ((result[1 + Is] = is_read_allowed<Tn, SetLockType>()), ...);
+            return result;
+        }
+
+        template<typename SetLockType>
+        static constexpr ComponentBitset ReadBitset() {
+            return ReadBitset<SetLockType>(std::index_sequence_for<Tn...>{});
+        }
+
+        template<typename SetLockType, size_t... Is>
+        static constexpr ComponentBitset WriteBitset(std::index_sequence<Is...>) {
+            ComponentBitset result;
+            result[0] = Tecs::is_add_remove_allowed<SetLockType>();
+            ((result[1 + Is] = is_write_allowed<Tn, SetLockType>()), ...);
+            return result;
+        }
+
+        template<typename SetLockType>
+        static constexpr ComponentBitset WriteBitset() {
+            return WriteBitset<SetLockType>(std::index_sequence_for<Tn...>{});
         }
 
         template<typename T>
