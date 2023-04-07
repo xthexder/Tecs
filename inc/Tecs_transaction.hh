@@ -40,7 +40,9 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes>
     class BaseTransaction {
     public:
-        BaseTransaction(ECSType<AllComponentTypes...> &instance) : instance(instance) {
+        BaseTransaction(ECSType<AllComponentTypes...> &instance,
+            const std::bitset<1 + sizeof...(AllComponentTypes)> &readPermissions)
+            : instance(instance), readPermissions(readPermissions) {
 #ifndef TECS_HEADER_ONLY
             transactionId = ++nextTransactionId;
             for (size_t i = 0; i < activeTransactionsCount; i++) {
@@ -70,6 +72,7 @@ namespace Tecs {
         size_t transactionId;
 #endif
 
+        const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
         std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 
         template<typename T>
@@ -106,7 +109,9 @@ namespace Tecs {
 #endif
 
     public:
-        inline Transaction(ECS<AllComponentTypes...> &instance) : BaseTransaction<ECS, AllComponentTypes...>(instance) {
+        inline Transaction(ECS<AllComponentTypes...> &instance,
+            const std::bitset<1 + sizeof...(AllComponentTypes)> &readPermissions)
+            : BaseTransaction<ECS, AllComponentTypes...>(instance, readPermissions) {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);

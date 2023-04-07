@@ -58,13 +58,13 @@ namespace Tecs {
         }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-        inline void StartTrace() {
+        void StartTrace() {
             transactionTrace.StartTrace();
             metadata.traceInfo.StartTrace();
             (Storage<Tn>().traceInfo.StartTrace(), ...);
         }
 
-        inline PerformanceTrace StopTrace() {
+        PerformanceTrace StopTrace() {
             return PerformanceTrace{
                 transactionTrace.StopTrace(),             // transactionEvents
                 metadata.traceInfo.StopTrace(),           // metadataEvents
@@ -83,14 +83,14 @@ namespace Tecs {
          * Returns the index of a Component type for use in a bitset.
          */
         template<typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        static constexpr size_t GetComponentIndex() {
             return GetComponentIndex<0, U>();
         }
 
         /**
          * Returns the number of Component types registered in this ECS instance.
          */
-        inline static constexpr size_t GetComponentCount() {
+        static constexpr size_t GetComponentCount() {
             return sizeof...(Tn);
         }
 
@@ -98,7 +98,7 @@ namespace Tecs {
          * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
          */
         template<typename U>
-        inline static std::string GetComponentName() {
+        static std::string GetComponentName() {
             if constexpr (std::extent<decltype(component_name<U>::value)>::value > 1) {
                 return component_name<U>::value;
             } else {
@@ -110,11 +110,11 @@ namespace Tecs {
          * Returns true if the Component type is part of this ECS.
          */
         template<typename U>
-        inline static constexpr bool IsComponent() {
+        static constexpr bool IsComponent() {
             return contains<U, Tn...>();
         }
 
-        inline static constexpr size_t GetBytesPerEntity() {
+        static constexpr size_t GetBytesPerEntity() {
             return (ComponentIndex<Tn>::GetBytesPerEntity() + ...);
         }
 

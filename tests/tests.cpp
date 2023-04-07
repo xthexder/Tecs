@@ -952,19 +952,38 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Script>(readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
         }
-        { // Test DynamicLock typecast method
+        { // Test optional permission typecast
             Tecs::Lock<ECS, Tecs::Read<Transform, Renderable, Script>> readLockSubset = readLockAll;
-            Tecs::DynamicLock<ECS, Tecs::Read<Transform>> dynamicLock = readLockSubset;
-            for (Tecs::Entity e : dynamicLock.EntitiesWith<Transform>()) {
-                Assert(e.Get<Transform>(dynamicLock).pos[0] == 1, "Expected position.x to be 1");
+            Tecs::Lock<ECS,
+                Tecs::Read<Transform, Renderable, Tecs::Optional<Script>>,
+                Tecs::Optional<Tecs::Read<GlobalComponent>>>
+                optionalLock1 = readLockSubset;
+            Tecs::Lock<ECS, Tecs::Read<Transform>, Tecs::Optional<Tecs::Read<Script, GlobalComponent>>> optionalLock2 =
+                optionalLock1;
+            Tecs::Lock<ECS, Tecs::Read<Transform, Tecs::Optional<Script, Renderable>>> optionalLock3 = optionalLock2;
+            for (Tecs::Entity e : optionalLock1.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock1).pos[0] == 1, "Expected position.x to be 1");
             }
-            auto readLockScript = dynamicLock.TryLock<Tecs::Read<Script, Renderable>>();
+            for (Tecs::Entity e : optionalLock2.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock2).pos[0] == 1, "Expected position.x to be 1");
+            }
+            for (Tecs::Entity e : optionalLock3.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock3).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto readLockScript = optionalLock2.TryLock<Tecs::Read<Transform, Script>>();
             Assert(readLockScript.has_value(), "Expected readLockScript to be valid");
             for (Tecs::Entity e : readLockScript->EntitiesWith<Script>()) {
                 Assert(e.Get<Script>(*readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
-            auto readLockGlobalCompoennt = dynamicLock.TryLock<Tecs::Read<GlobalComponent>>();
-            Assert(!readLockGlobalCompoennt.has_value(), "Expected readLockGlobalCompoennt to be invalid");
+            auto readLockScript2 = optionalLock3.TryLock<Tecs::Read<Transform, Script>>();
+            Assert(readLockScript2.has_value(), "Expected readLockScript2 to be valid");
+            for (Tecs::Entity e : readLockScript2->EntitiesWith<Script>()) {
+                Assert(e.Get<Script>(*readLockScript2).data[0] == 1, "Expected script[0] to be 1");
+            }
+            auto readLockGlobalComponent1 = optionalLock2.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalComponent1.has_value(), "Expected readLockGlobalComponent1 to be invalid");
+            auto readLockGlobalComponent2 = optionalLock3.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalComponent2.has_value(), "Expected readLockGlobalComponent2 to be invalid");
         }
         TestReadLock(readLockAll);
         TestAmbiguousLock(readLockAll);
@@ -1008,6 +1027,25 @@ int main(int /* argc */, char ** /* argv */) {
             Tecs::Lock<ECS, Tecs::Write<Script, Renderable>> writeLockScript = writeLockAll;
             for (Tecs::Entity e : writeLockScript.EntitiesWith<Script>()) {
                 Assert(e.Get<Script>(writeLockScript).data[0] == 1, "Expected script[0] to be 1");
+            }
+        }
+        { // Test optional permission typecast
+            Tecs::Lock<ECS, Tecs::Write<Transform, Renderable, Script>> writeLockSubset = writeLockAll;
+            Tecs::Lock<ECS,
+                Tecs::Write<Transform, Renderable, Tecs::Optional<Script>>,
+                Tecs::Optional<Tecs::Write<GlobalComponent>>>
+                optionalLock1 = writeLockSubset;
+            for (Tecs::Entity e : optionalLock1.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock1).pos[0] == 1, "Expected position.x to be 1");
+            }
+            Tecs::Lock<ECS, Tecs::Write<Transform>, Tecs::Optional<Tecs::Write<Script, GlobalComponent>>>
+                optionalLock2 = optionalLock1;
+            for (Tecs::Entity e : optionalLock2.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock2).pos[0] == 1, "Expected position.x to be 1");
+            }
+            Tecs::Lock<ECS, Tecs::Write<Transform, Tecs::Optional<Script, Renderable>>> optionalLock3 = optionalLock2;
+            for (Tecs::Entity e : optionalLock3.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(optionalLock3).pos[0] == 1, "Expected position.x to be 1");
             }
         }
         TestReadLock(writeLockAll);
