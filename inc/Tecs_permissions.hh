@@ -121,6 +121,8 @@ namespace Tecs {
     struct is_entity_lock : std::false_type {};
     template<typename ECSType, typename... Permissions>
     struct is_entity_lock<EntityLock<ECSType, Permissions...>> : std::true_type {};
+    template<typename ECSType, typename... Permissions>
+    struct is_entity_lock<const EntityLock<ECSType, Permissions...>> : std::true_type {};
 
     // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>
@@ -141,14 +143,14 @@ namespace Tecs {
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
 
-    template<typename T, typename Lock>
-    struct is_optional : std::false_type {};
-    template<typename T, typename Lock>
-    struct is_read_optional : std::false_type {};
-    template<typename T, typename Lock>
-    struct is_write_optional : std::false_type {};
-    template<typename Lock>
-    struct is_add_remove_optional : std::false_type {};
+    // template<typename T, typename Lock>
+    // struct is_optional : std::false_type {};
+    // template<typename T, typename Lock>
+    // struct is_read_optional : std::false_type {};
+    // template<typename T, typename Lock>
+    // struct is_write_optional : std::false_type {};
+    // template<typename Lock>
+    // struct is_add_remove_optional : std::false_type {};
 
     // Lock<Permissions...> specializations
     // clang-format off
@@ -167,30 +169,30 @@ namespace Tecs {
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
 
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_read_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
+    // template<typename T, typename ECSType, typename... Permissions>
+    // struct is_read_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
+    // template<typename T, typename ECSType, typename... Permissions>
+    // struct is_read_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
 
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
-    template<typename T, typename ECSType, typename... Permissions>
-    struct is_write_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
+    // template<typename T, typename ECSType, typename... Permissions>
+    // struct is_write_optional<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
+    // template<typename T, typename ECSType, typename... Permissions>
+    // struct is_write_optional<T, const Lock<ECSType, Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
 
-    template<typename ECSType, typename... Permissions>
-    struct is_add_remove_optional<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
-    template<typename ECSType, typename... Permissions>
-    struct is_add_remove_optional<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
+    // template<typename ECSType, typename... Permissions>
+    // struct is_add_remove_optional<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
+    // template<typename ECSType, typename... Permissions>
+    // struct is_add_remove_optional<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
 
     // Optional<Permissions...> specializations
-    template<typename T, typename... OptionalTypes>
-    struct is_optional<T, Optional<OptionalTypes...>> : contains<T, OptionalTypes...> {};
-    template<typename T, typename... Permissions>
-    struct is_read_optional<T, Optional<Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
-    template<typename T, typename... Permissions>
-    struct is_write_optional<T, Optional<Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
-    template<typename... Permissions>
-    struct is_add_remove_optional<Optional<Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
+    // template<typename T, typename... OptionalTypes>
+    // struct is_optional<T, Optional<OptionalTypes...>> : contains<T, OptionalTypes...> {};
+    // template<typename T, typename... Permissions>
+    // struct is_read_optional<T, Optional<Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    // template<typename T, typename... Permissions>
+    // struct is_write_optional<T, Optional<Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    // template<typename... Permissions>
+    // struct is_add_remove_optional<Optional<Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
     // clang-format on
 
     // Check SubLock <= Lock for component type T
@@ -204,10 +206,10 @@ namespace Tecs {
     template<typename T, typename... LockedTypes>
     struct is_read_allowed<T, Read<LockedTypes...>> : contains<T, LockedTypes...> {};
 
-    template<typename T, typename... LockedTypes>
-    struct is_read_optional<T, Read<LockedTypes...>>
-        : std::conjunction<std::negation<is_read_allowed<T, Read<LockedTypes...>>>,
-              std::disjunction<is_optional<T, LockedTypes>...>> {};
+    // template<typename T, typename... LockedTypes>
+    // struct is_read_optional<T, Read<LockedTypes...>>
+    //     : std::conjunction<std::negation<is_read_allowed<T, Read<LockedTypes...>>>,
+    //           std::disjunction<is_optional<T, LockedTypes>...>> {};
 
     // ReadAll specialization
     template<typename T>
@@ -219,14 +221,14 @@ namespace Tecs {
     template<typename T, typename... LockedTypes>
     struct is_write_allowed<T, Write<LockedTypes...>> : contains<T, LockedTypes...> {};
 
-    template<typename T, typename... LockedTypes>
-    struct is_read_optional<T, Write<LockedTypes...>>
-        : std::conjunction<std::negation<is_read_allowed<T, Write<LockedTypes...>>>,
-              std::disjunction<is_optional<T, LockedTypes>...>> {};
-    template<typename T, typename... LockedTypes>
-    struct is_write_optional<T, Write<LockedTypes...>>
-        : std::conjunction<std::negation<is_write_allowed<T, Write<LockedTypes...>>>,
-              std::disjunction<is_optional<T, LockedTypes>...>> {};
+    // template<typename T, typename... LockedTypes>
+    // struct is_read_optional<T, Write<LockedTypes...>>
+    //     : std::conjunction<std::negation<is_read_allowed<T, Write<LockedTypes...>>>,
+    //           std::disjunction<is_optional<T, LockedTypes>...>> {};
+    // template<typename T, typename... LockedTypes>
+    // struct is_write_optional<T, Write<LockedTypes...>>
+    //     : std::conjunction<std::negation<is_write_allowed<T, Write<LockedTypes...>>>,
+    //           std::disjunction<is_optional<T, LockedTypes>...>> {};
 
     // WriteAll specialization
     template<typename T>

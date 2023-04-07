@@ -22,9 +22,6 @@
 static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
 
 namespace Tecs {
-    template<typename, typename...>
-    class EntityLock;
-
     /**
      * Lock<ECS, Permissions...> is a reference to lock permissions held by an active Transaction.
      *
@@ -106,27 +103,28 @@ namespace Tecs {
             } else {
                 readAliasesWriteStorage[0] = source.readAliasesWriteStorage[0];
             }
-            ( // For each AllComponentTypes, copy the source permissions
-                [&] {
-                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
-                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-                        readAliasesWriteStorage[compIndex] = true;
-                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
-                        readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
-                    } else if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
-                        readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
-                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
-                        readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
-                    }
-                }(),
-                ...);
+            // ( // For each AllComponentTypes, copy the source permissions
+            //     [&] {
+            //         constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
+            //         if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+            //             readAliasesWriteStorage[compIndex] = true;
+            //             // } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+            //             //     readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
+            //         } else if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+            //             readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
+            //             // } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+            //             //     readAliasesWriteStorage[compIndex] = source.readAliasesWriteStorage[compIndex];
+            //         }
+            //     }(),
+            //     ...);
             base->template AcquireLockReference<LockType>();
         }
 
         // Reference a subset of an EntityLock
         template<typename... SourcePermissions,
-            std::enable_if_t<!is_add_remove_allowed<LockType>() && is_lock_subset<SourcePermissions...>() &&
-                                 (!is_write_allowed<AllComponentTypes, LockType>() && ...),
+            std::enable_if_t<!is_add_remove_allowed<LockType>() && is_lock_subset<SourcePermissions...>() /* &&
+                                  (!is_write_allowed<AllComponentTypes, LockType>() && ...)*/
+                ,
                 int> = 0>
         inline Lock(const EntityLock<ECS, SourcePermissions...> &source)
             : instance(source.lock.instance), base(source.lock.base), readAliasesWriteStorage({}) {
@@ -348,8 +346,7 @@ namespace Tecs {
 
         template<typename... PermissionsSubset>
         inline Lock<ECS, PermissionsSubset...> Subset() const {
-            static_assert(has_permissions<PermissionsSubset...>(),
-                "Lock types are not a subset of existing permissions.");
+            static_assert(has_permissions<PermissionsSubset...>(), "Lock is not a subset of existing permissions.");
 
             return Lock<ECS, PermissionsSubset...>(*this);
         }
@@ -359,33 +356,34 @@ namespace Tecs {
             if constexpr (has_permissions<DynamicPermissions...>()) {
                 return Lock<ECS, DynamicPermissions...>(*this);
             } else if constexpr (is_add_remove_allowed<Lock<ECS, DynamicPermissions...>>()) {
-                if constexpr (is_add_remove_optional<LockType>()) {
-                    if (base->writePermissions[0]) {
-                        return Lock<ECS, DynamicPermissions...>(instance, base, readAliasesWriteStorage);
-                    } else {
-                        return {};
-                    }
-                } else {
-                    return {};
-                }
+                // if constexpr (is_add_remove_optional<LockType>()) {
+                //     if (base->writePermissions[0]) {
+                //         return Lock<ECS, DynamicPermissions...>(instance, base, readAliasesWriteStorage);
+                //     } else {
+                //         return {};
+                //     }
+                // } else {
+                return {};
+                // }
             } else {
-                bool hasPermissions = ([&]() -> bool {
-                    if constexpr (is_write_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
-                        if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
-                            return instance.template BitsetHas<AllComponentTypes>(base->writePermissions);
-                        } else {
-                            return is_write_allowed<AllComponentTypes, LockType>();
-                        }
-                    } else if constexpr (is_read_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
-                        if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
-                            return instance.template BitsetHas<AllComponentTypes>(base->readPermissions);
-                        } else {
-                            return is_read_allowed<AllComponentTypes, LockType>();
-                        }
-                    } else {
-                        return true;
-                    }
-                }() && ...);
+                bool hasPermissions = false;
+                // ([&]() -> bool {
+                //     if constexpr (is_write_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
+                //         // if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                //         //     return instance.template BitsetHas<AllComponentTypes>(base->writePermissions);
+                //         // } else {
+                //         return is_write_allowed<AllComponentTypes, LockType>();
+                //         // }
+                //     } else if constexpr (is_read_allowed<AllComponentTypes, Lock<ECS, DynamicPermissions...>>()) {
+                //         // if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                //         //     return instance.template BitsetHas<AllComponentTypes>(base->readPermissions);
+                //         // } else {
+                //         return is_read_allowed<AllComponentTypes, LockType>();
+                //         // }
+                //     } else {
+                //         return true;
+                //     }
+                // }() && ...);
                 if (hasPermissions) {
                     return Lock<ECS, DynamicPermissions...>(instance, base, readAliasesWriteStorage);
                 } else {
@@ -404,32 +402,32 @@ namespace Tecs {
         inline Lock(ECS &instance, decltype(base) base, decltype(readAliasesWriteStorage) readAliasesWriteStorage)
             : instance(instance), base(base), readAliasesWriteStorage(readAliasesWriteStorage) {
             if constexpr (!is_add_remove_allowed<LockType>()) {
-                if constexpr (is_add_remove_optional<LockType>()) {
-                    if (!base->writePermissions[0]) {
-                        this->readAliasesWriteStorage[0] = false;
-                    }
-                } else {
-                    this->readAliasesWriteStorage[0] = false;
-                }
+                // if constexpr (is_add_remove_optional<LockType>()) {
+                //     if (!base->writePermissions[0]) {
+                //         this->readAliasesWriteStorage[0] = false;
+                //     }
+                // } else {
+                this->readAliasesWriteStorage[0] = false;
+                // }
             }
-            ( // For each AllComponentTypes
-                [&] {
-                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
-                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
-                        if constexpr (!is_write_allowed<AllComponentTypes, LockType>()) {
-                            if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
-                                if (!base->writePermissions[compIndex]) {
-                                    this->readAliasesWriteStorage[compIndex] = false;
-                                }
-                            } else {
-                                this->readAliasesWriteStorage[compIndex] = false;
-                            }
-                        }
-                    } else {
-                        this->readAliasesWriteStorage[compIndex] = false;
-                    }
-                }(),
-                ...);
+            // ( // For each AllComponentTypes
+            //     [&] {
+            //         constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
+            //         if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+            //             if constexpr (!is_write_allowed<AllComponentTypes, LockType>()) {
+            //                 // if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+            //                 //     if (!base->writePermissions[compIndex]) {
+            //                 //         this->readAliasesWriteStorage[compIndex] = false;
+            //                 //     }
+            //                 // } else {
+            //                 this->readAliasesWriteStorage[compIndex] = false;
+            //                 // }
+            //             }
+            //         } else {
+            //             this->readAliasesWriteStorage[compIndex] = false;
+            //         }
+            //     }(),
+            //     ...);
             base->template AcquireLockReference<LockType>();
         }
 
