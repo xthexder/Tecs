@@ -328,7 +328,7 @@ namespace Tecs {
             using DynamicLock = Lock<ECS, DynamicPermissions...>;
             if constexpr (has_permissions<DynamicPermissions...>()) {
                 return DynamicLock(*this);
-            } else if constexpr (is_add_remove_allowed<DynamicLock>()) {
+            } else {
                 static const auto requestedRead = generateReadBitset<DynamicLock>();
                 static const auto requestedWrite = generateWriteBitset<DynamicLock>();
                 if ((requestedRead & base->readPermissions) == requestedRead &&
