@@ -174,10 +174,13 @@ namespace Tecs {
 
         template<typename Permissions, size_t... Is>
         static constexpr ComponentBitset WriteBitset(std::index_sequence<Is...>) {
-            ComponentBitset result;
-            result[0] = Tecs::is_add_remove_allowed<Permissions>();
-            ((result[1 + Is] = is_write_allowed<Tn, Permissions>()), ...);
-            return result;
+            if constexpr (Tecs::is_add_remove_allowed<Permissions>()) {
+                return ComponentBitset().set();
+            } else {
+                ComponentBitset result;
+                ((result[1 + Is] = is_write_allowed<Tn, Permissions>()), ...);
+                return result;
+            }
         }
 
         template<typename Permissions>

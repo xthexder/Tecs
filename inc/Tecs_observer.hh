@@ -80,7 +80,7 @@ namespace Tecs {
         ECSType *ecs;
         std::weak_ptr<std::deque<EventType>> eventListWeak;
 
-        template<typename, typename...>
-        friend class Lock;
+        template<typename, typename>
+        friend class LockImpl;
     };
 }; // namespace Tecs

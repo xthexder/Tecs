@@ -62,7 +62,7 @@ namespace Tecs {
             : ImplType(instance,
                   std::make_shared<Transaction<ECS>>(instance, ECS::template ReadBitset<FlatPermissions>(),
                       ECS::template WriteBitset<FlatPermissions>()),
-                  this->base->writePermissions & ImplType::AcquireReadBitset()) {}
+                  ECS::template WriteBitset<FlatPermissions>() & ImplType::AcquireReadBitset()) {}
 
         // Reference an identical lock
         inline Lock(const LockType &source) : ImplType(source.instance, source.base, source.readAliasesWriteStorage) {}
@@ -372,10 +372,13 @@ namespace Tecs {
     private:
         template<size_t... Is>
         static constexpr ComponentBitset AcquireReadBitset(std::index_sequence<Is...>) {
-            ComponentBitset result;
-            result[0] = is_add_remove_optional<Permissions>();
-            ((result[1 + Is] = is_read_optional<AllComponentTypes, Permissions>()), ...);
-            return result | ECS::template ReadBitset<Permissions>();
+            if constexpr (is_add_remove_allowed<Permissions>()) {
+                return ComponentBitset().set();
+            } else {
+                ComponentBitset result;
+                ((result[1 + Is] = is_read_optional<AllComponentTypes, Permissions>()), ...);
+                return result | ECS::template ReadBitset<Permissions>();
+            }
         }
 
         static constexpr ComponentBitset AcquireReadBitset() {
