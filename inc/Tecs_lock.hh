@@ -55,7 +55,7 @@ namespace Tecs {
         template<typename... PermissionsSource>
         inline Lock(ECS &instance, decltype(base) base, decltype(readAliasesWriteStorage) readAliasesWriteStorage)
             : instance(instance), base(base), readAliasesWriteStorage(readAliasesWriteStorage) {
-            base->template AcquireLockReference<LockType>();
+            AcquireLockReference();
         }
 
         template<size_t... Is>
@@ -73,7 +73,7 @@ namespace Tecs {
                                       ECS::template ReadBitset<LockType>(), ECS::template WriteBitset<LockType>())),
               readAliasesWriteStorage(
                   base->writePermissions & optionalReadBitset(std::index_sequence_for<AllComponentTypes...>{})) {
-            base->template AcquireLockReference<LockType>();
+            AcquireLockReference();
         }
 
         // Returns true if this lock type can be constructed from a lock with the specified source permissions
@@ -96,7 +96,7 @@ namespace Tecs {
         // Reference an identical lock
         inline Lock(const LockType &source)
             : instance(source.instance), base(source.base), readAliasesWriteStorage(source.readAliasesWriteStorage) {
-            base->template AcquireLockReference<LockType>();
+            AcquireLockReference();
         }
 
         // Reference a subset of an existing transaction
@@ -105,11 +105,11 @@ namespace Tecs {
             : instance(source.instance), base(source.base),
               readAliasesWriteStorage(
                   base->writePermissions & optionalReadBitset(std::index_sequence_for<AllComponentTypes...>{})) {
-            base->template AcquireLockReference<LockType>();
+            AcquireLockReference();
         }
 
         inline ~Lock() {
-            base->template ReleaseLockReference<LockType>();
+            ReleaseLockReference();
         }
 
         inline constexpr ECS &GetInstance() const {
@@ -351,6 +351,87 @@ namespace Tecs {
         }
 
     private:
+        inline void AcquireLockReference() {
+            auto &t = *this->base;
+            t.readLockReferences[0]++;
+            if constexpr (is_add_remove_allowed<LockType>()) {
+                if (!t.writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
+                t.writeLockReferences[0]++;
+            } else if constexpr (is_add_remove_optional<LockType>()) {
+                if (t.writePermissions[0]) t.writeLockReferences[0]++;
+            }
+            ( // For each AllComponentTypes
+                [&] {
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                        if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                        t.writeLockReferences[compIndex]++;
+                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                        if (t.writePermissions[compIndex]) t.writeLockReferences[compIndex]++;
+                    }
+                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                        if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                        t.readLockReferences[compIndex]++;
+                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                        if (t.readPermissions[compIndex]) t.readLockReferences[compIndex]++;
+                    }
+                }(),
+                ...);
+        }
+
+        void ReleaseLockReference() {
+            auto &t = *this->base;
+            t.readLockReferences[0]--;
+            if constexpr (is_add_remove_allowed<LockType>()) {
+                if (!t.writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
+                t.writeLockReferences[0]--;
+            } else if constexpr (is_add_remove_optional<LockType>()) {
+                if (t.writePermissions[0]) t.writeLockReferences[0]--;
+            }
+            ( // For each AllComponentTypes
+                [&] {
+                    constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
+                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                        if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                        t.writeLockReferences[compIndex]--;
+                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                        if (t.writePermissions[compIndex]) {
+                            if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
+                            t.writeLockReferences[compIndex]--;
+                        }
+                    }
+                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                        if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                        t.readLockReferences[compIndex]--;
+                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                        if (t.readPermissions[compIndex]) {
+                            if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
+                            t.readLockReferences[compIndex]--;
+                        }
+                    }
+
+                    if (t.writeAccessedFlags[0] || t.writeAccessedFlags[compIndex]) return;
+                    if (t.writePermissions[compIndex]) {
+                        if (t.writeLockReferences[compIndex] == 0) {
+                            if (t.readLockReferences[compIndex] == 0) {
+                                t.writePermissions[compIndex] = false;
+                                t.readPermissions[compIndex] = false;
+                                instance.template Storage<AllComponentTypes>().WriteUnlock();
+                            } else {
+                                // t.writePermissions[compIndex] = false;
+                                // instance.template Storage<AllComponentTypes>().WriteToReadLock();
+                            }
+                        }
+                    } else if (t.readPermissions[compIndex]) {
+                        if (t.readLockReferences[compIndex] == 0) {
+                            t.readPermissions[compIndex] = false;
+                            instance.template Storage<AllComponentTypes>().ReadUnlock();
+                        }
+                    }
+                }(),
+                ...);
+        }
+
         template<typename T>
         inline void AllocateComponents(size_t count) const {
             if constexpr (!is_global_component<T>()) {
