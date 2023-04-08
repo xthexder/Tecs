@@ -102,10 +102,6 @@ namespace Tecs {
             AcquireLockReference();
         }
 
-        ~LockImpl() {
-            ReleaseLockReference();
-        }
-
     public:
         // Entity locks limit write permissions to a single entity, but allow reads from any entity.
         const std::optional<Entity> entity;
@@ -145,9 +141,13 @@ namespace Tecs {
         LockImpl(const LockImpl<ECS, SourcePermissions> &lock)
             : instance(lock.instance), base(lock.base),
               readAliasesWriteStorage(lock.base->writePermissions & AcquireReadBitset()), entity(lock.entity) {
-            static_assert(decltype(lock)::template has_permissions<Permissions>(),
+            static_assert(LockImpl<ECS, SourcePermissions>::template has_permissions<Permissions>(),
                 "Lock doesn't have all the required permissions");
             AcquireLockReference();
+        }
+
+        ~LockImpl() {
+            ReleaseLockReference();
         }
 
         inline constexpr ECS &GetInstance() const {
