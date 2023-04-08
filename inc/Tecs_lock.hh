@@ -68,9 +68,21 @@ namespace Tecs {
         inline Lock(const LockType &source) : ImplType(source.instance, source.base, source.readAliasesWriteStorage) {}
         inline Lock(const ImplType &impl) : ImplType(impl) {}
 
+        // Returns true if this lock type can be constructed from a lock with the specified source permissions
+        template<typename SourcePermissions>
+        static constexpr bool is_lock_subset() {
+            if constexpr (is_add_remove_allowed<SourcePermissions>()) {
+                return true;
+            } else if constexpr (is_add_remove_allowed<FlatPermissions>()) {
+                return false;
+            } else {
+                return std::conjunction<
+                    Tecs::is_lock_subset<AllComponentTypes, FlatPermissions, SourcePermissions>...>();
+            }
+        }
+
         // Reference a subset of an existing transaction
-        template<typename SourcePermissions,
-            std::enable_if_t<ImplType::template is_lock_subset<SourcePermissions>(), int> = 0>
+        template<typename SourcePermissions, std::enable_if_t<is_lock_subset<SourcePermissions>(), int> = 0>
         Lock(const LockImpl<ECS, SourcePermissions> &other)
             : ImplType(other.instance, other.base, other.base->writePermissions & ImplType::AcquireReadBitset()) {}
     };
@@ -95,13 +107,16 @@ namespace Tecs {
         }
 
     public:
-        // Returns true if this lock type can be constructed from a lock with the specified source permissions
-        template<typename SourcePermissions>
-        static constexpr bool is_lock_subset() {
-            if constexpr (is_add_remove_allowed<Permissions>() && !is_add_remove_allowed<SourcePermissions>()) {
+        // Returns true if this lock type has all of the requested permissions
+        template<typename RequestedPermissions>
+        static constexpr bool has_permissions() {
+            if constexpr (is_add_remove_allowed<Permissions>()) {
+                return true;
+            } else if (is_add_remove_allowed<RequestedPermissions>()) {
                 return false;
             } else {
-                return std::conjunction<Tecs::is_lock_subset<AllComponentTypes, Permissions, SourcePermissions>...>();
+                return std::conjunction<
+                    Tecs::is_lock_subset<AllComponentTypes, RequestedPermissions, Permissions>...>();
             }
         }
 
@@ -112,22 +127,13 @@ namespace Tecs {
         }
 
         // Reference a subset of an existing transaction
-        template<typename SourcePermissions, std::enable_if_t<is_lock_subset<SourcePermissions>(), int> = 0>
+        template<typename SourcePermissions>
         LockImpl(const LockImpl<ECS, SourcePermissions> &other)
             : instance(other.instance), base(other.base),
               readAliasesWriteStorage(other.base->writePermissions & AcquireReadBitset()) {
+            static_assert(decltype(other)::template has_permissions<Permissions>(),
+                "Lock doesn't have all the required permissions");
             AcquireLockReference();
-        }
-
-        // Returns true if this lock type has all of the requested permissions
-        template<typename RequestedPermissions>
-        static constexpr bool has_permissions() {
-            if constexpr (is_add_remove_allowed<RequestedPermissions>() && !is_add_remove_allowed<Permissions>()) {
-                return false;
-            } else {
-                return std::conjunction<
-                    Tecs::is_lock_subset<AllComponentTypes, RequestedPermissions, Permissions>...>();
-            }
         }
 
         inline constexpr ECS &GetInstance() const {
