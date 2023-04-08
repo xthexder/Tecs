@@ -50,7 +50,6 @@ namespace Tecs {
     class Lock<ECSType<AllComponentTypes...>, Permissions...>
         : public LockImpl<ECSType<AllComponentTypes...>,
               SortPermissions<TransactionPermissions<Permissions...>, AllComponentTypes...>> {
-    private:
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
         using FlatPermissions = SortPermissions<TransactionPermissions<Permissions...>, AllComponentTypes...>;
@@ -65,8 +64,9 @@ namespace Tecs {
                   ECS::template WriteBitset<FlatPermissions>() & ImplType::AcquireReadBitset()) {}
 
         // Reference an identical lock
-        inline Lock(const LockType &source) : ImplType(source.instance, source.base, source.readAliasesWriteStorage) {}
         inline Lock(const ImplType &impl) : ImplType(impl) {}
+        inline Lock(const ImplType &impl, const Entity &ent) : ImplType(impl, ent) {}
+        inline Lock(const LockType &lock) : ImplType(lock.instance, lock.base, lock.readAliasesWriteStorage) {}
 
         // Returns true if this lock type can be constructed from a lock with the specified source permissions
         template<typename SourcePermissions>
@@ -83,8 +83,8 @@ namespace Tecs {
 
         // Reference a subset of an existing transaction
         template<typename SourcePermissions, std::enable_if_t<is_lock_subset<SourcePermissions>(), int> = 0>
-        Lock(const LockImpl<ECS, SourcePermissions> &other)
-            : ImplType(other.instance, other.base, other.base->writePermissions & ImplType::AcquireReadBitset()) {}
+        Lock(const LockImpl<ECS, SourcePermissions> &lock)
+            : ImplType(lock.instance, lock.base, lock.base->writePermissions & ImplType::AcquireReadBitset()) {}
     };
 
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename Permissions>
@@ -107,6 +107,9 @@ namespace Tecs {
         }
 
     public:
+        // Entity locks limit write permissions to a single entity, but allow reads from any entity.
+        const std::optional<Entity> entity;
+
         // Returns true if this lock type has all of the requested permissions
         template<typename RequestedPermissions>
         static constexpr bool has_permissions() {
@@ -121,17 +124,28 @@ namespace Tecs {
         }
 
         // Reference an identical lock
-        LockImpl(const LockImpl &source)
-            : instance(source.instance), base(source.base), readAliasesWriteStorage(source.readAliasesWriteStorage) {
+        LockImpl(const LockImpl &lock)
+            : instance(lock.instance), base(lock.base), readAliasesWriteStorage(lock.readAliasesWriteStorage),
+              entity(lock.entity) {
             AcquireLockReference();
         }
 
-        // Reference a subset of an existing transaction
+        // Create an entity lock from an existing lock
+        LockImpl(const LockImpl &lock, const Entity &ent)
+            : instance(lock.instance), base(lock.base), readAliasesWriteStorage(lock.readAliasesWriteStorage),
+              entity(ent) {
+            if (lock.entity.has_value()) {
+                throw std::runtime_error("Can't create an entity lock from an entity lock");
+            }
+            AcquireLockReference();
+        }
+
+        // Reference a subset of an existing lock
         template<typename SourcePermissions>
-        LockImpl(const LockImpl<ECS, SourcePermissions> &other)
-            : instance(other.instance), base(other.base),
-              readAliasesWriteStorage(other.base->writePermissions & AcquireReadBitset()) {
-            static_assert(decltype(other)::template has_permissions<Permissions>(),
+        LockImpl(const LockImpl<ECS, SourcePermissions> &lock)
+            : instance(lock.instance), base(lock.base),
+              readAliasesWriteStorage(lock.base->writePermissions & AcquireReadBitset()), entity(lock.entity) {
+            static_assert(decltype(lock)::template has_permissions<Permissions>(),
                 "Lock doesn't have all the required permissions");
             AcquireLockReference();
         }
