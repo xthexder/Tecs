@@ -347,9 +347,9 @@ namespace Tecs {
         std::vector<Entity> writeValidEntities;
         std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
 
-        template<typename, typename...>
-        friend class Lock;
-        template<typename, typename...>
+        template<typename, typename>
+        friend class LockImpl;
+        template<typename>
         friend class Transaction;
         friend struct Entity;
     };

@@ -159,30 +159,30 @@ namespace Tecs {
             return (bitset[1 + GetComponentIndex<0, Un>()] && ...);
         }
 
-        template<typename SetLockType, size_t... Is>
+        template<typename Permissions, size_t... Is>
         static constexpr ComponentBitset ReadBitset(std::index_sequence<Is...>) {
             ComponentBitset result;
             result[0] = true;
-            ((result[1 + Is] = is_read_allowed<Tn, SetLockType>()), ...);
+            ((result[1 + Is] = is_read_allowed<Tn, Permissions>()), ...);
             return result;
         }
 
-        template<typename SetLockType>
+        template<typename Permissions>
         static constexpr ComponentBitset ReadBitset() {
-            return ReadBitset<SetLockType>(std::index_sequence_for<Tn...>{});
+            return ReadBitset<Permissions>(std::make_index_sequence<sizeof...(Tn)>());
         }
 
-        template<typename SetLockType, size_t... Is>
+        template<typename Permissions, size_t... Is>
         static constexpr ComponentBitset WriteBitset(std::index_sequence<Is...>) {
             ComponentBitset result;
-            result[0] = Tecs::is_add_remove_allowed<SetLockType>();
-            ((result[1 + Is] = is_write_allowed<Tn, SetLockType>()), ...);
+            result[0] = Tecs::is_add_remove_allowed<Permissions>();
+            ((result[1 + Is] = is_write_allowed<Tn, Permissions>()), ...);
             return result;
         }
 
-        template<typename SetLockType>
+        template<typename Permissions>
         static constexpr ComponentBitset WriteBitset() {
-            return WriteBitset<SetLockType>(std::index_sequence_for<Tn...>{});
+            return WriteBitset<Permissions>(std::make_index_sequence<sizeof...(Tn)>());
         }
 
         template<typename T>
@@ -215,10 +215,10 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename, typename>
+        friend class LockImpl;
+        template<typename>
         friend class Transaction;
-        template<template<typename...> typename, typename...>
-        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs

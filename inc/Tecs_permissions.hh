@@ -9,9 +9,7 @@ namespace Tecs {
     template<typename... Tn>
     class ECS;
     template<typename, typename...>
-    class Lock {};
-    template<typename, typename...>
-    class Transaction {};
+    class Lock;
 
     /**
      * Lock permissions are passed in as template arguments when creating a Transaction or Lock.
@@ -115,6 +113,14 @@ namespace Tecs {
         static constexpr char value[] = (ComponentName);                                                               \
     };
 
+    // Helper type for wrapping a set of permissions in a single type.
+    template<typename... Permissions>
+    struct TransactionPermissions {
+        static constexpr const char *Name() {
+            return __FUNCTION__;
+        }
+    };
+
     // contains<T, Un...>::value is true if T is part of the set Un...
     template<typename T, typename... Un>
     struct contains : std::disjunction<std::is_same<T, Un>...> {};
@@ -143,7 +149,7 @@ namespace Tecs {
     template<typename Lock>
     struct is_add_remove_optional : std::false_type {};
 
-    // Lock<Permissions...> specializations
+    // Lock<ECS, Permissions...> and TransactionPermissions<Permissions...> specializations
     // clang-format off
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
@@ -174,6 +180,21 @@ namespace Tecs {
     struct is_add_remove_optional<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_optional<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
+
+    // TransactionPermissions<Permissions...> specializations
+    template<typename T, typename... Permissions>
+    struct is_read_allowed<T, TransactionPermissions<Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename... Permissions>
+    struct is_write_allowed<T, TransactionPermissions<Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename... Permissions>
+    struct is_add_remove_allowed<TransactionPermissions<Permissions...>> : contains<AddRemove, Permissions...> {};
+
+    template<typename T, typename... Permissions>
+    struct is_read_optional<T, TransactionPermissions<Permissions...>> : std::disjunction<is_read_optional<T, Permissions>...> {};
+    template<typename T, typename... Permissions>
+    struct is_write_optional<T, TransactionPermissions<Permissions...>> : std::disjunction<is_write_optional<T, Permissions>...> {};
+    template<typename... Permissions>
+    struct is_add_remove_optional<TransactionPermissions<Permissions...>> : std::disjunction<is_add_remove_optional<Permissions>...> {};
 
     // Optional<Permissions...> specializations
     template<typename T, typename... OptionalTypes>
@@ -236,33 +257,44 @@ namespace Tecs {
     struct is_add_remove_allowed<AddRemove> : std::true_type {};
 
     // Helpers for converting a lock type to a de-duplicated permission list
-    template<typename... Permissions>
-    struct TransactionPermissions {
-        static constexpr const char *Name() {
-            return __FUNCTION__;
-        }
-    };
-
     template<typename>
     struct tuple_to_read {
-        using type = Read<>;
+        using type = std::tuple<>;
     };
-    template<typename... Tn>
-    struct tuple_to_read<std::tuple<Tn...>> {
-        using type = Read<std::remove_pointer_t<Tn>...>;
+    template<typename T, typename... Tn>
+    struct tuple_to_read<std::tuple<T, Tn...>> {
+        using type = std::tuple<Read<std::remove_pointer_t<T>, std::remove_pointer_t<Tn>...>>;
     };
 
     template<typename>
     struct tuple_to_write {
-        using type = Write<>;
+        using type = std::tuple<>;
     };
-    template<typename... Tn>
-    struct tuple_to_write<std::tuple<Tn...>> {
-        using type = Write<std::remove_pointer_t<Tn>...>;
+    template<typename T, typename... Tn>
+    struct tuple_to_write<std::tuple<T, Tn...>> {
+        using type = std::tuple<Write<std::remove_pointer_t<T>, std::remove_pointer_t<Tn>...>>;
+    };
+
+    template<typename>
+    struct tuple_to_optional {
+        using type = std::tuple<>;
+    };
+    template<typename T, typename... Tn>
+    struct tuple_to_optional<std::tuple<T, Tn...>> {
+        using type = std::tuple<Optional<T, Tn...>>;
+    };
+
+    template<typename>
+    struct tuple_to_permissions {
+        using type = TransactionPermissions<>;
+    };
+    template<typename T, typename... Tn>
+    struct tuple_to_permissions<std::tuple<T, Tn...>> {
+        using type = TransactionPermissions<T, Tn...>;
     };
 
     template<typename LockType, typename... AllComponentTypes>
-    struct FlattenPermissions {
+    struct SortPermissionsImpl {
         using AllTuple = std::tuple<AllComponentTypes...>;
 
         template<size_t... Indices>
@@ -288,29 +320,64 @@ namespace Tecs {
             // clang-format on
         }
 
+        template<size_t... Indices>
+        static constexpr auto flatten_optional_read(std::index_sequence<Indices...>) {
+            // clang-format off
+            return std::tuple_cat(std::conditional_t<
+                is_read_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value
+                && !is_write_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
+                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                std::tuple<>
+            >{}...);
+            // clang-format on
+        }
+
+        template<size_t... Indices>
+        static constexpr auto flatten_optional_write(std::index_sequence<Indices...>) {
+            // clang-format off
+            return std::tuple_cat(std::conditional_t<
+                is_write_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
+                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                std::tuple<>
+            >{}...);
+            // clang-format on
+        }
+
+        // Flattens permissions to the common format:
+        //     TransactionPermissions<Read<...>, Write<...>, Optional<Read<...>, Write<...>>>
         static constexpr auto flatten() {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 return TransactionPermissions<AddRemove>{};
             } else {
                 using ReadPerm = decltype(flatten_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
                 using WritePerm = decltype(flatten_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                if constexpr (std::is_same_v<ReadPerm, std::tuple<>>) {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
-                        return TransactionPermissions<>{};
-                    } else {
-                        return TransactionPermissions<typename tuple_to_write<WritePerm>::type>{};
-                    }
-                } else {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
-                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
-                    } else {
-                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type,
-                            typename tuple_to_write<WritePerm>::type>{};
-                    }
-                }
+                using OptionalReadPerm =
+                    decltype(flatten_optional_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
+                using OptionalWritePerm =
+                    decltype(flatten_optional_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
+                // clang-format off
+                using CombinedTuple = decltype(std::tuple_cat(
+                    typename tuple_to_read<ReadPerm>::type{},
+                    typename tuple_to_write<WritePerm>::type{},
+                    typename tuple_to_optional<
+                        std::conditional_t<
+                            is_add_remove_optional<LockType>::value,
+                            std::tuple<AddRemove>,
+                            decltype(std::tuple_cat(
+                                typename tuple_to_read<OptionalReadPerm>::type{},
+                                typename tuple_to_write<OptionalWritePerm>::type{}
+                            ))
+                        >
+                    >::type{}
+                ));
+                // clang-format on
+                return typename tuple_to_permissions<CombinedTuple>::type{};
             }
         }
 
         using type = decltype(flatten());
     };
+
+    template<typename LockType, typename... AllComponentTypes>
+    using SortPermissions = typename SortPermissionsImpl<LockType, AllComponentTypes...>::type;
 }; // namespace Tecs

@@ -22,6 +22,11 @@
 static_assert(TECS_ENTITY_ALLOCATION_BATCH_SIZE > 0, "At least 1 entity needs to be allocated at once.");
 
 namespace Tecs {
+    template<typename, typename...>
+    class Lock;
+    template<typename, typename>
+    class LockImpl;
+
     /**
      * Lock<ECS, Permissions...> is a reference to lock permissions held by an active Transaction.
      *
@@ -42,74 +47,87 @@ namespace Tecs {
      * Lock<ECSType, AddRemove> lock2;
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
-    class Lock<ECSType<AllComponentTypes...>, Permissions...> {
+    class Lock<ECSType<AllComponentTypes...>, Permissions...>
+        : public LockImpl<ECSType<AllComponentTypes...>,
+              SortPermissions<TransactionPermissions<Permissions...>, AllComponentTypes...>> {
     private:
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
-
-        ECS &instance;
-        const std::shared_ptr<BaseTransaction<ECSType, AllComponentTypes...>> base;
-        const std::bitset<1 + sizeof...(AllComponentTypes)> readAliasesWriteStorage;
-
-        // Private constructor for TryLock conversion
-        template<typename... PermissionsSource>
-        inline Lock(ECS &instance, decltype(base) base, decltype(readAliasesWriteStorage) readAliasesWriteStorage)
-            : instance(instance), base(base), readAliasesWriteStorage(readAliasesWriteStorage) {
-            AcquireLockReference();
-        }
-
-        template<size_t... Is>
-        static constexpr typename ECS::ComponentBitset optionalReadBitset(std::index_sequence<Is...>) {
-            typename ECS::ComponentBitset result;
-            result[0] = is_add_remove_optional<LockType>();
-            ((result[1 + Is] = is_read_optional<AllComponentTypes, LockType>()), ...);
-            return result | ECS::template ReadBitset<LockType>();
-        }
+        using FlatPermissions = SortPermissions<TransactionPermissions<Permissions...>, AllComponentTypes...>;
+        using ImplType = LockImpl<ECS, FlatPermissions>;
 
     public:
         // Start a new transaction
         inline Lock(ECS &instance)
-            : instance(instance), base(std::make_shared<Transaction<ECS, Permissions...>>(instance,
-                                      ECS::template ReadBitset<LockType>(), ECS::template WriteBitset<LockType>())),
-              readAliasesWriteStorage(
-                  base->writePermissions & optionalReadBitset(std::index_sequence_for<AllComponentTypes...>{})) {
+            : ImplType(instance,
+                  std::make_shared<Transaction<ECS>>(instance, ECS::template ReadBitset<FlatPermissions>(),
+                      ECS::template WriteBitset<FlatPermissions>()),
+                  this->base->writePermissions & ImplType::AcquireReadBitset()) {}
+
+        // Reference an identical lock
+        inline Lock(const LockType &source) : ImplType(source.instance, source.base, source.readAliasesWriteStorage) {}
+        inline Lock(const ImplType &impl) : ImplType(impl) {}
+
+        // Reference a subset of an existing transaction
+        template<typename SourcePermissions,
+            std::enable_if_t<ImplType::template is_lock_subset<SourcePermissions>(), int> = 0>
+        Lock(const LockImpl<ECS, SourcePermissions> &other)
+            : ImplType(other.instance, other.base, other.base->writePermissions & ImplType::AcquireReadBitset()) {}
+    };
+
+    template<template<typename...> typename ECSType, typename... AllComponentTypes, typename Permissions>
+    class LockImpl<ECSType<AllComponentTypes...>, Permissions> {
+    protected:
+        using ECS = ECSType<AllComponentTypes...>;
+        using ComponentBitset = typename ECS::ComponentBitset;
+
+        ECS &instance;
+        const std::shared_ptr<Transaction<ECS>> base;
+        const ComponentBitset readAliasesWriteStorage;
+
+        LockImpl(ECS &instance, const std::shared_ptr<Transaction<ECS>> &base, const ComponentBitset &readAliases)
+            : instance(instance), base(base), readAliasesWriteStorage(readAliases) {
             AcquireLockReference();
         }
 
+        ~LockImpl() {
+            ReleaseLockReference();
+        }
+
+    public:
         // Returns true if this lock type can be constructed from a lock with the specified source permissions
-        template<typename... SourcePermissions>
+        template<typename SourcePermissions>
         static constexpr bool is_lock_subset() {
-            using SourceLockType = Lock<ECS, SourcePermissions...>;
-            if constexpr (is_add_remove_allowed<LockType>() && !is_add_remove_allowed<SourceLockType>()) {
+            if constexpr (is_add_remove_allowed<Permissions>() && !is_add_remove_allowed<SourcePermissions>()) {
                 return false;
             } else {
-                return std::conjunction<Tecs::is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>();
+                return std::conjunction<Tecs::is_lock_subset<AllComponentTypes, Permissions, SourcePermissions>...>();
             }
         }
 
-        // Returns true if this lock type has all of the requested permissions
-        template<typename... RequestedPermissions>
-        static constexpr bool has_permissions() {
-            return Lock<ECS, RequestedPermissions...>::template is_lock_subset<LockType>();
-        }
-
         // Reference an identical lock
-        inline Lock(const LockType &source)
+        LockImpl(const LockImpl &source)
             : instance(source.instance), base(source.base), readAliasesWriteStorage(source.readAliasesWriteStorage) {
             AcquireLockReference();
         }
 
         // Reference a subset of an existing transaction
-        template<typename... SourcePermissions, std::enable_if_t<is_lock_subset<SourcePermissions...>(), int> = 0>
-        inline Lock(const Lock<ECS, SourcePermissions...> &source)
-            : instance(source.instance), base(source.base),
-              readAliasesWriteStorage(
-                  base->writePermissions & optionalReadBitset(std::index_sequence_for<AllComponentTypes...>{})) {
+        template<typename SourcePermissions, std::enable_if_t<is_lock_subset<SourcePermissions>(), int> = 0>
+        LockImpl(const LockImpl<ECS, SourcePermissions> &other)
+            : instance(other.instance), base(other.base),
+              readAliasesWriteStorage(other.base->writePermissions & AcquireReadBitset()) {
             AcquireLockReference();
         }
 
-        inline ~Lock() {
-            ReleaseLockReference();
+        // Returns true if this lock type has all of the requested permissions
+        template<typename RequestedPermissions>
+        static constexpr bool has_permissions() {
+            if constexpr (is_add_remove_allowed<RequestedPermissions>() && !is_add_remove_allowed<Permissions>()) {
+                return false;
+            } else {
+                return std::conjunction<
+                    Tecs::is_lock_subset<AllComponentTypes, RequestedPermissions, Permissions>...>();
+            }
         }
 
         inline constexpr ECS &GetInstance() const {
@@ -158,7 +176,7 @@ namespace Tecs {
          * Note: This function invalidates all references to components if a storage resize occurs.
          */
         inline Entity NewEntity() const {
-            static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
+            static_assert(is_add_remove_allowed<Permissions>(), "Lock does not have AddRemove permission.");
             base->writeAccessedFlags[0] = true;
 
             Entity entity;
@@ -212,12 +230,12 @@ namespace Tecs {
             return instance.template BitsetHas<Tn...>(instance.globalReadMetadata);
         }
 
-        template<typename T, typename ReturnType =
-                                 std::conditional_t<is_write_allowed<std::remove_cv_t<T>, LockType>::value, T, const T>>
+        template<typename T, typename ReturnType = std::conditional_t<
+                                 is_write_allowed<std::remove_cv_t<T>, Permissions>::value, T, const T>>
         inline ReturnType &Get() const {
             using CompType = std::remove_cv_t<T>;
-            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
-            static_assert(is_write_allowed<CompType, LockType>() || std::is_const<ReturnType>(),
+            static_assert(is_read_allowed<CompType, Permissions>(), "Component is not locked for reading.");
+            static_assert(is_write_allowed<CompType, Permissions>() || std::is_const<ReturnType>(),
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
@@ -225,7 +243,7 @@ namespace Tecs {
 
             auto &metadata = readAliasesWriteStorage[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
             if (!instance.template BitsetHas<CompType>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if (is_add_remove_allowed<Permissions>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<CompType>()] = true;
@@ -247,7 +265,7 @@ namespace Tecs {
         template<typename T>
         inline const T &GetPrevious() const {
             using CompType = std::remove_cv_t<T>;
-            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
+            static_assert(is_read_allowed<CompType, Permissions>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
             if (!instance.template BitsetHas<CompType>(instance.globalReadMetadata)) {
@@ -258,13 +276,13 @@ namespace Tecs {
 
         template<typename T>
         inline T &Set(T &value) const {
-            static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
+            static_assert(is_write_allowed<T, Permissions>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
             base->template SetAccessFlag<T>(true);
 
             auto &metadata = readAliasesWriteStorage[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
             if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if (is_add_remove_allowed<Permissions>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
@@ -278,13 +296,13 @@ namespace Tecs {
 
         template<typename T, typename... Args>
         inline T &Set(Args &&...args) const {
-            static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
+            static_assert(is_write_allowed<T, Permissions>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
             base->template SetAccessFlag<T>(true);
 
             auto &metadata = readAliasesWriteStorage[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
             if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if (is_add_remove_allowed<Permissions>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
@@ -298,7 +316,8 @@ namespace Tecs {
 
         template<typename... Tn>
         inline void Unset() const {
-            static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
+            static_assert(is_add_remove_allowed<Permissions>(),
+                "Components cannot be removed without an AddRemove lock.");
             static_assert(all_global_components<Tn...>(), "Only global components can be unset without an Entity");
 
             (RemoveComponents<Tn>(), ...);
@@ -306,7 +325,8 @@ namespace Tecs {
 
         template<typename Event>
         inline Observer<ECS, Event> Watch() const {
-            static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
+            static_assert(is_add_remove_allowed<Permissions>(),
+                "An AddRemove lock is required to watch for ecs changes.");
 
             auto &observerList = instance.template Observers<Event>();
             auto &eventList = observerList.observers.emplace_back(std::make_shared<std::deque<Event>>());
@@ -315,32 +335,31 @@ namespace Tecs {
 
         template<typename Event>
         inline void StopWatching(Observer<ECS, Event> &observer) const {
-            static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
+            static_assert(is_add_remove_allowed<Permissions>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
             auto &observers = instance.template Observers<Event>().observers;
             observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
             observer.eventListWeak.reset();
         }
 
-        template<typename... PermissionsSubset>
-        inline Lock<ECS, PermissionsSubset...> Subset() const {
-            static_assert(has_permissions<PermissionsSubset...>(),
-                "Lock types are not a subset of existing permissions.");
+        template<typename PermissionsSubset>
+        inline Lock<ECS, PermissionsSubset> Subset() const {
+            static_assert(has_permissions<PermissionsSubset>(), "Lock types are not a subset of existing permissions.");
 
-            return Lock<ECS, PermissionsSubset...>(*this);
+            return Lock<ECS, PermissionsSubset>(*this);
         }
 
-        template<typename... DynamicPermissions>
-        std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
-            using DynamicLock = Lock<ECS, DynamicPermissions...>;
-            if constexpr (has_permissions<DynamicPermissions...>()) {
-                return DynamicLock(*this);
+        template<typename DynamicPermissions>
+        std::optional<Lock<ECS, DynamicPermissions>> TryLock() const {
+            using DynamicSorted = SortPermissions<DynamicPermissions, AllComponentTypes...>;
+            if constexpr (has_permissions<DynamicPermissions>()) {
+                return LockImpl<ECS, DynamicSorted>(instance, base, readAliasesWriteStorage);
             } else {
-                static const auto requestedRead = ECS::template ReadBitset<DynamicLock>();
-                static const auto requestedWrite = ECS::template WriteBitset<DynamicLock>();
+                static const auto requestedRead = ECS::template ReadBitset<DynamicSorted>();
+                static const auto requestedWrite = ECS::template WriteBitset<DynamicSorted>();
                 if ((requestedRead & base->readPermissions) == requestedRead &&
                     (requestedWrite & readAliasesWriteStorage) == requestedWrite) {
-                    return DynamicLock(instance, base, readAliasesWriteStorage);
+                    return LockImpl<ECS, DynamicSorted>(instance, base, readAliasesWriteStorage);
                 }
                 return {};
             }
@@ -351,28 +370,40 @@ namespace Tecs {
         }
 
     private:
-        inline void AcquireLockReference() {
-            auto &t = *this->base;
+        template<size_t... Is>
+        static constexpr ComponentBitset AcquireReadBitset(std::index_sequence<Is...>) {
+            ComponentBitset result;
+            result[0] = is_add_remove_optional<Permissions>();
+            ((result[1 + Is] = is_read_optional<AllComponentTypes, Permissions>()), ...);
+            return result | ECS::template ReadBitset<Permissions>();
+        }
+
+        static constexpr ComponentBitset AcquireReadBitset() {
+            return AcquireReadBitset(std::make_index_sequence<sizeof...(AllComponentTypes)>());
+        }
+
+        void AcquireLockReference() {
+            auto &t = *base;
             t.readLockReferences[0]++;
-            if constexpr (is_add_remove_allowed<LockType>()) {
+            if constexpr (is_add_remove_allowed<Permissions>()) {
                 if (!t.writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
                 t.writeLockReferences[0]++;
-            } else if constexpr (is_add_remove_optional<LockType>()) {
+            } else if constexpr (is_add_remove_optional<Permissions>()) {
                 if (t.writePermissions[0]) t.writeLockReferences[0]++;
             }
             ( // For each AllComponentTypes
                 [&] {
                     constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
-                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                    if constexpr (is_write_allowed<AllComponentTypes, Permissions>()) {
                         if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         t.writeLockReferences[compIndex]++;
-                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_write_optional<AllComponentTypes, Permissions>()) {
                         if (t.writePermissions[compIndex]) t.writeLockReferences[compIndex]++;
                     }
-                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                    if constexpr (is_read_allowed<AllComponentTypes, Permissions>()) {
                         if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
                         t.readLockReferences[compIndex]++;
-                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_read_optional<AllComponentTypes, Permissions>()) {
                         if (t.readPermissions[compIndex]) t.readLockReferences[compIndex]++;
                     }
                 }(),
@@ -380,30 +411,30 @@ namespace Tecs {
         }
 
         void ReleaseLockReference() {
-            auto &t = *this->base;
+            auto &t = *base;
             t.readLockReferences[0]--;
-            if constexpr (is_add_remove_allowed<LockType>()) {
+            if constexpr (is_add_remove_allowed<Permissions>()) {
                 if (!t.writePermissions[0]) throw std::runtime_error("AddRemove lock not acquired");
                 t.writeLockReferences[0]--;
-            } else if constexpr (is_add_remove_optional<LockType>()) {
+            } else if constexpr (is_add_remove_optional<Permissions>()) {
                 if (t.writePermissions[0]) t.writeLockReferences[0]--;
             }
             ( // For each AllComponentTypes
                 [&] {
                     constexpr auto compIndex = 1 + ECS::template GetComponentIndex<AllComponentTypes>();
-                    if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+                    if constexpr (is_write_allowed<AllComponentTypes, Permissions>()) {
                         if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                         t.writeLockReferences[compIndex]--;
-                    } else if constexpr (is_write_optional<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_write_optional<AllComponentTypes, Permissions>()) {
                         if (t.writePermissions[compIndex]) {
                             if (!t.writePermissions[compIndex]) throw std::runtime_error("Write lock not acquired");
                             t.writeLockReferences[compIndex]--;
                         }
                     }
-                    if constexpr (is_read_allowed<AllComponentTypes, LockType>()) {
+                    if constexpr (is_read_allowed<AllComponentTypes, Permissions>()) {
                         if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
                         t.readLockReferences[compIndex]--;
-                    } else if constexpr (is_read_optional<AllComponentTypes, LockType>()) {
+                    } else if constexpr (is_read_optional<AllComponentTypes, Permissions>()) {
                         if (t.readPermissions[compIndex]) {
                             if (!t.readPermissions[compIndex]) throw std::runtime_error("Read lock not acquired");
                             t.readLockReferences[compIndex]--;
@@ -482,6 +513,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
+        template<typename, typename>
+        friend class LockImpl;
         friend struct Entity;
     };
 }; // namespace Tecs
