@@ -199,7 +199,7 @@ namespace Tecs {
             static_assert(is_add_remove_allowed<Permissions>(), "Lock does not have AddRemove permission.");
             base->writeAccessedFlags[0] = true;
 
-            Entity entity;
+            Entity ent;
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
                 (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
@@ -217,19 +217,19 @@ namespace Tecs {
                         1,
                         (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
-                entity = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
+                ent = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
             } else {
-                entity = instance.freeEntities.front();
+                ent = instance.freeEntities.front();
                 instance.freeEntities.pop_front();
             }
 
-            instance.metadata.writeComponents[entity.index][0] = true;
-            instance.metadata.writeComponents[entity.index].generation = entity.generation;
+            instance.metadata.writeComponents[ent.index][0] = true;
+            instance.metadata.writeComponents[ent.index].generation = ent.generation;
             auto &validEntities = instance.metadata.writeValidEntities;
-            instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
-            validEntities.emplace_back(entity);
+            instance.metadata.validEntityIndexes[ent.index] = validEntities.size();
+            validEntities.emplace_back(ent);
 
-            return entity;
+            return ent;
         }
 
         template<typename... Tn>
