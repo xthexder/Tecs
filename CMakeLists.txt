@@ -47,7 +47,7 @@ if(TECS_HEADER_ONLY)
     )
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_HEADER_ONLY)
 else()
-    add_library(${PROJECT_NAME} STATIC src/Tecs.cc)
+    add_library(${PROJECT_NAME} STATIC src/Tecs.cc src/Tecs_storage.cc)
     target_include_directories(
         ${PROJECT_NAME}
         PUBLIC

@@ -293,51 +293,47 @@ namespace Tecs {
         using type = TransactionPermissions<T, Tn...>;
     };
 
-    template<typename LockType, typename... AllComponentTypes>
+    template<typename InputPerms, typename... AllComponentTypes>
     struct SortPermissionsImpl {
         using AllTuple = std::tuple<AllComponentTypes...>;
 
-        template<size_t... Indices>
-        static constexpr auto flatten_read(std::index_sequence<Indices...>) {
+        static constexpr auto flatten_read() {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
-                is_read_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value
-                && !is_write_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
-                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                is_read_allowed<AllComponentTypes, InputPerms>::value
+                && !is_write_allowed<AllComponentTypes, InputPerms>::value,
+                std::tuple<AllComponentTypes *>,
                 std::tuple<>
             >{}...);
             // clang-format on
         }
 
-        template<size_t... Indices>
-        static constexpr auto flatten_write(std::index_sequence<Indices...>) {
+        static constexpr auto flatten_write() {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
-                is_write_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
-                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                is_write_allowed<AllComponentTypes, InputPerms>::value,
+                std::tuple<AllComponentTypes *>,
                 std::tuple<>
             >{}...);
             // clang-format on
         }
 
-        template<size_t... Indices>
-        static constexpr auto flatten_optional_read(std::index_sequence<Indices...>) {
+        static constexpr auto flatten_optional_read() {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
-                is_read_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value
-                && !is_write_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
-                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                is_read_optional<AllComponentTypes, InputPerms>::value
+                && !is_write_optional<AllComponentTypes, InputPerms>::value,
+                std::tuple<AllComponentTypes *>,
                 std::tuple<>
             >{}...);
             // clang-format on
         }
 
-        template<size_t... Indices>
-        static constexpr auto flatten_optional_write(std::index_sequence<Indices...>) {
+        static constexpr auto flatten_optional_write() {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
-                is_write_optional<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
-                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                is_write_optional<AllComponentTypes, InputPerms>::value,
+                std::tuple<AllComponentTypes *>,
                 std::tuple<>
             >{}...);
             // clang-format on
@@ -346,22 +342,20 @@ namespace Tecs {
         // Flattens permissions to the common format:
         //     TransactionPermissions<Read<...>, Write<...>, Optional<Read<...>, Write<...>>>
         static constexpr auto flatten() {
-            if constexpr (is_add_remove_allowed<LockType>()) {
+            if constexpr (is_add_remove_allowed<InputPerms>()) {
                 return TransactionPermissions<AddRemove>{};
             } else {
-                using ReadPerm = decltype(flatten_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                using WritePerm = decltype(flatten_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                using OptionalReadPerm =
-                    decltype(flatten_optional_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                using OptionalWritePerm =
-                    decltype(flatten_optional_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
+                using ReadPerm = decltype(flatten_read());
+                using WritePerm = decltype(flatten_write());
+                using OptionalReadPerm = decltype(flatten_optional_read());
+                using OptionalWritePerm = decltype(flatten_optional_write());
                 // clang-format off
                 using CombinedTuple = decltype(std::tuple_cat(
                     typename tuple_to_read<ReadPerm>::type{},
                     typename tuple_to_write<WritePerm>::type{},
                     typename tuple_to_optional<
                         std::conditional_t<
-                            is_add_remove_optional<LockType>::value,
+                            is_add_remove_optional<InputPerms>::value,
                             std::tuple<AddRemove>,
                             decltype(std::tuple_cat(
                                 typename tuple_to_read<OptionalReadPerm>::type{},
@@ -378,6 +372,6 @@ namespace Tecs {
         using type = decltype(flatten());
     };
 
-    template<typename LockType, typename... AllComponentTypes>
-    using SortPermissions = typename SortPermissionsImpl<LockType, AllComponentTypes...>::type;
+    template<typename InputPerms, typename... AllComponentTypes>
+    using SortPermissions = typename SortPermissionsImpl<InputPerms, AllComponentTypes...>::type;
 }; // namespace Tecs
