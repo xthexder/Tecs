@@ -98,10 +98,7 @@ namespace testing {
 
         Timer &operator=(MultiTimer &newParent) {
             this->~Timer();
-            this->name = "";
-            this->parent = &newParent;
-            start = std::chrono::high_resolution_clock::now();
-
+            new (this) Timer(newParent);
             return *this;
         }
 
