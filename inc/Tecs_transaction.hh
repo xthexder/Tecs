@@ -271,6 +271,10 @@ namespace Tecs {
             ( // For each AllComponentTypes, reset the write storage to match read.
                 [&] {
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
+#ifdef TECS_ENABLE_TRACY
+                        ZoneNamedN(tracyCommitScope3, "CopyRead", true);
+                        ZoneStrV(tracyCommitScope3, typeid(AllComponentTypes).name());
+#endif
                         // Skip if no write accesses were made
                         if (!this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) return;
                         auto &storage = this->instance.template Storage<AllComponentTypes>();
