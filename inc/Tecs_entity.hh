@@ -129,15 +129,16 @@ namespace Tecs {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
 
+            auto &storage = lock.instance.template Storage<CompType>();
             if (!lock.instance.template BitsetHas<CompType>(metadata)) {
-                if (is_add_remove_allowed<LockType>() && !std::is_const<ReturnType>()) {
+                if constexpr (is_add_remove_allowed<LockType>() && !std::is_const<ReturnType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
                     // Reset value before allowing reading.
-                    lock.instance.template Storage<CompType>().writeComponents[index] = {};
+                    storage.writeComponents[index] = {};
                     metadata[1 + lock.instance.template GetComponentIndex<CompType>()] = true;
-                    auto &validEntities = lock.instance.template Storage<CompType>().writeValidEntities;
-                    lock.instance.template Storage<CompType>().validEntityIndexes[index] = validEntities.size();
+                    auto &validEntities = storage.writeValidEntities;
+                    storage.validEntityIndexes[index] = validEntities.size();
                     validEntities.emplace_back(*this);
                 } else {
                     throw std::runtime_error(
@@ -146,9 +147,9 @@ namespace Tecs {
             }
 
             if (lock.instance.template BitsetHas<CompType>(lock.permissions)) {
-                return lock.instance.template Storage<CompType>().writeComponents[index];
+                return storage.writeComponents[index];
             } else {
-                return lock.instance.template Storage<CompType>().readComponents[index];
+                return storage.readComponents[index];
             }
         }
 
@@ -193,7 +194,7 @@ namespace Tecs {
             }
 
             if (!lock.instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if constexpr (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
@@ -226,7 +227,7 @@ namespace Tecs {
             }
 
             if (!lock.instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if constexpr (is_add_remove_allowed<LockType>()) {
                     lock.base->writeAccessedFlags[0] = true;
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;

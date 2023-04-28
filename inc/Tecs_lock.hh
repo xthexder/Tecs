@@ -205,23 +205,24 @@ namespace Tecs {
             if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>(true);
 
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            auto &storage = instance.template Storage<CompType>();
             if (!instance.template BitsetHas<CompType>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if constexpr (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<CompType>()] = true;
-                    instance.template Storage<CompType>().writeComponents.resize(1);
+                    storage.writeComponents.resize(1);
                     // Reset value before allowing reading.
-                    instance.template Storage<CompType>().writeComponents[0] = {};
+                    storage.writeComponents[0] = {};
                 } else {
                     throw std::runtime_error(
                         "Missing global component of type: " + std::string(typeid(CompType).name()));
                 }
             }
             if (instance.template BitsetHas<CompType>(permissions)) {
-                return instance.template Storage<CompType>().writeComponents[0];
+                return storage.writeComponents[0];
             } else {
-                return instance.template Storage<CompType>().readComponents[0];
+                return storage.readComponents[0];
             }
         }
 
@@ -245,7 +246,7 @@ namespace Tecs {
 
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
             if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if constexpr (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
@@ -265,7 +266,7 @@ namespace Tecs {
 
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
             if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+                if constexpr (is_add_remove_allowed<LockType>()) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
@@ -377,55 +378,64 @@ namespace Tecs {
     private:
         using ECS = ECSType<AllComponentTypes...>;
 
-        std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+        const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
 
-        template<typename... Permissions>
-        static const auto generateReadBitset() {
+        template<typename LockType>
+        static inline constexpr auto generateReadBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            result[0] = true;
-            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
-                     is_read_allowed<AllComponentTypes, Permissions...>()),
-                ...);
+            if constexpr (sizeof...(AllComponentTypes) < 64) {
+                // clang-format off
+                constexpr uint64_t mask = 1 | ((
+                    ((uint64_t)is_read_allowed<AllComponentTypes, LockType>())
+                        << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
+                ) | ...);
+                // clang-format on
+                result = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
+            } else {
+                result[0] = true;
+                ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                         is_read_allowed<AllComponentTypes, LockType>()),
+                    ...);
+            }
             return result;
         }
 
-        template<typename... Permissions>
-        static const auto generateWriteBitset() {
+        template<typename LockType>
+        static inline constexpr auto generateWriteBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            result[0] = Tecs::is_add_remove_allowed<Permissions...>();
-            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
-                     is_write_allowed<AllComponentTypes, Permissions...>()),
-                ...);
+            if constexpr (sizeof...(AllComponentTypes) < 64) {
+                // clang-format off
+                constexpr uint64_t mask = (uint64_t)Tecs::is_add_remove_allowed<LockType>() | ((
+                    ((uint64_t)is_write_allowed<AllComponentTypes, LockType>())
+                        << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
+                ) | ...);
+                // clang-format on
+                result = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
+            } else {
+                result[0] = Tecs::is_add_remove_allowed<LockType>();
+                ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                         is_write_allowed<AllComponentTypes, LockType>()),
+                    ...);
+            }
             return result;
         }
 
     public:
         template<typename LockType>
-        DynamicLock(const LockType &lock) : Lock<ECS, StaticPermissions...>(lock) {
-#ifdef TECS_ENABLE_TRACY
-            ZoneScoped;
-#endif
-
-            if constexpr (sizeof...(AllComponentTypes) + 1 <= 64) {
-                constexpr uint64_t mask = 1 | ((((size_t)is_read_allowed<AllComponentTypes, LockType>())
-                                                   << (1 + ECS::template GetComponentIndex<AllComponentTypes>())) |
-                                                  ...);
-                readPermissions = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
-            } else {
-                readPermissions = generateReadBitset<LockType>();
-            }
-        }
+        DynamicLock(const LockType &lock)
+            : Lock<ECS, StaticPermissions...>(lock), readPermissions(generateReadBitset<LockType>()) {}
 
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
-            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicPermissions...>()) {
-                return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+            using DynamicLockType = Lock<ECS, DynamicPermissions...>;
+            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicLockType>()) {
+                return DynamicLockType(this->instance, this->base, this->permissions);
             } else {
-                static const auto requestedRead = generateReadBitset<DynamicPermissions...>();
-                static const auto requestedWrite = generateWriteBitset<DynamicPermissions...>();
+                static constexpr auto requestedRead = generateReadBitset<DynamicLockType>();
+                static constexpr auto requestedWrite = generateWriteBitset<DynamicLockType>();
                 if ((requestedRead & readPermissions) == requestedRead &&
                     (requestedWrite & this->permissions) == requestedWrite) {
-                    return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+                    return DynamicLockType(this->instance, this->base, this->permissions);
                 }
                 return {};
             }
