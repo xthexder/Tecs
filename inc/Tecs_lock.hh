@@ -377,7 +377,7 @@ namespace Tecs {
     private:
         using ECS = ECSType<AllComponentTypes...>;
 
-        const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+        std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
 
         template<typename... Permissions>
         static const auto generateReadBitset() {
@@ -401,8 +401,20 @@ namespace Tecs {
 
     public:
         template<typename LockType>
-        DynamicLock(const LockType &lock)
-            : Lock<ECS, StaticPermissions...>(lock), readPermissions(generateReadBitset<LockType>()) {}
+        DynamicLock(const LockType &lock) : Lock<ECS, StaticPermissions...>(lock) {
+#ifdef TECS_ENABLE_TRACY
+            ZoneScoped;
+#endif
+
+            if constexpr (sizeof...(AllComponentTypes) + 1 <= 64) {
+                constexpr uint64_t mask = 1 | ((((size_t)is_read_allowed<AllComponentTypes, LockType>())
+                                                   << (1 + ECS::template GetComponentIndex<AllComponentTypes>())) |
+                                                  ...);
+                readPermissions = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
+            } else {
+                readPermissions = generateReadBitset<LockType>();
+            }
+        }
 
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
