@@ -67,7 +67,7 @@ namespace Tecs {
 
     public:
         template<typename LockType>
-        inline bool Exists(LockType &lock) const {
+        inline bool Exists(const LockType &lock) const {
             auto &metadataList =
                 lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) return false;
@@ -77,7 +77,7 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        inline bool Existed(LockType &lock) const {
+        inline bool Existed(const LockType &lock) const {
             if (index >= lock.instance.metadata.readComponents.size()) return false;
 
             auto &metadata = lock.instance.metadata.readComponents[index];
@@ -85,7 +85,7 @@ namespace Tecs {
         }
 
         template<typename... Tn, typename LockType>
-        inline bool Has(LockType &lock) const {
+        inline bool Has(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
             auto &metadataList =
                 lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
@@ -97,7 +97,7 @@ namespace Tecs {
         }
 
         template<typename... Tn, typename LockType>
-        inline bool Had(LockType &lock) const {
+        inline bool Had(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
             if (index >= lock.instance.metadata.readComponents.size()) return false;
 
@@ -109,7 +109,7 @@ namespace Tecs {
         template<typename T, typename LockType,
             typename ReturnType =
                 std::conditional_t<is_write_allowed<std::remove_cv_t<T>, LockType>::value, T, const T>>
-        inline ReturnType &Get(LockType &lock) const {
+        inline ReturnType &Get(const LockType &lock) const {
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_write_allowed<CompType, LockType>() || std::is_const<ReturnType>(),
@@ -154,7 +154,7 @@ namespace Tecs {
         }
 
         template<typename T, typename LockType>
-        inline const T &GetPrevious(LockType &lock) const {
+        inline const T &GetPrevious(const LockType &lock) const {
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(!is_global_component<CompType>(),
@@ -177,7 +177,7 @@ namespace Tecs {
         }
 
         template<typename T, typename LockType>
-        inline T &Set(LockType &lock, T &value) const {
+        inline T &Set(const LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->template SetAccessFlag<T>(true);
@@ -210,7 +210,7 @@ namespace Tecs {
         }
 
         template<typename T, typename LockType, typename... Args>
-        inline T &Set(LockType &lock, Args... args) const {
+        inline T &Set(const LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
             lock.base->template SetAccessFlag<T>(true);
@@ -243,7 +243,7 @@ namespace Tecs {
         }
 
         template<typename... Tn, typename LockType>
-        inline void Unset(LockType &lock) const {
+        inline void Unset(const LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Components cannot be removed without an AddRemove lock.");
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
@@ -260,7 +260,7 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        inline void Destroy(LockType &lock) const {
+        inline void Destroy(const LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
             lock.base->writeAccessedFlags[0] = true;
 
@@ -284,7 +284,7 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        inline void Destroy(LockType &lock) {
+        inline void Destroy(const LockType &lock) {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
 
             ((const Entity *)this)->Destroy(lock);
