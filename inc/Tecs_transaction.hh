@@ -8,6 +8,7 @@
 #endif
 
 #ifdef TECS_ENABLE_TRACY
+    #include <cstring>
     #include <tracy/Tracy.hpp>
 #endif
 
