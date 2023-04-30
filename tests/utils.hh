@@ -86,6 +86,20 @@ namespace testing {
         }
 
         ~Timer() {
+            stopTimer();
+        }
+
+        Timer &operator=(MultiTimer &newParent) {
+            this->stopTimer();
+            this->name = "";
+            this->parent = &newParent;
+            start = std::chrono::high_resolution_clock::now();
+
+            return *this;
+        }
+
+    private:
+        inline void stopTimer() {
             auto end = std::chrono::high_resolution_clock::now();
             if (parent != nullptr) {
                 parent->AddValue(end - start);
@@ -96,16 +110,6 @@ namespace testing {
             }
         }
 
-        Timer &operator=(MultiTimer &newParent) {
-            this->~Timer();
-            this->name = "";
-            this->parent = &newParent;
-            start = std::chrono::high_resolution_clock::now();
-
-            return *this;
-        }
-
-    private:
         std::string name;
         std::chrono::high_resolution_clock::time_point start;
         MultiTimer *parent = nullptr;
