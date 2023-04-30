@@ -28,31 +28,31 @@ namespace Tecs {
             iterator(const EntityView &view, size_t index = 0) : view(view), i(index) {}
 
             inline reference operator*() const {
-                if (view.storage == nullptr || i < view.start_index || i >= view.end_index) {
-                    static const Entity null_entity = {};
-                    return null_entity;
-                } else {
-                    return (*view.storage)[i];
-                }
+                // if (i < view.start_index || i >= view.end_index) {
+                //     static const Entity null_entity = {};
+                //     return null_entity;
+                // } else {
+                return (*view.storage)[i];
+                // }
             }
 
             inline pointer operator->() const {
-                if (view.storage == nullptr || i < view.start_index || i >= view.end_index) {
-                    static const Entity null_entity = {};
-                    return &null_entity;
-                } else {
-                    return &(*view.storage)[i];
-                }
+                // if (i < view.start_index || i >= view.end_index) {
+                //     static const Entity null_entity = {};
+                //     return &null_entity;
+                // } else {
+                return &(*view.storage)[i];
+                // }
             }
 
             inline reference operator[](difference_type n) const {
                 size_t index = i + n;
-                if (view.storage == nullptr || index < view.start_index || index >= view.end_index) {
-                    static const Entity null_entity = {};
-                    return null_entity;
-                } else {
-                    return (*view.storage)[index];
-                }
+                // if (index < view.start_index || index >= view.end_index) {
+                //     static const Entity null_entity = {};
+                //     return null_entity;
+                // } else {
+                return (*view.storage)[index];
+                // }
             }
 
             inline iterator &operator++() {
@@ -113,14 +113,15 @@ namespace Tecs {
         EntityView(const std::vector<Entity> &storage) : storage(&storage), start_index(0), end_index(storage.size()) {}
         EntityView(const std::vector<Entity> &storage, size_t start, size_t end)
             : storage(&storage), start_index(start), end_index(end) {
-            if (start > storage.size()) {
-                throw std::runtime_error("EntityView start index out of range: " + std::to_string(start));
-            } else if (end > storage.size()) {
-                throw std::runtime_error("EntityView end index out of range: " + std::to_string(end));
-            } else if (start > end) {
-                throw std::runtime_error(
-                    "EntityView start index is past end index: " + std::to_string(start) + " > " + std::to_string(end));
-            }
+            // if (start > storage.size()) {
+            //     throw std::runtime_error("EntityView start index out of range: " + std::to_string(start));
+            // } else if (end > storage.size()) {
+            //     throw std::runtime_error("EntityView end index out of range: " + std::to_string(end));
+            // } else if (start > end) {
+            //     throw std::runtime_error(
+            //         "EntityView start index is past end index: " + std::to_string(start) + " > " +
+            //         std::to_string(end));
+            // }
         }
 
         inline iterator begin() const noexcept {
@@ -140,24 +141,24 @@ namespace Tecs {
         }
 
         inline reference operator[](size_type index) const noexcept {
-            if (storage == nullptr || index < start_index || index >= end_index) {
-                static const Entity null_entity = {};
-                return null_entity;
-            } else {
-                return (*storage)[index];
-            }
+            // if (index < start_index || index >= end_index) {
+            //     static const Entity null_entity = {};
+            //     return null_entity;
+            // } else {
+            return (*storage)[index];
+            // }
         }
 
         inline size_type size() const noexcept {
-            return storage == nullptr ? 0 : end_index - start_index;
+            return end_index - start_index;
         }
 
         inline bool empty() const noexcept {
-            return storage == nullptr || end_index <= start_index;
+            return end_index <= start_index;
         }
 
         inline EntityView subview(size_type offset, size_type count = std::numeric_limits<size_type>::max()) const {
-            if (storage == nullptr) throw std::runtime_error("EntityView::subview storage is null");
+            // if (storage == nullptr) throw std::runtime_error("EntityView::subview storage is null");
             return EntityView(*storage, start_index + offset, std::min(end_index, start_index + offset + count));
         }
 
