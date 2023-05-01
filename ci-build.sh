@@ -27,7 +27,7 @@ echo -e "+++ Running \033[33mtests\033[0m :camera_with_flash:"
 cd build/tests
 
 success=0
-for file in ./Tecs-tests ./Tecs-benchmark; do
+for file in ./Tecs-tests ./Tecs-tests-unchecked ./Tecs-benchmark; do
     "./$file"
     result=$?
     if [ $result -ne 0 ]; then

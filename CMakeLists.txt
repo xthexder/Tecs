@@ -3,8 +3,13 @@ project(Tecs VERSION 0.11.0)
 
 option(TECS_HEADER_ONLY "Use Tecs in header-only library mode (Disables nested transaction detection)" OFF)
 option(TECS_ENABLE_PERFORMANCE_TRACING "Include performance trace counters inside Tecs for debugging lock contention" OFF)
+
 # Note: Tracy only supports tracking locks up to 64 threads and will crash the client with more than 64 simultaneous transactions.
 option(TECS_ENABLE_TRACY "Add Tracy C++ Profiler hooks for showing transactions and lock contention" OFF)
+
+# In UNCHECED mode, calling operations on null or invalid entities will result in undefined behaviour instead of throwing an exception.
+# If a program ensures entities are valid itself, removing Tecs' runtime checks can improve performance.
+option(TECS_UNCHECKED_MODE "Remove all runtime checks from Tecs (for performance testing)" OFF)
 
 # Tell cmake to export a compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -62,6 +67,10 @@ endif()
 
 if(TECS_ENABLE_TRACY)
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_TRACY)
+endif()
+
+if(TECS_UNCHECKED_MODE)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_UNCHECKED_MODE)
 endif()
 
 if(UNIX)
