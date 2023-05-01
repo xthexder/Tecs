@@ -134,9 +134,11 @@ namespace Tecs {
             auto &storage = lock.instance.template Storage<CompType>();
 
             if constexpr (is_add_remove_allowed<LockType>() && !std::is_const<ReturnType>()) {
+#ifdef TECS_UNCHECKED_MODE
                 auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
                                                          : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
+#endif
                 if (!lock.instance.template BitsetHas<CompType>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
 
@@ -206,9 +208,11 @@ namespace Tecs {
 #endif
 
             if constexpr (is_add_remove_allowed<LockType>()) {
+#ifdef TECS_UNCHECKED_MODE
                 auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
                                                          : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
+#endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
 
@@ -245,9 +249,11 @@ namespace Tecs {
 #endif
 
             if constexpr (is_add_remove_allowed<LockType>()) {
+#ifdef TECS_UNCHECKED_MODE
                 auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
                                                          : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
+#endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
 
