@@ -6,6 +6,8 @@ option(TECS_ENABLE_PERFORMANCE_TRACING "Include performance trace counters insid
 
 # Note: Tracy only supports tracking locks up to 64 threads and will crash the client with more than 64 simultaneous transactions.
 option(TECS_ENABLE_TRACY "Add Tracy C++ Profiler hooks for showing transactions and lock contention" OFF)
+option(TECS_TRACY_INCLUDE_LOCKS "Include lock contention in Tracy profiling" ON)
+option(TECS_TRACY_INCLUDE_DETAILED_COMMIT "Include detailed per-component zones for transaction end in Tracy profiling" ON)
 
 # In UNCHECED mode, calling operations on null or invalid entities will result in undefined behaviour instead of throwing an exception.
 # If a program ensures entities are valid itself, removing Tecs' runtime checks can improve performance.
@@ -67,6 +69,12 @@ endif()
 
 if(TECS_ENABLE_TRACY)
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_ENABLE_TRACY)
+    if(TECS_TRACY_INCLUDE_LOCKS)
+        target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_TRACY_INCLUDE_LOCKS)
+    endif()
+    if(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+        target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+    endif()
 endif()
 
 if(TECS_UNCHECKED_MODE)

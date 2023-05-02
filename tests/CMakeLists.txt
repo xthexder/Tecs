@@ -17,7 +17,14 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
 
     add_executable(${PROJECT_NAME}-benchmark-tracy benchmark.cpp transform_component.cpp)
     target_link_libraries(${PROJECT_NAME}-benchmark-tracy ${PROJECT_NAME} TracyClient)
-    target_compile_definitions(${PROJECT_NAME}-benchmark-tracy PRIVATE TECS_ENABLE_TRACY TECS_UNCHECKED_MODE)
+    target_compile_definitions(
+        ${PROJECT_NAME}-benchmark-tracy
+        PRIVATE
+            TECS_ENABLE_TRACY
+            TECS_TRACY_INCLUDE_LOCKS
+            TECS_TRACY_INCLUDE_DETAILED_COMMIT
+            TECS_UNCHECKED_MODE
+    )
     if(WIN32)
         # Link winmm library for timeBeginPeriod()
         target_link_libraries(${PROJECT_NAME}-benchmark-tracy winmm)
