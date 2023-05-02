@@ -204,24 +204,32 @@ namespace Tecs {
 
             if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>(true);
 
+#ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
-            if (!instance.template BitsetHas<CompType>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+#endif
+
+            auto &storage = instance.template Storage<CompType>();
+            if constexpr (is_add_remove_allowed<LockType>()) {
+#ifdef TECS_UNCHECKED_MODE
+                auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+#endif
+                if (!instance.template BitsetHas<CompType>(metadata)) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<CompType>()] = true;
-                    instance.template Storage<CompType>().writeComponents.resize(1);
+                    storage.writeComponents.resize(1);
                     // Reset value before allowing reading.
-                    instance.template Storage<CompType>().writeComponents[0] = {};
-                } else {
-                    throw std::runtime_error(
-                        "Missing global component of type: " + std::string(typeid(CompType).name()));
+                    storage.writeComponents[0] = {};
                 }
+#ifndef TECS_UNCHECKED_MODE
+            } else if (!instance.template BitsetHas<CompType>(metadata)) {
+                throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
+#endif
             }
             if (instance.template BitsetHas<CompType>(permissions)) {
-                return instance.template Storage<CompType>().writeComponents[0];
+                return storage.writeComponents[0];
             } else {
-                return instance.template Storage<CompType>().readComponents[0];
+                return storage.readComponents[0];
             }
         }
 
@@ -231,9 +239,11 @@ namespace Tecs {
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
+#ifndef TECS_UNCHECKED_MODE
             if (!instance.template BitsetHas<CompType>(instance.globalReadMetadata)) {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
             }
+#endif
             return instance.template Storage<CompType>().readComponents[0];
         }
 
@@ -243,16 +253,24 @@ namespace Tecs {
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
             base->template SetAccessFlag<T>(true);
 
+#ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
-            if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+#endif
+
+            if constexpr (is_add_remove_allowed<LockType>()) {
+#ifdef TECS_UNCHECKED_MODE
+                auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+#endif
+                if (!instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
                     instance.template Storage<T>().writeComponents.resize(1);
-                } else {
-                    throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
                 }
+#ifndef TECS_UNCHECKED_MODE
+            } else if (!instance.template BitsetHas<T>(metadata)) {
+                throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
+#endif
             }
             return instance.template Storage<T>().writeComponents[0] = value;
         }
@@ -263,16 +281,24 @@ namespace Tecs {
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
             base->template SetAccessFlag<T>(true);
 
+#ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
-            if (!instance.template BitsetHas<T>(metadata)) {
-                if (is_add_remove_allowed<LockType>()) {
+#endif
+
+            if constexpr (is_add_remove_allowed<LockType>()) {
+#ifdef TECS_UNCHECKED_MODE
+                auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+#endif
+                if (!instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
                     instance.template Storage<T>().writeComponents.resize(1);
-                } else {
-                    throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
                 }
+#ifndef TECS_UNCHECKED_MODE
+            } else if (!instance.template BitsetHas<T>(metadata)) {
+                throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
+#endif
             }
             return instance.template Storage<T>().writeComponents[0] = T(std::forward<Args>(args)...);
         }
@@ -379,23 +405,43 @@ namespace Tecs {
 
         const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
 
-        template<typename... Permissions>
-        static const auto generateReadBitset() {
+        template<typename LockType>
+        static inline constexpr auto generateReadBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            result[0] = true;
-            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
-                     is_read_allowed<AllComponentTypes, Permissions...>()),
-                ...);
+            if constexpr (sizeof...(AllComponentTypes) < 64) {
+                // clang-format off
+                constexpr uint64_t mask = 1 | ((
+                    ((uint64_t)is_read_allowed<AllComponentTypes, LockType>())
+                        << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
+                ) | ...);
+                // clang-format on
+                result = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
+            } else {
+                result[0] = true;
+                ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                         is_read_allowed<AllComponentTypes, LockType>()),
+                    ...);
+            }
             return result;
         }
 
-        template<typename... Permissions>
-        static const auto generateWriteBitset() {
+        template<typename LockType>
+        static inline constexpr auto generateWriteBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            result[0] = Tecs::is_add_remove_allowed<Permissions...>();
-            ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
-                     is_write_allowed<AllComponentTypes, Permissions...>()),
-                ...);
+            if constexpr (sizeof...(AllComponentTypes) < 64) {
+                // clang-format off
+                constexpr uint64_t mask = (uint64_t)Tecs::is_add_remove_allowed<LockType>() | ((
+                    ((uint64_t)is_write_allowed<AllComponentTypes, LockType>())
+                        << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
+                ) | ...);
+                // clang-format on
+                result = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
+            } else {
+                result[0] = Tecs::is_add_remove_allowed<LockType>();
+                ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                         is_write_allowed<AllComponentTypes, LockType>()),
+                    ...);
+            }
             return result;
         }
 
@@ -406,14 +452,15 @@ namespace Tecs {
 
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
-            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicPermissions...>()) {
-                return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+            using DynamicLockType = Lock<ECS, DynamicPermissions...>;
+            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicLockType>()) {
+                return DynamicLockType(this->instance, this->base, this->permissions);
             } else {
-                static const auto requestedRead = generateReadBitset<DynamicPermissions...>();
-                static const auto requestedWrite = generateWriteBitset<DynamicPermissions...>();
+                static constexpr auto requestedRead = generateReadBitset<DynamicLockType>();
+                static constexpr auto requestedWrite = generateWriteBitset<DynamicLockType>();
                 if ((requestedRead & readPermissions) == requestedRead &&
                     (requestedWrite & this->permissions) == requestedWrite) {
-                    return Lock<ECS, DynamicPermissions...>(this->instance, this->base, this->permissions);
+                    return DynamicLockType(this->instance, this->base, this->permissions);
                 }
                 return {};
             }

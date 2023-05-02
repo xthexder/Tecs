@@ -315,6 +315,8 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!ent.Exists(lock), "Null entity should not exist");
         Assert(!ent.Has<Transform>(lock), "Null entity should not have Transform");
         Assert(!ent.Had<Transform>(lock), "Null entity should not have previous Transform");
+
+#ifndef TECS_UNCHECKED_MODE
         try {
             ent.Get<Transform>(lock);
             Assert(false, "Entity.Get() on null entity should fail");
@@ -357,6 +359,7 @@ int main(int /* argc */, char ** /* argv */) {
             std::string msg = e.what();
             Assert(msg == "Entity does not exist: Entity(invalid)", "Received wrong runtime_error: " + msg);
         }
+#endif
     }
     {
         Timer t("Test reading observers");
@@ -682,6 +685,7 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
         Assert(!ent.Had<Transform>(lock), "New entity should not have previous Transform");
 
+#ifndef TECS_UNCHECKED_MODE
         try {
             ent.Get<const Transform>(lock);
             Assert(false, "Entity.Get<const>() on missing component should fail");
@@ -690,6 +694,7 @@ int main(int /* argc */, char ** /* argv */) {
             auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
             Assert(msg == compare, "Received wrong runtime_error: " + msg);
         }
+#endif
         Assert(!ent.Has<Transform>(lock), "New entity should not have Transform");
 
         ent.Get<Transform>(lock);
@@ -710,6 +715,7 @@ int main(int /* argc */, char ** /* argv */) {
                 // Try starting a noop write transaction while another read transaction is active.
                 auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+#ifndef TECS_UNCHECKED_MODE
                 try {
                     constGetEntity.Get<const Transform>(writeLock);
                     Assert(false, "Entity.Get<const>() on missing component should fail");
@@ -718,6 +724,7 @@ int main(int /* argc */, char ** /* argv */) {
                     auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
                     Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
+#endif
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
 
                 // Commit should not occur since no write operations were done.
@@ -729,6 +736,7 @@ int main(int /* argc */, char ** /* argv */) {
                 // Try starting a noop write transaction while another read transaction is active.
                 auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
+#ifndef TECS_UNCHECKED_MODE
                 try {
                     constGetEntity.Get<const Transform>(writeLock);
                     Assert(false, "Entity.Get<const>() on missing component should fail");
@@ -737,6 +745,7 @@ int main(int /* argc */, char ** /* argv */) {
                     auto compare = std::string("Entity does not have a component of type: ") + typeid(Transform).name();
                     Assert(msg == compare, "Received wrong runtime_error: " + msg);
                 }
+#endif
                 Assert(!constGetEntity.Has<Transform>(writeLock), "New entity should not have Transform");
 
                 // Commit should not occur since no write operations were done.

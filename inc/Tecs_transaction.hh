@@ -215,7 +215,7 @@ namespace Tecs {
                 ...);
 
             { // Acquire commit locks for all write-accessed components
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
                 ZoneNamedN(tracyCommitScope1, "CommitLock", true);
 #endif
                 if constexpr (is_add_remove_allowed<LockType>()) {
@@ -232,7 +232,7 @@ namespace Tecs {
                     ...);
             }
             { // Swap read and write storage, and release commit lock for all held locks
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
                 ZoneNamedN(tracyCommitScope2, "Commit", true);
 #endif
                 if constexpr (is_add_remove_allowed<LockType>()) {
@@ -272,8 +272,8 @@ namespace Tecs {
             ( // For each AllComponentTypes, reset the write storage to match read.
                 [&] {
                     if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-#ifdef TECS_ENABLE_TRACY
-                        ZoneNamedN(tracyCommitScope3, "CopyRead", true);
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                        ZoneNamedN(tracyCommitScope3, "CopyReadComponent", true);
                         ZoneTextV(tracyCommitScope3,
                             typeid(AllComponentTypes).name(),
                             std::strlen(typeid(AllComponentTypes).name()));

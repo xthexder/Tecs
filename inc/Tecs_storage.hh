@@ -6,7 +6,7 @@
     #include "Tecs_tracing.hh"
 #endif
 
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
     #include <tracy/Tracy.hpp>
 #endif
 
@@ -36,7 +36,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             bool runAfterLockShared = false;
             if (block) {
                 runAfterLockShared = tracyRead.BeforeLockShared();
@@ -57,7 +57,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::ReadLock);
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
                         if (block) {
                             if (runAfterLockShared) tracyRead.AfterLockShared();
                         } else {
@@ -69,7 +69,7 @@ namespace Tecs {
                 }
 
                 if (!block) {
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
                     tracyRead.AfterTryLockShared(false);
 #endif
                     return false;
@@ -113,7 +113,7 @@ namespace Tecs {
 #if __cpp_lib_atomic_wait
             readers.notify_all();
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             tracyRead.AfterUnlockShared();
 #endif
         }
@@ -127,7 +127,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             bool runAfterLock = false;
             if (block) {
                 runAfterLock = tracyWrite.BeforeLock();
@@ -146,7 +146,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::WriteLock);
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
                         if (block) {
                             if (runAfterLock) tracyWrite.AfterLock();
                         } else {
@@ -158,7 +158,7 @@ namespace Tecs {
                 }
 
                 if (!block) {
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
                     tracyWrite.AfterTryLock(false);
 #endif
                     return false;
@@ -195,7 +195,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             bool tracedWait = false;
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             bool runAfterLock = tracyRead.BeforeLock();
 #endif
 
@@ -218,7 +218,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
                         traceInfo.Trace(TraceEvent::Type::CommitLock);
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
                         if (runAfterLock) tracyRead.AfterLock();
 #endif
                         return;
@@ -272,7 +272,7 @@ namespace Tecs {
 #if __cpp_lib_atomic_wait
             writer.notify_all();
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             tracyRead.AfterUnlock();
 #endif
         }
@@ -303,7 +303,7 @@ namespace Tecs {
             writer.notify_all();
 #endif
 
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
             tracyWrite.AfterUnlock();
 #endif
         }
@@ -311,7 +311,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo traceInfo;
 #endif
-#ifdef TECS_ENABLE_TRACY
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
         static inline const auto tracyReadCtx = []() -> const tracy::SourceLocationData * {
             static const std::string lockName = std::string("Read ") + typeid(T *).name();
             static const tracy::SourceLocationData srcloc{nullptr, lockName.c_str(), __FILE__, __LINE__, 0};
