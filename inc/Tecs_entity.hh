@@ -3,6 +3,7 @@
 #include "Tecs_permissions.hh"
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <stdexcept>
 #include <string>
