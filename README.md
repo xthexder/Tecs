@@ -8,11 +8,13 @@ while still providing thread-safe access. This is achieved by making heavy use o
 to ensure memory access is safe at compile-time, and minimize the amount of logic remaining in the
 compiled output.
 
+Tecs is a core component of the [Stray Photons Game Engine](https://github.com/frustra/strayphotons)
+
 ### Features
 
  - Thread-safe transaction model for easy multi-threading
  - Compile-time safety checks ensure thread-safe operation
- - Context-switch free lock aquisision
+ - Context-switch free lock acquisition
  - Minimal read/write overhead for existing components
  - Efficient memory layout for maximum cache usage
  - Observer pattern for watching creations and deletions
