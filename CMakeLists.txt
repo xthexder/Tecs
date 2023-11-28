@@ -81,7 +81,7 @@ if(TECS_UNCHECKED_MODE)
     target_compile_definitions(${PROJECT_NAME} INTERFACE TECS_UNCHECKED_MODE)
 endif()
 
-if(UNIX)
+if(UNIX AND NOT ANDROID)
     target_link_libraries(
         ${PROJECT_NAME}
         INTERFACE
