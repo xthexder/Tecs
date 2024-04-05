@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -60,6 +61,10 @@ namespace Tecs {
         TECS_ENTITY_INDEX_TYPE index;
 
         inline Entity() : generation(0), index(0) {}
+
+        inline Entity(uint64_t eid)
+            : generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)),
+              index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
             : generation(generation), index(index) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation,
@@ -344,6 +349,10 @@ namespace Tecs {
 
         inline explicit operator bool() const {
             return generation != 0;
+        }
+
+        inline explicit operator uint64_t() const {
+            return (((uint64_t)generation) << (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)) | (uint64_t)index;
         }
     };
 
