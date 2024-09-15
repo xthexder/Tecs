@@ -334,7 +334,19 @@ namespace Tecs {
             using NewLockType = Lock<ECS, PermissionsSubset...>;
             static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
 
-            return Lock<ECS, PermissionsSubset...>(*this);
+            return NewLockType(*this);
+        }
+
+        /**
+         * Convert this lock into a read-only variant.
+         *
+         * Reads performed through this lock will not be able to see writes from the parent lock, and instead will
+         * return the previous value.
+         */
+        inline auto ReadOnlySubset() const {
+            using NewLockType = Lock<ECS, typename FlattenPermissions<LockType, AllComponentTypes...>::type_readonly>;
+            static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
+            return NewLockType(this->instance, this->base, {});
         }
 
         long UseCount() const {

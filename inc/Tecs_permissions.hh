@@ -218,6 +218,17 @@ namespace Tecs {
         }
 
         template<size_t... Indices>
+        static constexpr auto flatten_readonly(std::index_sequence<Indices...>) {
+            // clang-format off
+            return std::tuple_cat(std::conditional_t<
+                is_read_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
+                std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
+                std::tuple<>
+            >{}...);
+            // clang-format on
+        }
+
+        template<size_t... Indices>
         static constexpr auto flatten_write(std::index_sequence<Indices...>) {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
@@ -252,5 +263,7 @@ namespace Tecs {
         }
 
         using type = decltype(flatten());
+        using type_readonly = typename tuple_to_read<decltype(flatten_readonly(
+            std::make_index_sequence<sizeof...(AllComponentTypes)>()))>::type;
     };
 }; // namespace Tecs
