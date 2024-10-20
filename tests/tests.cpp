@@ -551,6 +551,7 @@ int main(int /* argc */, char ** /* argv */) {
         }
         Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
     }
+    Assert(Tecs::nextTransactionId == 17, "Expected next transaction id to be 17");
     {
         Timer t("Test lock reference counting");
         std::unique_ptr<Tecs::Lock<ECS, Tecs::Write<Script>>> outerLock;
@@ -577,6 +578,7 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(writtenId.Get<Script>(transaction).data[3] == 99, "Script data should be set to 99");
         }
     }
+    Assert(Tecs::nextTransactionId == 20, "Expected next transaction id to be 20");
     {
         Timer t("Test read lock reference write transaction can see changes");
         auto transaction = ecs.StartTransaction<Tecs::Write<Script>>();
@@ -649,6 +651,7 @@ int main(int /* argc */, char ** /* argv */) {
             entities2[prevSize + i].Destroy(writeLock);
         }
     }
+    Assert(Tecs::nextTransactionId == 26, "Expected next transaction id to be 26");
     {
         Timer t("Test write priority");
         std::vector<std::thread> readThreads;
@@ -674,6 +677,7 @@ int main(int /* argc */, char ** /* argv */) {
             thread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == 127, "Expected next transaction id to be 127");
     Tecs::Entity constGetEntity;
     {
         Timer t("Test const Get does not add component");
@@ -706,6 +710,7 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!ent.Had<Transform>(lock), "Entity should not have previous Transform");
         constGetEntity = ent;
     }
+    Assert(Tecs::nextTransactionId == 128, "Expected next transaction id to be 128");
     {
         Timer t("Test const Get does not commit lock");
         {
@@ -754,6 +759,7 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == 131, "Expected next transaction id to be 131");
     {
         auto lock = ecs.StartTransaction<Tecs::AddRemove>();
         constGetEntity.Destroy(lock);
@@ -808,6 +814,7 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(!e.Exists(lock), "Entity should not exist after test.");
         }
     }
+    Assert(Tecs::nextTransactionId == 237, "Expected next transaction id to be 237");
     {
         Timer t("Test noop write transaction does not commit lock");
         {
@@ -827,6 +834,7 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == 239, "Expected next transaction id to be 239");
     {
         Timer t("Test write transaction does not commit untouched components");
         {
@@ -849,6 +857,7 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == 241, "Expected next transaction id to be 241");
     {
         Timer t("Test noop add/remove transaction does not commit");
         {
@@ -869,6 +878,7 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == 243, "Expected next transaction id to be 243");
     {
         Timer t("Test overlapping commit transactions don't deadlock");
         Tecs::Entity readIdA, readIdB;
@@ -916,6 +926,7 @@ int main(int /* argc */, char ** /* argv */) {
         writeThreadA.join();
         writeThreadB.join();
     }
+    Assert(Tecs::nextTransactionId == 246, "Expected next transaction id to be 246");
     {
         Timer t("Test read with const lock");
         const auto lock = ecs.StartTransaction<Tecs::Read<Transform>>();
@@ -1078,6 +1089,7 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!transformObserver.Poll(readLock, transformEvent), "No events should have occured");
         Assert(!globalCompObserver.Poll(readLock, globalCompEvent), "No events should have occured");
     }
+    Assert(Tecs::nextTransactionId == 253, "Expected next transaction id to be 253");
     {
         Timer t("Test cross-component write commit");
         std::thread blockingThread;
@@ -1122,7 +1134,8 @@ int main(int /* argc */, char ** /* argv */) {
 
         blockingThread.join();
     }
-    size_t additionalTransactionCount = 0;
+    Assert(Tecs::nextTransactionId == 255, "Expected next transaction id to be 255");
+    size_t expectedTransactionId = 255;
     {
         Timer t("Test continuous overlapping reads");
         std::thread blockingThread;
@@ -1135,6 +1148,7 @@ int main(int /* argc */, char ** /* argv */) {
                     auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 });
+                expectedTransactionId++;
             }
 
             std::atomic_bool commitCompleted = false;
@@ -1152,6 +1166,7 @@ int main(int /* argc */, char ** /* argv */) {
                 }
                 commitCompleted = true;
             });
+            expectedTransactionId += 2;
 
             while (!commitCompleted) {
                 // Cycle through each transaction and restart the thread when it completes
@@ -1161,7 +1176,7 @@ int main(int /* argc */, char ** /* argv */) {
                         auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     });
-                    additionalTransactionCount++;
+                    expectedTransactionId++;
                 }
             }
         }
@@ -1171,6 +1186,8 @@ int main(int /* argc */, char ** /* argv */) {
             thread.join();
         }
     }
+    Assert(Tecs::nextTransactionId == expectedTransactionId,
+        "Expected next transaction id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test AddRemove commit lock metadata race");
         for (size_t i = 0; i < 10; i++) {
@@ -1180,6 +1197,7 @@ int main(int /* argc */, char ** /* argv */) {
             std::thread writeThreadScript;
             {
                 auto addLock = ecs.StartTransaction<Tecs::AddRemove>();
+                expectedTransactionId++;
                 entity = addLock.NewEntity();
                 entity.Set<Transform>(addLock, 42.0, 64.0, 128.0);
                 entity.Set<Renderable>(addLock, "test_value");
@@ -1201,6 +1219,7 @@ int main(int /* argc */, char ** /* argv */) {
                         Assert(false, "Received unexpected runtime_error: " + msg);
                     }
                 });
+                expectedTransactionId++;
 
                 writeThreadRenderable = std::thread([&] {
                     // Start a write transaction during the AddRemove so it starts immediately after
@@ -1213,6 +1232,7 @@ int main(int /* argc */, char ** /* argv */) {
                         Assert(false, "Received unexpected runtime_error: " + msg);
                     }
                 });
+                expectedTransactionId++;
 
                 writeThreadScript = std::thread([&] {
                     // Start a write transaction during the AddRemove so it starts immediately after
@@ -1228,6 +1248,7 @@ int main(int /* argc */, char ** /* argv */) {
                         Assert(false, "Received unexpected runtime_error: " + msg);
                     }
                 });
+                expectedTransactionId++;
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
@@ -1237,10 +1258,13 @@ int main(int /* argc */, char ** /* argv */) {
 
             {
                 auto removeLock = ecs.StartTransaction<Tecs::AddRemove>();
+                expectedTransactionId++;
                 entity.Destroy(removeLock);
             }
         }
     }
+    Assert(Tecs::nextTransactionId == expectedTransactionId,
+        "Expected next transaction id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test nested transactions");
         try {
@@ -1251,17 +1275,20 @@ int main(int /* argc */, char ** /* argv */) {
             std::string msg = e.what();
             Assert(msg == "Nested transactions are not allowed", "Received wrong runtime_error: " + msg);
         }
+        expectedTransactionId += 2;
     }
     {
         Timer t("Test nested transactions across ecs instances");
         testing::ECS ecs2;
         auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
         auto lockB = ecs2.StartTransaction<Tecs::Read<Renderable>, Tecs::Write<Script>>();
+        expectedTransactionId += 2;
     }
     {
         Timer t("Test count entities");
         {
             auto readLock = ecs.StartTransaction<>();
+            expectedTransactionId++;
             Assert(readLock.Entities().size() == ENTITY_COUNT, "Expected entity count not to change");
         }
     }
@@ -1269,6 +1296,7 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test destroy entities using reference to entity list");
         {
             auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+            expectedTransactionId++;
             for (auto &e : lock.Entities()) {
                 e.Destroy(lock);
             }
@@ -1280,6 +1308,7 @@ int main(int /* argc */, char ** /* argv */) {
             std::map<Tecs::Entity, int> theMap;
 
             auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            expectedTransactionId++;
             Tecs::Entity e = writeLock.NewEntity();
             theMap[e] = 1;
             Assert(theMap[e] == 1, "Expected value to be set");
@@ -1288,13 +1317,16 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(theMap[e] == 0, "Expected value to not be set");
         }
     }
+    Assert(Tecs::nextTransactionId == expectedTransactionId,
+        "Expected next transaction id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test total transaction count via transaction id");
         {
             auto readLock = ecs.StartTransaction<>();
+            expectedTransactionId++;
             std::cout << "Total test transactions: " << readLock.GetTransactionId() << std::endl;
-            Assert(readLock.GetTransactionId() == 325 + additionalTransactionCount,
-                "Expected transaction id to be 325 + " + std::to_string(additionalTransactionCount));
+            Assert(readLock.GetTransactionId() == expectedTransactionId,
+                "Expected next transaction id to be " + std::to_string(expectedTransactionId));
         }
     }
 
