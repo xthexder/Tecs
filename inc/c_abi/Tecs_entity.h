@@ -6,10 +6,9 @@ extern "C" {
 typedef uint8_t bool;
 #endif
 
-#include "Tecs_lock.h"
-
 #include <stdint.h>
 
+typedef void TecsLock;
 typedef uint64_t TecsEntity;
 
 bool Tecs_entity_exists(TecsLock *dynLockPtr, TecsEntity entity);

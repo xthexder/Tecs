@@ -5,8 +5,8 @@
 #include <Tecs.hh>
 
 namespace testing {
-    template<typename... Tn, typename LockType>
-    static inline void AssertHas(LockType &lock, Tecs::Entity &e) {
+    template<typename... Tn, typename LockType, typename EntityType>
+    static inline void AssertHas(LockType &lock, EntityType &e) {
         if (Tecs::contains<Transform, Tn...>()) {
             Assert(e.template Has<Transform>(lock), "Entity is missing a Transform component");
         } else {
