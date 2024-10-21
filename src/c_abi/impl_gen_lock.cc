@@ -23,7 +23,50 @@ size_t Tecs_lock_get_transaction_id(TecsLock *dynLockPtr) {
     return dynLock->GetTransactionId();
 }
 
-size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t componentIndex, const TecsEntity **output) {
+bool Tecs_lock_is_add_remove_allowed(TecsLock *dynLockPtr) {
+    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
+    return dynLock->TryLock<Tecs::AddRemove>().has_value();
+}
+
+bool Tecs_lock_is_write_allowed(TecsLock *dynLockPtr, size_t componentIndex) {
+    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
+    // For each component...
+)RAWSTR";
+    for (size_t i = 0; i < names.size(); i++) {
+        if (i == 0) {
+            out << "    if (componentIndex == 0) {" << std::endl;
+        } else {
+            out << "    } else if (componentIndex == " << i << ") {" << std::endl;
+        }
+        out << "         return dynLock->TryLock<Tecs::Write<" << names[i] << ">>().has_value();" << std::endl;
+    }
+    out << "    } else {";
+    out << R"RAWSTR(
+        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        return false;
+    }
+}
+
+bool Tecs_lock_is_read_allowed(TecsLock *dynLockPtr, size_t componentIndex) {
+    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
+    // For each component...
+)RAWSTR";
+    for (size_t i = 0; i < names.size(); i++) {
+        if (i == 0) {
+            out << "    if (componentIndex == 0) {" << std::endl;
+        } else {
+            out << "    } else if (componentIndex == " << i << ") {" << std::endl;
+        }
+        out << "         return dynLock->TryLock<Tecs::Read<" << names[i] << ">>().has_value();" << std::endl;
+    }
+    out << "    } else {";
+    out << R"RAWSTR(
+        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        return false;
+    }
+}
+
+size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t componentIndex, TecsEntityView *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     Tecs::EntityView view;
     // For each component...
@@ -47,11 +90,15 @@ size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t componentIndex, 
         std::cerr << "Component index out of range: " << componentIndex << std::endl;
         return 0;
     }
-    *output = reinterpret_cast<const size_t *>(&*view.begin());
+    *output = TecsEntityView {
+        .storage = view.storage,
+        .start_index = view.start_index,
+        .end_index = view.end_index,
+    };
     return view.size();
 }
 
-size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentIndex, const TecsEntity **output) {
+size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentIndex, TecsEntityView *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     Tecs::EntityView view;
     // For each component...
@@ -75,21 +122,33 @@ size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentIndex, const Tec
         std::cerr << "Component index out of range: " << componentIndex << std::endl;
         return 0;
     }
-    *output = reinterpret_cast<const size_t *>(&*view.begin());
+    *output = TecsEntityView {
+        .storage = view.storage,
+        .start_index = view.start_index,
+        .end_index = view.end_index,
+    };
     return view.size();
 }
 
-size_t Tecs_previous_entities(TecsLock *dynLockPtr, const TecsEntity **output) {
+size_t Tecs_previous_entities(TecsLock *dynLockPtr, TecsEntityView *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto view = dynLock->PreviousEntities();
-    *output = reinterpret_cast<const size_t *>(&*view.begin());
+    *output = TecsEntityView {
+        .storage = view.storage,
+        .start_index = view.start_index,
+        .end_index = view.end_index,
+    };
     return view.size();
 }
 
-size_t Tecs_entities(TecsLock *dynLockPtr, const TecsEntity **output) {
+size_t Tecs_entities(TecsLock *dynLockPtr, TecsEntityView *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto view = dynLock->Entities();
-    *output = reinterpret_cast<const size_t *>(&*view.begin());
+    *output = TecsEntityView {
+        .storage = view.storage,
+        .start_index = view.start_index,
+        .end_index = view.end_index,
+    };
     return view.size();
 }
 
@@ -322,11 +381,6 @@ void Tecs_unset(TecsLock *dynLockPtr, size_t componentIndex) {
 TecsLock *Tecs_lock_read_only(TecsLock *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return new DynamicLock(dynLock->ReadOnlySubset());
-}
-
-void Tecs_lock_release(TecsLock *dynLockPtr) {
-    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
-    delete dynLock;
 }
 
 } // extern "C"

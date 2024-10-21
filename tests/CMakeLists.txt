@@ -34,8 +34,15 @@ endif()
 add_executable(${PROJECT_NAME}-tests tests.cpp transform_component.cpp)
 target_link_libraries(${PROJECT_NAME}-tests ${PROJECT_NAME})
 
+add_executable(Tecs-gen-ecs ${CMAKE_CURRENT_SOURCE_DIR}/../src/c_abi/impl_gen_ecs.cc)
 add_executable(Tecs-gen-entity ${CMAKE_CURRENT_SOURCE_DIR}/../src/c_abi/impl_gen_entity.cc)
 add_executable(Tecs-gen-lock ${CMAKE_CURRENT_SOURCE_DIR}/../src/c_abi/impl_gen_lock.cc)
+target_include_directories(
+    Tecs-gen-ecs
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../inc
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
 target_include_directories(
     Tecs-gen-entity
     PUBLIC
@@ -48,6 +55,10 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../inc
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+target_compile_definitions(Tecs-gen-ecs PRIVATE
+    TECS_C_ABI_ECS_INCLUDE="test_components.hh"
+    TECS_C_ABI_ECS_NAME=testing::ECS
+)
 target_compile_definitions(Tecs-gen-entity PRIVATE
     TECS_C_ABI_ECS_INCLUDE="test_components.hh"
     TECS_C_ABI_ECS_NAME=testing::ECS
@@ -57,6 +68,11 @@ target_compile_definitions(Tecs-gen-lock PRIVATE
     TECS_C_ABI_ECS_NAME=testing::ECS
 )
 
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Tecs_ecs_gen.cc
+    COMMAND Tecs-gen-ecs ${CMAKE_CURRENT_BINARY_DIR}/Tecs_ecs_gen.cc
+    DEPENDS Tecs-gen-ecs
+)
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Tecs_entity_gen.cc
     COMMAND Tecs-gen-entity ${CMAKE_CURRENT_BINARY_DIR}/Tecs_entity_gen.cc
@@ -71,6 +87,8 @@ add_custom_command(
 add_executable(${PROJECT_NAME}-c_abi_test
     c_abi_test.cpp
     transform_component.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/c_abi/Tecs_entity_view.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/Tecs_ecs_gen.cc
     ${CMAKE_CURRENT_BINARY_DIR}/Tecs_entity_gen.cc
     ${CMAKE_CURRENT_BINARY_DIR}/Tecs_lock_gen.cc
 )

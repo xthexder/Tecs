@@ -15,6 +15,11 @@ namespace Tecs {
     template<typename>
     class Transaction {};
 
+    namespace abi {
+        template<typename, typename...>
+        class Lock {};
+    } // namespace abi
+
     /**
      * Lock permissions are passed in as template arguments when creating a Transaction or Lock.
      *
@@ -120,6 +125,10 @@ namespace Tecs {
     struct is_read_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
 
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
@@ -129,6 +138,10 @@ namespace Tecs {
     struct is_write_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, abi::Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
 
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
@@ -138,6 +151,10 @@ namespace Tecs {
     struct is_add_remove_allowed<DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
     template<typename ECSType, typename... Permissions>
     struct is_add_remove_allowed<const DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<abi::Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<const abi::Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
     // clang-format on
 
     // Check SubLock <= Lock for component type T
