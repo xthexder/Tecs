@@ -415,18 +415,21 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... StaticPermissions>
     class DynamicLock<ECSType<AllComponentTypes...>, StaticPermissions...>
         : public Lock<ECSType<AllComponentTypes...>, StaticPermissions...> {
+    public:
+        using PermissionBitset = std::bitset<1 + sizeof...(AllComponentTypes)>;
+
     private:
         using ECS = ECSType<AllComponentTypes...>;
 
-        const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+        const PermissionBitset readPermissions;
 
         template<typename LockType>
-        static inline constexpr auto generateReadBitset() {
+        static inline auto generateReadBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            if constexpr (sizeof...(AllComponentTypes) < 64) {
+            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<unsigned long long>::digits) {
                 // clang-format off
-                constexpr uint64_t mask = 1 | ((
-                    ((uint64_t)is_read_allowed<AllComponentTypes, LockType>())
+                constexpr unsigned long long mask = 1 | ((
+                    ((unsigned long long)is_read_allowed<AllComponentTypes, LockType>())
                         << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
                 ) | ...);
                 // clang-format on
@@ -441,12 +444,12 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        static inline constexpr auto generateWriteBitset() {
+        static inline auto generateWriteBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            if constexpr (sizeof...(AllComponentTypes) < 64) {
+            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<unsigned long long>::digits) {
                 // clang-format off
-                constexpr uint64_t mask = (uint64_t)Tecs::is_add_remove_allowed<LockType>() | ((
-                    ((uint64_t)is_write_allowed<AllComponentTypes, LockType>())
+                constexpr unsigned long long mask = (unsigned long long)Tecs::is_add_remove_allowed<LockType>() | ((
+                    ((unsigned long long)is_write_allowed<AllComponentTypes, LockType>())
                         << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
                 ) | ...);
                 // clang-format on
@@ -465,14 +468,21 @@ namespace Tecs {
         DynamicLock(const LockType &lock)
             : Lock<ECS, StaticPermissions...>(lock), readPermissions(generateReadBitset<LockType>()) {}
 
+        // Start a new transaction from runtime permissions
+        inline DynamicLock(ECS &instance, const PermissionBitset &readPermissions,
+            const PermissionBitset &writePermissions)
+            : Lock<ECS>(instance, std::make_shared<Transaction<ECS>>(instance, readPermissions, writePermissions),
+                  writePermissions),
+              readPermissions(readPermissions) {}
+
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
             using DynamicLockType = Lock<ECS, DynamicPermissions...>;
             if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicLockType>()) {
                 return DynamicLockType(this->instance, this->transaction, this->writePermissions);
             } else {
-                static constexpr auto requestedRead = generateReadBitset<DynamicLockType>();
-                static constexpr auto requestedWrite = generateWriteBitset<DynamicLockType>();
+                static const auto requestedRead = generateReadBitset<DynamicLockType>();
+                static const auto requestedWrite = generateWriteBitset<DynamicLockType>();
                 if ((requestedRead & readPermissions) == requestedRead &&
                     (requestedWrite & this->writePermissions) == requestedWrite) {
                     return DynamicLockType(this->instance, this->transaction, this->writePermissions);

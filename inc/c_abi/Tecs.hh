@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Tecs.h"
+#include "Tecs_lock.hh"
+
+#include <bitset>
 
 namespace Tecs::abi {
     /**
@@ -47,8 +50,30 @@ namespace Tecs::abi {
          */
         template<typename... Permissions>
         inline Lock<ECS<Tn...>, Permissions...> StartTransaction() {
-            // Tecs_ecs_start_transaction(base.get(), );
-            return Lock<ECS<Tn...>, Permissions...>(*this);
+            using LockType = Lock<ECS<Tn...>, Permissions...>;
+
+            std::bitset<1 + sizeof...(Tn)> readPermissions;
+            std::bitset<1 + sizeof...(Tn)> writePermissions;
+            readPermissions[0] = true;
+            writePermissions[0] = is_add_remove_allowed<LockType>();
+            // clang-format off
+            ((
+                readPermissions[1 + GetComponentIndex<Tn>()] = is_read_allowed<Tn, LockType>(),
+                writePermissions[1 + GetComponentIndex<Tn>()] = is_write_allowed<Tn, LockType>()
+            ), ...);
+            // clang-format on
+            TecsLock *l = nullptr;
+            if constexpr (sizeof...(Tn) > std::numeric_limits<unsigned long long>::digits) {
+                l = Tecs_ecs_start_transaction(base.get(), readPermissions.to_ullong(), writePermissions.to_ullong());
+            } else {
+                l = Tecs_ecs_start_transaction_bitstr(base.get(),
+                    readPermissions.to_string().c_str(),
+                    writePermissions.to_string().c_str());
+            }
+            std::shared_ptr<TecsLock> lockPtr(l, [](auto *ptr) {
+                Tecs_lock_release(ptr);
+            });
+            return LockType(lockPtr);
         }
 
         inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
@@ -86,7 +111,7 @@ namespace Tecs::abi {
             return contains<U, Tn...>();
         }
 
-        inline static constexpr size_t GetBytesPerEntity() {
+        inline size_t GetBytesPerEntity() {
             return Tecs_ecs_get_bytes_per_entity(base.get());
         }
 

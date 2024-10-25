@@ -1,6 +1,20 @@
-add_executable(${PROJECT_NAME}-benchmark benchmark.cpp transform_component.cpp)
+add_executable(${PROJECT_NAME}-benchmark
+    benchmark.cpp
+    transform_component.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/c_abi/Tecs_entity_view.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/Tecs_ecs_gen.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/Tecs_entity_gen.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/Tecs_lock_gen.cc
+)
 target_link_libraries(${PROJECT_NAME}-benchmark ${PROJECT_NAME})
-target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_ENABLE_PERFORMANCE_TRACING TECS_UNCHECKED_MODE)
+target_include_directories(
+    ${PROJECT_NAME}-benchmark
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../inc
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_UNCHECKED_MODE)
+# target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_ENABLE_PERFORMANCE_TRACING TECS_UNCHECKED_MODE)
 if(WIN32)
     # Link winmm library for timeBeginPeriod()
     target_link_libraries(${PROJECT_NAME}-benchmark winmm)
