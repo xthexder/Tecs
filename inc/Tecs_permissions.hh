@@ -12,7 +12,7 @@ namespace Tecs {
     class Lock {};
     template<typename, typename...>
     class DynamicLock {};
-    template<typename, typename...>
+    template<typename>
     class Transaction {};
 
     /**

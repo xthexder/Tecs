@@ -349,7 +349,7 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
         friend struct Entity;
     };
