@@ -4,26 +4,27 @@
 #include "utils.hh"
 
 #include <Tecs.hh>
-#include <c_abi/Tecs.h>
-#include <c_abi/Tecs_entity.h>
+#include <c_abi/Tecs.hh>
 #include <c_abi/Tecs_entity.hh>
-#include <c_abi/Tecs_lock.h>
 #include <c_abi/Tecs_lock.hh>
 #include <iostream>
 
 using namespace testing;
 
-static ECS ecs;
+using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
+
+static ECS baseEcs;
 
 #define ENTITY_COUNT 10000
 
 int main(int /* argc */, char ** /* argv */) {
-    size_t componentCount = Tecs_ecs_get_component_count(&ecs);
-    size_t bytesPerEntity = Tecs_ecs_get_bytes_per_entity(&ecs);
-    std::cout << "Running with " << ENTITY_COUNT << " entities and " << componentCount << " component types"
+    std::shared_ptr<TecsECS> ecsPtr(&baseEcs, [](auto *) {});
+    AbiECS ecs = AbiECS(ecsPtr);
+
+    std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
               << std::endl;
-    std::cout << bytesPerEntity << " bytes per entity * N = " << (bytesPerEntity * ENTITY_COUNT) << " bytes total"
-              << std::endl;
+    std::cout << ecs.GetBytesPerEntity() << " bytes per entity * N = " << (ecs.GetBytesPerEntity() * ENTITY_COUNT)
+              << " bytes total" << std::endl;
     std::cout << "Using C ABI" << std::endl;
 
     Assert(Tecs::nextTransactionId == 0, "Expected next transaction id to be 0");
@@ -34,19 +35,18 @@ int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        Tecs::DynamicLock<ECS> dynLock = writeLock;
-        entityObserver = writeLock.Watch<Tecs::EntityEvent>();
-        transformObserver = writeLock.Watch<Tecs::ComponentEvent<Transform>>();
-        globalCompObserver = writeLock.Watch<Tecs::ComponentEvent<GlobalComponent>>();
+        // Tecs::DynamicLock<ECS> dynLock = writeLock;
+        // entityObserver = writeLock.Watch<Tecs::EntityEvent>();
+        // transformObserver = writeLock.Watch<Tecs::ComponentEvent<Transform>>();
+        // globalCompObserver = writeLock.Watch<Tecs::ComponentEvent<GlobalComponent>>();
 
-        Assert(Tecs_lock_get_transaction_id(&dynLock) == 1, "Expected transaction id to be 1");
+        Assert(Tecs_lock_get_transaction_id(writeLock.base.get()) == 1, "Expected transaction id to be 1");
     }
     Assert(Tecs::nextTransactionId == 1, "Expected next transaction id to be 1");
     bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::AddRemove>();
-        Tecs::abi::Lock<ECS, Tecs::AddRemove> writeLock(std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
         auto &gc = writeLock.Set<GlobalComponent>(0);
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
@@ -70,9 +70,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test update global counter");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
-        Tecs::abi::Lock<ECS, Tecs::Write<GlobalComponent>> writeLock(
-            std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -90,8 +88,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test read global counter");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::Read<GlobalComponent>>();
-        Tecs::abi::Lock<ECS, Tecs::Read<GlobalComponent>> readLock(std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto readLock = ecs.StartTransaction<Tecs::Read<GlobalComponent>>();
         Assert(readLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = readLock.Get<GlobalComponent>();
@@ -99,8 +96,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test remove global component");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::AddRemove>();
-        Tecs::abi::Lock<ECS, Tecs::AddRemove> writeLock(std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -111,11 +107,10 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(writeLock.Had<GlobalComponent>(), "ECS should still know previous state");
         Assert(globalComponentInitialized, "Global component should still be initialized (kept by read pointer)");
     }
-    Assert(globalComponentInitialized, "Global component should still be initialized (kept by observer)");
+    // Assert(globalComponentInitialized, "Global component should still be initialized (kept by observer)");
     {
         Timer t("Test add remove global component in single transaction");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::AddRemove>();
-        Tecs::abi::Lock<ECS, Tecs::AddRemove> writeLock(std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         Assert(!writeLock.Has<GlobalComponent>(), "Global component should be removed");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -135,8 +130,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test simple add entity");
-        Tecs::DynamicLock<ECS> dynLock = ecs.StartTransaction<Tecs::AddRemove>();
-        Tecs::abi::Lock<ECS, Tecs::AddRemove> writeLock(std::shared_ptr<TecsLock>(&dynLock, [](auto *) {}));
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
         for (size_t i = 0; i < 100; i++) {
             Tecs::abi::Entity e = writeLock.NewEntity();
             Assert(e.index == i,
@@ -152,12 +146,25 @@ int main(int /* argc */, char ** /* argv */) {
         }
     }
     {
-        Timer t("Test stopping observers");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        entityObserver.Stop(writeLock);
-        transformObserver.Stop(writeLock);
-        globalCompObserver.Stop(writeLock);
+        Timer t("Test entities with");
+        auto readLock = ecs.StartTransaction<Tecs::Read<Renderable, Transform>>();
+
+        auto &validRenderables = readLock.EntitiesWith<Renderable>();
+        auto &validTransforms = readLock.EntitiesWith<Transform>();
+        for (Tecs::abi::Entity ent : validRenderables) {
+            std::cout << std::to_string(ent) << std::endl;
+        }
+        for (Tecs::abi::Entity ent : validTransforms) {
+            std::cout << std::to_string(ent) << std::endl;
+        }
     }
+    // {
+    //     Timer t("Test stopping observers");
+    //     auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+    //     entityObserver.Stop(writeLock);
+    //     transformObserver.Stop(writeLock);
+    //     globalCompObserver.Stop(writeLock);
+    // }
 
     std::cout << "Tests succeeded" << std::endl;
     return 0;

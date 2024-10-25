@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../Tecs_permissions.hh"
-#include "Tecs_entity_view.h"
+#include "Tecs_entity_view.hh"
 #include "Tecs_lock.h"
 
 namespace Tecs::abi {
@@ -11,9 +11,10 @@ namespace Tecs::abi {
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
+    public:
+        // TODO: make this private
         std::shared_ptr<TecsLock> base;
 
-    public:
         inline Lock(const std::shared_ptr<TecsLock> &lock) : base(lock) {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 if (!Tecs_lock_is_add_remove_allowed(lock.get())) {

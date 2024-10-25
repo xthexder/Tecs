@@ -22,18 +22,23 @@ extern "C" {
 TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPermissions,
     unsigned long long writePermissions) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
-    if constexpr (1 + ecs->GetComponentCount() > sizeof(unsigned long long) * 8) {
-        std::cerr << "Too many components to use uint64 init: " << ecs->GetComponentCount() << std::endl;
+    if constexpr (1 + ECS::GetComponentCount() > std::numeric_limits<unsigned long long>::digits) {
+        std::cerr << "Too many components to use uint64 init: " << ECS::GetComponentCount() << std::endl;
         return nullptr;
     } else {
-        // TODO
-        (void)readPermissions;
-        (void)writePermissions;
-        return nullptr;
+        return new DynamicLock(*ecs,
+            DynamicLock::PermissionBitset(readPermissions),
+            DynamicLock::PermissionBitset(writePermissions));
     }
 }
 
-TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPermissions, const char *writePermissions);
+TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPermissions,
+    const char *writePermissions) {
+    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    return new DynamicLock(*ecs,
+        DynamicLock::PermissionBitset(std::string(readPermissions)),
+        DynamicLock::PermissionBitset(std::string(writePermissions)));
+}
 
 size_t Tecs_ecs_get_instance_id(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
