@@ -16,6 +16,7 @@
 #include <atomic>
 #include <bitset>
 #include <cstddef>
+#include <sstream>
 #include <stdexcept>
 
 namespace Tecs {
@@ -44,26 +45,10 @@ namespace Tecs {
         using PermissionBitset = std::bitset<1 + sizeof...(AllComponentTypes)>;
 
     private:
-        // using FlatPermissions = typename FlattenPermissions<LockType, AllComponentTypes...>::type;
-        using EntityMetadata = typename ECS<AllComponentTypes...>::EntityMetadata;
+        using ECS = ECSType<AllComponentTypes...>;
+        using EntityMetadata = typename ECS::EntityMetadata;
 
-#ifdef TECS_ENABLE_TRACY
-        static inline const auto tracyCtx = []() -> const tracy::SourceLocationData * {
-            static const tracy::SourceLocationData srcloc{"TecsTransaction",
-                FlatPermissions::Name(),
-                __FILE__,
-                __LINE__,
-                0};
-            return &srcloc;
-        };
-    #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
-        tracy::ScopedZone tracyZone{tracyCtx(), TRACY_CALLSTACK, true};
-    #else
-        tracy::ScopedZone tracyZone{tracyCtx(), true};
-    #endif
-#endif
-
-        ECSType<AllComponentTypes...> &instance;
+        ECS &instance;
 #ifndef TECS_HEADER_ONLY
         size_t transactionId;
 #endif
@@ -102,15 +87,13 @@ namespace Tecs {
         }
 #endif
 
-        Transaction(ECS<AllComponentTypes...> &instance, const PermissionBitset &readPermissions,
-            const PermissionBitset &writePermissions)
+        Transaction(ECS &instance, const PermissionBitset &readPermissions, const PermissionBitset &writePermissions)
             : instance(instance), readPermissions(readPermissions | writePermissions),
               writePermissions(writePermissions) {
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyScope, "StartTransaction", true);
 #endif
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionStart);
 #endif
 
@@ -193,18 +176,11 @@ namespace Tecs {
                     },
                     instance.eventLists);
             }
-
-#ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(FlatPermissions::Name());
-#endif
         }
         // Delete copy constructor
         Transaction(const Transaction &) = delete;
 
         ~Transaction() {
-#ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(FlatPermissions::Name());
-#endif
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
@@ -323,7 +299,6 @@ namespace Tecs {
             activeTransactionsCount = std::remove(start, start + activeTransactionsCount, instance.ecsId) - start;
 #endif
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-            TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(FlatPermissions::Name());
             instance.transactionTrace.Trace(TraceEvent::Type::TransactionEnd);
 #endif
         }
@@ -424,5 +399,87 @@ namespace Tecs {
                 }
             }
         }
+
+#ifdef TECS_ENABLE_TRACY
+        const std::string permissionsStr = [&]() {
+            ZoneScopedN("PermissionsStrGen");
+            std::stringstream out, write, read;
+            out << "Permissions<";
+            if (IsAddRemoveAllowed()) {
+                out << "AddRemove";
+            } else if (writePermissions.all()) {
+                out << "WriteAll";
+            } else {
+                bool firstOut = true, firstRead = true, firstWrite = true;
+                for (size_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
+                    if (writePermissions[i]) {
+                        if (firstWrite) {
+                            firstWrite = false;
+                        } else {
+                            write << ", ";
+                        }
+                        write << ECS::GetComponentName(i - 1);
+                    }
+                }
+                if (!firstWrite) {
+                    if (firstOut) {
+                        firstOut = false;
+                    } else {
+                        out << ", ";
+                    }
+                    out << "Write<" << write.str() << ">";
+                }
+                if (readPermissions.all()) {
+                    if (firstOut) {
+                        firstOut = false;
+                    } else {
+                        out << ", ";
+                    }
+                    out << "ReadAll";
+                } else {
+                    for (size_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
+                        if (readPermissions[i] && !writePermissions[i]) {
+                            if (firstRead) {
+                                firstRead = false;
+                            } else {
+                                read << ", ";
+                            }
+                            read << ECS::GetComponentName(i - 1);
+                        }
+                    }
+                    if (!firstRead) {
+                        if (firstOut) {
+                            firstOut = false;
+                        } else {
+                            out << ", ";
+                        }
+                        out << "Read<" << read.str() << ">";
+                    }
+                }
+            }
+            out << ">";
+            return out.str();
+        }();
+    #if defined(TRACY_HAS_CALLSTACK) && defined(TRACY_CALLSTACK)
+        tracy::ScopedZone tracyZone{__LINE__,
+            __FILE__,
+            strlen(__FILE__),
+            permissionsStr.c_str(),
+            permissionsStr.size(),
+            "TecsTransaction",
+            strlen("TecsTransaction"),
+            TRACY_CALLSTACK,
+            true};
+    #else
+        tracy::ScopedZone tracyZone{__LINE__,
+            __FILE__,
+            strlen(__FILE__),
+            permissionsStr.c_str(),
+            permissionsStr.size(),
+            "TecsTransaction",
+            strlen("TecsTransaction"),
+            true};
+    #endif
+#endif
     };
 }; // namespace Tecs

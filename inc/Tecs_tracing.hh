@@ -6,6 +6,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <map>
 #include <ostream>
 #include <sstream>
@@ -14,19 +15,6 @@
 
 #ifndef TECS_PERFORMANCE_TRACING_MAX_EVENTS
     #define TECS_PERFORMANCE_TRACING_MAX_EVENTS 10000
-#endif
-
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTING
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTING(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_STARTED
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_STARTED(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDING
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDING(permissions)
-#endif
-#ifndef TECS_EXTERNAL_TRACE_TRANSACTION_ENDED
-    #define TECS_EXTERNAL_TRACE_TRANSACTION_ENDED(permissions)
 #endif
 
 namespace Tecs {
@@ -74,23 +62,34 @@ namespace Tecs {
         nonstd::span<TraceEvent> metadataEvents;
         std::vector<nonstd::span<TraceEvent>> componentEvents;
         std::vector<std::string> componentNames;
-        std::map<std::thread::id, std::string> threadNames;
+        std::map<size_t, std::string> threadNames;
 
-        void SetThreadName(std::string name, std::thread::id threadId = std::this_thread::get_id()) {
-            threadNames[threadId] = name;
+        void SetThreadName(const std::string &name, size_t threadIdHash) {
+            threadNames[threadIdHash] = name;
         }
 
-        std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
-            auto it = threadNames.find(threadId);
+        void SetThreadName(const std::string &name, std::thread::id threadId = std::this_thread::get_id()) {
+            static std::hash<std::thread::id> threadHasher;
+            SetThreadName(name, threadHasher(threadId));
+        }
+
+        std::string GetThreadName(size_t threadIdHash) {
+            auto it = threadNames.find(threadIdHash);
             if (it != threadNames.end()) {
                 return it->second;
             }
             std::stringstream ss;
-            ss << threadId;
+            ss << threadIdHash;
             return ss.str();
         }
 
-        void SaveToCSV(std::ostream &out) {
+        std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
+            static std::hash<std::thread::id> threadHasher;
+            return GetThreadName(threadHasher(threadId));
+        }
+
+        void SaveToCSV(const std::string &filePath) {
+            std::ofstream out(filePath);
             out << "Transaction Event,Transaction Thread Id,Transaction TimeNs";
             out << ",Metadata Event,Metadata Thread Id,Metadata TimeNs";
             if (componentEvents.size() != componentNames.size()) {
@@ -137,6 +136,7 @@ namespace Tecs {
                 }
                 out << std::endl;
             }
+            out.close();
         }
     };
 

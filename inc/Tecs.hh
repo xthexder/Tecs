@@ -107,6 +107,13 @@ namespace Tecs {
         }
 
         /**
+         * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
+         */
+        inline static std::string GetComponentName(size_t componentIndex) {
+            return GetComponentName<Tn...>(componentIndex);
+        }
+
+        /**
          * Returns true if the Component type is part of this ECS.
          */
         template<typename U>
@@ -144,6 +151,18 @@ namespace Tecs {
                 return I;
             } else {
                 return GetComponentIndex<I + 1, U>();
+            }
+        }
+
+        template<typename U, typename... Un>
+        inline static std::string GetComponentName(size_t index) {
+            if (index == 0) {
+                return GetComponentName<U>();
+            }
+            if constexpr (sizeof...(Un) > 0) {
+                return GetComponentName<Un...>(index - 1);
+            } else {
+                throw std::runtime_error("Component does not exist");
             }
         }
 

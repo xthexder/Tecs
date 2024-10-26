@@ -1,6 +1,8 @@
 
 #include <Tecs_entity_view.hh>
-#include <c_abi/Tecs_entity_view.h>
+#include <c_abi/Tecs_entity_view.hh>
+
+thread_local size_t Tecs::abi::viewInvalidationCounter;
 
 extern "C" {
 

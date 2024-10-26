@@ -8,6 +8,8 @@
 #include <vector>
 
 namespace Tecs::abi {
+    extern thread_local size_t viewInvalidationCounter;
+
     class EntityView {
     public:
         typedef const Entity element_type;
@@ -26,7 +28,20 @@ namespace Tecs::abi {
             typedef const Entity &reference;
             typedef std::random_access_iterator_tag iterator_category;
 
-            iterator(const TecsEntityView &view, size_t index = 0) : view(view), i(index) {}
+            iterator(const TecsEntityView &view, size_t index = 0)
+                : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(viewInvalidationCounter) {}
+
+            inline const Entity *begin_uncached() const {
+                return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view));
+            }
+
+            inline const Entity *begin() const {
+                if (viewInvalidationCounter != cacheCounter) {
+                    cachedBase = begin_uncached();
+                    cacheCounter = viewInvalidationCounter;
+                }
+                return cachedBase;
+            }
 
             inline reference operator*() const {
 #ifndef TECS_UNCHECKED_MODE
@@ -34,7 +49,7 @@ namespace Tecs::abi {
                     throw std::runtime_error("EntityView::iterator::operator*: index out of bounds");
                 }
 #endif
-                return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view))[i];
+                return begin()[i];
             }
 
             inline pointer operator->() const {
@@ -43,7 +58,7 @@ namespace Tecs::abi {
                     throw std::runtime_error("EntityView::iterator::operator->: index out of bounds");
                 }
 #endif
-                return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view)) + i;
+                return begin() + i;
             }
 
             inline reference operator[](difference_type n) const {
@@ -53,7 +68,7 @@ namespace Tecs::abi {
                     throw std::runtime_error("EntityView::iterator::operator[]: index out of bounds");
                 }
 #endif
-                return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view))[index];
+                return begin()[index];
             }
 
             inline iterator &operator++() noexcept {
@@ -106,6 +121,9 @@ namespace Tecs::abi {
 
             const TecsEntityView &view;
             size_t i;
+
+            mutable const Entity *cachedBase;
+            mutable size_t cacheCounter;
         };
 
         typedef std::reverse_iterator<iterator> reverse_iterator;

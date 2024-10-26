@@ -3,7 +3,6 @@
 template<typename T>
 void generateECSCC(T &out) {
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
-    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
 #ifdef TECS_C_ABI_ECS_INCLUDE
     out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
 #endif

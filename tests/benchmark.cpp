@@ -4,7 +4,6 @@
 #include <c_abi/Tecs.hh>
 #include <chrono>
 #include <cstring>
-#include <fstream>
 #include <future>
 #include <iomanip>
 #include <thread>
@@ -48,6 +47,9 @@ namespace benchmark {
 #define SCRIPT_DIVISOR 10
 
     void renderThread() {
+#ifdef TECS_ENABLE_TRACY
+        tracy::SetThreadName("Render");
+#endif
         renderThreadId = std::this_thread::get_id();
         MultiTimer timer1("RenderThread StartTransaction");
         MultiTimer timer2("RenderThread Run");
@@ -121,6 +123,9 @@ namespace benchmark {
 
 #if SCRIPT_THREAD_COUNT > 0
     void scriptThread() {
+    #ifdef TECS_ENABLE_TRACY
+        tracy::SetThreadName("Script");
+    #endif
         scriptThreadId = std::this_thread::get_id();
         MultiTimer timer1("ScriptThread StartTransaction");
         MultiTimer timer2("ScriptThread Run");
@@ -157,6 +162,9 @@ namespace benchmark {
 #endif
 
     void transformWorkerThread() {
+#ifdef TECS_ENABLE_TRACY
+        tracy::SetThreadName("Transform");
+#endif
         transformThreadId = std::this_thread::get_id();
         MultiTimer timer1("TransformWorkerThread StartTransaction");
         MultiTimer timer2("TransformWorkerThread Run");
@@ -307,9 +315,7 @@ namespace benchmark {
         trace.SetThreadName("Render", renderThreadId);
         trace.SetThreadName("Script", scriptThreadId);
         trace.SetThreadName("Transform", transformThreadId);
-        std::ofstream traceFile("benchmark-trace.csv");
-        trace.SaveToCSV(traceFile);
-        traceFile.close();
+        trace.SaveToCSV("benchmark-trace.csv");
 #endif
 
         std::vector<Transform> transforms;

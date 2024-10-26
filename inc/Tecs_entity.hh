@@ -2,6 +2,7 @@
 
 #include "Tecs_permissions.hh"
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -102,6 +103,19 @@ namespace Tecs {
                    lock.instance.template BitsetHas<Tn...>(metadata);
         }
 
+        template<typename LockType,
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits),
+                int> = 0>
+        inline bool HasBitset(const LockType &lock,
+            const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
+            if (index >= metadataList.size()) return false;
+
+            auto &metadata = metadataList[index];
+            return metadata[0] && metadata.generation == generation && (metadata & componentBits) == componentBits;
+        }
+
         template<typename... Tn, typename LockType>
         inline bool Had(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
@@ -110,6 +124,17 @@ namespace Tecs {
             auto &metadata = lock.instance.metadata.readComponents[index];
             return metadata[0] && metadata.generation == generation &&
                    lock.instance.template BitsetHas<Tn...>(metadata);
+        }
+
+        template<typename LockType,
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits),
+                int> = 0>
+        inline bool HadBitset(const LockType &lock,
+            const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
+            if (index >= lock.instance.metadata.readComponents.size()) return false;
+
+            auto &metadata = lock.instance.metadata.readComponents[index];
+            return metadata[0] && metadata.generation == generation && (metadata & componentBits) == componentBits;
         }
 
         template<typename T, typename LockType,
