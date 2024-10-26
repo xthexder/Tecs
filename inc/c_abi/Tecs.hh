@@ -2,6 +2,9 @@
 
 #include "Tecs.h"
 #include "Tecs_lock.hh"
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+    #include "Tecs_tracing.hh"
+#endif
 
 #include <bitset>
 
@@ -63,7 +66,7 @@ namespace Tecs::abi {
             ), ...);
             // clang-format on
             TecsLock *l = nullptr;
-            if constexpr (sizeof...(Tn) > std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (sizeof...(Tn) <= std::numeric_limits<unsigned long long>::digits) {
                 l = Tecs_ecs_start_transaction(base.get(), readPermissions.to_ullong(), writePermissions.to_ullong());
             } else {
                 l = Tecs_ecs_start_transaction_bitstr(base.get(),
@@ -75,6 +78,19 @@ namespace Tecs::abi {
             });
             return LockType(lockPtr);
         }
+
+#ifdef TECS_ENABLE_PERFORMANCE_TRACING
+        inline void StartTrace() {
+            Tecs_ecs_start_perf_trace(base.get());
+        }
+
+        inline PerformanceTrace StopTrace() {
+            TecsPerfTrace *trace = Tecs_ecs_stop_perf_trace(base.get());
+            return PerformanceTrace{std::shared_ptr<TecsPerfTrace>(trace, [](auto *ptr) {
+                Tecs_ecs_perf_trace_release(ptr);
+            })};
+        }
+#endif
 
         inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)Tecs_ecs_get_instance_id(base.get());
@@ -96,11 +112,21 @@ namespace Tecs::abi {
         }
 
         /**
+         * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
+         */
+        inline std::string GetComponentName(size_t componentIndex) {
+            size_t size = Tecs_ecs_get_component_name(base.get(), componentIndex, 0, nullptr);
+            std::string str(size, '\0');
+            Tecs_ecs_get_component_name(base.get(), componentIndex, size, str.data());
+            return str;
+        }
+
+        /**
          * Returns the registered name of a Component type, or a default of "ComponentN" if none is set.
          */
         template<typename U>
-        inline static std::string GetComponentName() {
-            return std::string(Tecs_ecs_get_component_name(base.get(), GetComponentIndex<U>()));
+        inline std::string GetComponentName() {
+            return GetComponentName(GetComponentIndex<U>());
         }
 
         /**

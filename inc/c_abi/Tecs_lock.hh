@@ -11,10 +11,9 @@ namespace Tecs::abi {
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
-    public:
-        // TODO: make this private
         std::shared_ptr<TecsLock> base;
 
+    public:
         inline Lock(const std::shared_ptr<TecsLock> &lock) : base(lock) {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 if (!Tecs_lock_is_add_remove_allowed(lock.get())) {
@@ -108,6 +107,8 @@ namespace Tecs::abi {
          */
         inline Entity NewEntity() const {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
+
+            viewInvalidationCounter++;
 
             return Entity(Tecs_new_entity(base.get()));
         }

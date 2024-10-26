@@ -40,7 +40,7 @@ int main(int /* argc */, char ** /* argv */) {
         // transformObserver = writeLock.Watch<Tecs::ComponentEvent<Transform>>();
         // globalCompObserver = writeLock.Watch<Tecs::ComponentEvent<GlobalComponent>>();
 
-        Assert(Tecs_lock_get_transaction_id(writeLock.base.get()) == 1, "Expected transaction id to be 1");
+        Assert(writeLock.GetTransactionId() == 1, "Expected transaction id to be 1");
     }
     Assert(Tecs::nextTransactionId == 1, "Expected next transaction id to be 1");
     bool globalComponentInitialized = false;

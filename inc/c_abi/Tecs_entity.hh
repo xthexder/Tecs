@@ -87,20 +87,34 @@ namespace Tecs::abi {
         inline bool Has(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            return (Tecs_entity_has(lock.base.get(),
-                        (TecsEntity)(*this),
-                        LockType::ECS::template GetComponentIndex<Tn>()) &&
-                    ...);
+            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits) {
+                std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
+                componentBits[0] = true;
+                ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);
+                return Tecs_entity_has_bitset(lock.base.get(), (TecsEntity)(*this), componentBits.to_ullong());
+            } else {
+                return (Tecs_entity_has(lock.base.get(),
+                            (TecsEntity)(*this),
+                            LockType::ECS::template GetComponentIndex<Tn>()) &&
+                        ...);
+            }
         }
 
         template<typename... Tn, typename LockType>
         inline bool Had(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            return (Tecs_entity_had(lock.base.get(),
-                        (TecsEntity)(*this),
-                        LockType::ECS::template GetComponentIndex<Tn>()) &&
-                    ...);
+            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits) {
+                std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
+                componentBits[0] = true;
+                ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);
+                return Tecs_entity_had_bitset(lock.base.get(), (TecsEntity)(*this), componentBits.to_ullong());
+            } else {
+                return (Tecs_entity_had(lock.base.get(),
+                            (TecsEntity)(*this),
+                            LockType::ECS::template GetComponentIndex<Tn>()) &&
+                        ...);
+            }
         }
 
         template<typename T, typename LockType,
