@@ -22,6 +22,8 @@
 
 static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic_int is not lock-free");
 
+typedef void TecsLock;
+
 namespace Tecs {
     template<typename T>
     class ComponentIndex {

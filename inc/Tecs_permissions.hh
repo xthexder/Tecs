@@ -262,14 +262,14 @@ namespace Tecs {
             } else {
                 using ReadPerm = decltype(flatten_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
                 using WritePerm = decltype(flatten_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                if constexpr (std::is_same_v<ReadPerm, std::tuple<>>) {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                if constexpr (std::is_same<ReadPerm, std::tuple<>>()) {
+                    if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
                         return TransactionPermissions<>{};
                     } else {
                         return TransactionPermissions<typename tuple_to_write<WritePerm>::type>{};
                     }
                 } else {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                    if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
                         return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
                     } else {
                         return TransactionPermissions<typename tuple_to_read<ReadPerm>::type,

@@ -13,6 +13,11 @@ namespace Tecs::abi {
 
         std::shared_ptr<TecsLock> base;
 
+        mutable std::tuple<AllComponentTypes *...> cachedStorage;
+        mutable std::tuple<const AllComponentTypes *...> cachedConstStorage;
+        mutable std::tuple<const AllComponentTypes *...> cachedPreviousStorage;
+        mutable size_t cacheCounter;
+
     public:
         inline Lock(const std::shared_ptr<TecsLock> &lock) : base(lock) {
             if constexpr (is_add_remove_allowed<LockType>()) {
@@ -108,7 +113,7 @@ namespace Tecs::abi {
         inline Entity NewEntity() const {
             static_assert(is_add_remove_allowed<LockType>(), "Lock does not have AddRemove permission.");
 
-            viewInvalidationCounter++;
+            cacheInvalidationCounter++;
 
             return Entity(Tecs_new_entity(base.get()));
         }
