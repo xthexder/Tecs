@@ -96,6 +96,15 @@ namespace Tecs {
         inline Lock(const Lock<ECS, PermissionsSource...> &source)
             : instance(source.instance), transaction(source.transaction), writePermissions(source.writePermissions) {}
 
+        template<typename T>
+        inline bool IsWriteAllowed() const {
+            return writePermissions[1 + instance.template GetComponentIndex<T>()];
+        }
+
+        inline bool IsAddRemoveAllowed() const {
+            return writePermissions[0];
+        }
+
         inline constexpr ECS &GetInstance() const {
             return instance;
         }
@@ -117,7 +126,7 @@ namespace Tecs {
         inline const EntityView EntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
-            if (writePermissions[0]) {
+            if (IsAddRemoveAllowed()) {
                 return instance.template Storage<T>().writeValidEntities;
             } else {
                 return instance.template Storage<T>().readValidEntities;
@@ -129,7 +138,7 @@ namespace Tecs {
         }
 
         inline const EntityView Entities() const {
-            if (writePermissions[0]) {
+            if (IsAddRemoveAllowed()) {
                 return instance.metadata.writeValidEntities;
             } else {
                 return instance.metadata.readValidEntities;
@@ -182,7 +191,7 @@ namespace Tecs {
         inline bool Has() const {
             static_assert(all_global_components<Tn...>(), "Only global components can be accessed without an Entity");
 
-            if (writePermissions[0]) {
+            if (IsAddRemoveAllowed()) {
                 return instance.template BitsetHas<Tn...>(instance.globalWriteMetadata);
             } else {
                 return instance.template BitsetHas<Tn...>(instance.globalReadMetadata);
@@ -198,6 +207,24 @@ namespace Tecs {
 
         template<typename T, typename ReturnType =
                                  std::conditional_t<is_write_allowed<std::remove_cv_t<T>, LockType>::value, T, const T>>
+        inline ReturnType *GetStorage() const {
+            using CompType = std::remove_cv_t<T>;
+            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
+            static_assert(is_write_allowed<CompType, LockType>() || std::is_const<ReturnType>(),
+                "Can't get non-const reference of read only Component.");
+
+            if (!std::is_const<ReturnType>()) transaction->template SetAccessFlag<CompType>(true);
+
+            auto &storage = instance.template Storage<CompType>();
+            if (instance.template BitsetHas<CompType>(writePermissions)) {
+                return storage.writeComponents.data();
+            } else {
+                return storage.readComponents.data();
+            }
+        }
+
+        template<typename T, typename ReturnType =
+                                 std::conditional_t<is_write_allowed<std::remove_cv_t<T>, LockType>::value, T, const T>>
         inline ReturnType &Get() const {
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
@@ -208,13 +235,13 @@ namespace Tecs {
             if (!std::is_const<ReturnType>()) transaction->template SetAccessFlag<CompType>(true);
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
             auto &storage = instance.template Storage<CompType>();
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+                auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
                 if (!instance.template BitsetHas<CompType>(metadata)) {
                     transaction->template SetAccessFlag<AddRemove>(true);
@@ -234,6 +261,14 @@ namespace Tecs {
             } else {
                 return storage.readComponents[0];
             }
+        }
+
+        template<typename T>
+        inline const T *GetPreviousStorage() const {
+            using CompType = std::remove_cv_t<T>;
+            static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
+
+            return instance.template Storage<CompType>().readComponents.data();
         }
 
         template<typename T>
@@ -257,12 +292,12 @@ namespace Tecs {
             transaction->template SetAccessFlag<T>(true);
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+                auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
                 if (!instance.template BitsetHas<T>(metadata)) {
                     transaction->template SetAccessFlag<AddRemove>(true);
@@ -285,12 +320,12 @@ namespace Tecs {
             transaction->template SetAccessFlag<T>(true);
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+            auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadata = writePermissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
+                auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
                 if (!instance.template BitsetHas<T>(metadata)) {
                     transaction->template SetAccessFlag<AddRemove>(true);

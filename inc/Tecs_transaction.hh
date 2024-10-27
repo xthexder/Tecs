@@ -74,11 +74,11 @@ namespace Tecs {
 
         template<typename T>
         inline void SetAccessFlag(bool value) {
-            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
-        }
-        template<>
-        inline void SetAccessFlag<AddRemove>(bool value) {
-            writeAccessedFlags[0] = value;
+            if constexpr (std::is_same<T, AddRemove>()) {
+                writeAccessedFlags[0] = value;
+            } else {
+                writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
+            }
         }
 
 #ifndef TECS_HEADER_ONLY

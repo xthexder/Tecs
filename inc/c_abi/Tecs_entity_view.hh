@@ -8,8 +8,6 @@
 #include <vector>
 
 namespace Tecs::abi {
-    extern thread_local size_t viewInvalidationCounter;
-
     class EntityView {
     public:
         typedef const Entity element_type;
@@ -29,16 +27,16 @@ namespace Tecs::abi {
             typedef std::random_access_iterator_tag iterator_category;
 
             iterator(const TecsEntityView &view, size_t index = 0)
-                : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(viewInvalidationCounter) {}
+                : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(cacheInvalidationCounter) {}
 
             inline const Entity *begin_uncached() const {
                 return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view));
             }
 
             inline const Entity *begin() const {
-                if (viewInvalidationCounter != cacheCounter) {
+                if (cacheInvalidationCounter != cacheCounter) {
                     cachedBase = begin_uncached();
-                    cacheCounter = viewInvalidationCounter;
+                    cacheCounter = cacheInvalidationCounter;
                 }
                 return cachedBase;
             }

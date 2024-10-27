@@ -88,7 +88,7 @@ bool Tecs_entity_had_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned lo
     return Tecs::Entity(entity).HadBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
 }
 
-const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -109,7 +109,7 @@ const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_
                 << " read permissions\" << std::endl;" << std::endl;
             out << "            return nullptr;" << std::endl;
             out << "        }" << std::endl;
-            out << "        return &Tecs::Entity(entity).Get<const " << names[i] << ">(*lock);" << std::endl;
+            out << "        return lock->GetStorage<const " << names[i] << ">();" << std::endl;
         }
     }
     out << "    } else {";
@@ -119,7 +119,26 @@ const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_
     }
 }
 
-void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+)RAWSTR";
+    for (size_t i = 0; i < names.size(); i++) {
+        if (i == 0) {
+            out << "    if (componentIndex == 0) {" << std::endl;
+        } else {
+            out << "    } else if (componentIndex == " << i << ") {" << std::endl;
+        }
+        out << "        auto *storage = static_cast<const " << names[i]
+            << " *>(Tecs_const_get_entity_storage(dynLockPtr, componentIndex));" << std::endl;
+        out << "        return &storage[Tecs::Entity(entity).index];" << std::endl;
+    }
+    out << "    } else {";
+    out << R"RAWSTR(
+        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        return nullptr;
+    }
+}
+
+void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -136,7 +155,7 @@ void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
         } else {
             out << "        auto lock1 = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
             out << "        if (lock1) {" << std::endl;
-            out << "            return &Tecs::Entity(entity).Get<" << names[i] << ">(*lock1);" << std::endl;
+            out << "            return lock1->GetStorage<" << names[i] << ">();" << std::endl;
             out << "        }" << std::endl;
             out << "        auto lock2 = dynLock->TryLock<Tecs::Write<" << names[i] << ">>();" << std::endl;
             out << "        if (!lock2) {" << std::endl;
@@ -144,7 +163,7 @@ void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
                 << " write permissions\" << std::endl;" << std::endl;
             out << "            return nullptr;" << std::endl;
             out << "        }" << std::endl;
-            out << "        return &Tecs::Entity(entity).Get<" << names[i] << ">(*lock2);" << std::endl;
+            out << "        return lock2->GetStorage<" << names[i] << ">();" << std::endl;
         }
     }
     out << "    } else {";
@@ -154,7 +173,26 @@ void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
     }
 }
 
-const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+)RAWSTR";
+    for (size_t i = 0; i < names.size(); i++) {
+        if (i == 0) {
+            out << "    if (componentIndex == 0) {" << std::endl;
+        } else {
+            out << "    } else if (componentIndex == " << i << ") {" << std::endl;
+        }
+        out << "        auto *storage = static_cast<" << names[i]
+            << " *>(Tecs_get_entity_storage(dynLockPtr, componentIndex));" << std::endl;
+        out << "        return &storage[Tecs::Entity(entity).index];" << std::endl;
+    }
+    out << "    } else {";
+    out << R"RAWSTR(
+        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        return nullptr;
+    }
+}
+
+const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -175,8 +213,27 @@ const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, si
                 << " read permissions\" << std::endl;" << std::endl;
             out << "            return nullptr;" << std::endl;
             out << "        }" << std::endl;
-            out << "        return &Tecs::Entity(entity).GetPrevious<" << names[i] << ">(*lock);" << std::endl;
+            out << "        return lock->GetPreviousStorage<" << names[i] << ">();" << std::endl;
         }
+    }
+    out << "    } else {";
+    out << R"RAWSTR(
+        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        return nullptr;
+    }
+}
+
+const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+)RAWSTR";
+    for (size_t i = 0; i < names.size(); i++) {
+        if (i == 0) {
+            out << "    if (componentIndex == 0) {" << std::endl;
+        } else {
+            out << "    } else if (componentIndex == " << i << ") {" << std::endl;
+        }
+        out << "        auto *storage = static_cast<const " << names[i]
+            << " *>(Tecs_get_previous_entity_storage(dynLockPtr, componentIndex));" << std::endl;
+        out << "        return &storage[Tecs::Entity(entity).index];" << std::endl;
     }
     out << "    } else {";
     out << R"RAWSTR(

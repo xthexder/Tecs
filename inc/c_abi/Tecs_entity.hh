@@ -27,7 +27,9 @@ static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) > sizeof(TECS_ENTITY_ECS_IDENT
 
 namespace Tecs::abi {
     struct Entity;
-};
+
+    extern thread_local size_t cacheInvalidationCounter;
+}; // namespace Tecs::abi
 
 namespace std {
     inline string to_string(const Tecs::abi::Entity &ent);
@@ -127,12 +129,27 @@ namespace Tecs::abi {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
+            if (cacheInvalidationCounter != lock.cacheCounter) {
+                lock.cachedStorage = {};
+                lock.cachedConstStorage = {};
+                lock.cachedPreviousStorage = {};
+                lock.cacheCounter = cacheInvalidationCounter;
+            }
+
             constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
             if constexpr (std::is_const<ReturnType>()) {
-                return *static_cast<const CompType *>(
-                    Tecs_entity_const_get(lock.base.get(), (TecsEntity)(*this), componentIndex));
+                auto *&cachedConstStorage = std::get<const CompType *>(lock.cachedConstStorage);
+                if (!cachedConstStorage) {
+                    cachedConstStorage =
+                        static_cast<const CompType *>(Tecs_const_get_entity_storage(lock.base.get(), componentIndex));
+                }
+                return cachedConstStorage[index];
             } else {
-                return *static_cast<CompType *>(Tecs_entity_get(lock.base.get(), (TecsEntity)(*this), componentIndex));
+                auto *&cachedStorage = std::get<CompType *>(lock.cachedStorage);
+                if (!cachedStorage) {
+                    cachedStorage = static_cast<CompType *>(Tecs_get_entity_storage(lock.base.get(), componentIndex));
+                }
+                return cachedStorage[index];
             }
         }
 
@@ -143,9 +160,20 @@ namespace Tecs::abi {
             static_assert(!is_global_component<CompType>(),
                 "Global components must be accessed through lock.GetPrevious()");
 
-            constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
-            return *static_cast<const CompType *>(
-                Tecs_entity_get_previous(lock.base.get(), (TecsEntity)(*this), componentIndex));
+            if (cacheInvalidationCounter != lock.cacheCounter) {
+                lock.cachedStorage = {};
+                lock.cachedConstStorage = {};
+                lock.cachedPreviousStorage = {};
+                lock.cacheCounter = cacheInvalidationCounter;
+            }
+            auto *&cachedPreviousStorage = std::get<const CompType *>(lock.cachedPreviousStorage);
+            if (!cachedPreviousStorage) {
+                constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
+                cachedPreviousStorage =
+                    static_cast<CompType *>(Tecs_get_previous_entity_storage(lock.base.get(), componentIndex));
+            }
+
+            return cachedPreviousStorage[index];
         }
 
         template<typename T, typename LockType>

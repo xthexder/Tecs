@@ -25,7 +25,7 @@ namespace testing {
         if constexpr (sizeof...(Tn) > 0) {
             Assert(e.template Has<Tn...>(lock), "Entity is missing components");
         } else if (!e.Exists(lock)) {
-            Assert(!e.Has<>(lock), "Invalid entity should not have components");
+            Assert(!e.template Has<>(lock), "Invalid entity should not have components");
         }
     }
 
