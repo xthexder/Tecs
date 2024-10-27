@@ -1,11 +1,16 @@
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-    #ifdef TECS_C_ABI_ECS_INCLUDE
-        #include TECS_C_ABI_ECS_INCLUDE
+    #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+        #define _CRT_SECURE_NO_WARNINGS
     #endif
 
     #include <Tecs.hh>
     #include <Tecs_tracing.hh>
     #include <c_abi/Tecs_tracing.h>
+    #include <cstring>
+
+    #ifdef TECS_C_ABI_ECS_INCLUDE
+        #include TECS_C_ABI_ECS_INCLUDE
+    #endif
 
     #ifdef TECS_C_ABI_ECS_NAME
 using ECS = TECS_C_ABI_ECS_NAME;
@@ -25,19 +30,23 @@ TecsPerfTrace *Tecs_ecs_stop_perf_trace(TecsECS *ecsPtr) {
     return new Tecs::PerformanceTrace(ecs->StopTrace());
 }
 
-void Tecs_perf_trace_set_thread_name(TecsPerfTrace *tracePtr, size_t thread_id_hash, const char *thread_name) {
+void Tecs_perf_trace_set_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, const char *threadName) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
-    trace->SetThreadName(std::string(thread_name), thread_id_hash);
+    trace->SetThreadName(std::string(threadName), threadIdHash);
 }
 
-const char *Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t thread_id_hash) {
+size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, size_t bufferSize, char *output) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
-    return trace->GetThreadName(thread_id_hash).c_str();
+    std::string name = trace->GetThreadName(threadIdHash);
+    if (name.size() < bufferSize) {
+        (void)std::strncpy(output, name.c_str(), bufferSize);
+    }
+    return name.size() + 1;
 }
 
-void Tecs_perf_trace_save_to_csv(TecsPerfTrace *tracePtr, const char *file_path) {
+void Tecs_perf_trace_save_to_csv(TecsPerfTrace *tracePtr, const char *filePath) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
-    trace->SaveToCSV(std::string(file_path));
+    trace->SaveToCSV(std::string(filePath));
 }
 
 void Tecs_ecs_perf_trace_release(TecsPerfTrace *tracePtr) {
