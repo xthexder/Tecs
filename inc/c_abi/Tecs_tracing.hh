@@ -20,7 +20,10 @@ namespace Tecs::abi {
         }
 
         std::string GetThreadName(size_t threadIdHash) {
-            return std::string(Tecs_perf_trace_get_thread_name(base.get(), threadIdHash));
+            size_t size = Tecs_perf_trace_get_thread_name(base.get(), threadIdHash, 0, nullptr);
+            std::string str(size, '\0');
+            Tecs_perf_trace_get_thread_name(base.get(), threadIdHash, size, str.data());
+            return str;
         }
 
         std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {

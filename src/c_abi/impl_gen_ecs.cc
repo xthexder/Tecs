@@ -2,9 +2,12 @@
 
 template<typename T>
 void generateECSCC(T &out) {
+    out << "#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)" << std::endl;
+    out << "    #define _CRT_SECURE_NO_WARNINGS" << std::endl;
+    out << "#endif" << std::endl;
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
 #ifdef TECS_C_ABI_ECS_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
+    out << std::endl << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE);
 #endif
     out << R"RAWSTR(
 #include <Tecs.hh>
@@ -68,7 +71,7 @@ size_t Tecs_ecs_get_component_name(TecsECS *ecsPtr, size_t componentIndex, size_
         return 0;
     }
     if (name.size() < bufferSize) {
-        (void)strcpy_s(output, bufferSize, name.c_str());
+        (void)std::strncpy(output, name.c_str(), bufferSize);
     }
     return name.size() + 1;
 }

@@ -85,7 +85,13 @@ namespace Tecs {
 
         std::string GetThreadName(std::thread::id threadId = std::this_thread::get_id()) {
             static std::hash<std::thread::id> threadHasher;
-            return GetThreadName(threadHasher(threadId));
+            auto it = threadNames.find(threadHasher(threadId));
+            if (it != threadNames.end()) {
+                return it->second;
+            }
+            std::stringstream ss;
+            ss << threadId;
+            return ss.str();
         }
 
         void SaveToCSV(const std::string &filePath) {
