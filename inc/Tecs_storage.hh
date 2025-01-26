@@ -153,6 +153,10 @@ namespace Tecs {
                             tracyWrite.AfterTryLock(true);
                         }
 #endif
+
+                        // Reset access flags
+                        writeAccessedEntities.clear();
+                        writeAccessedEntities.resize(writeComponents.size());
                         return true;
                     }
                 }
@@ -345,12 +349,16 @@ namespace Tecs {
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
         std::vector<Entity> writeValidEntities;
-        std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
+        std::vector<size_t> validEntityIndexes; // Size of writeComponents, Indexes into writeValidEntities
+
+        std::vector<bool> writeAccessedEntities; // Size of writeComponents
 
         template<typename, typename...>
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
+        template<template<typename...> typename, typename...>
+        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs

@@ -14,6 +14,7 @@ namespace testing {
             std::stringstream ss;
             ss << "Assertion failed: " << message << std::endl;
             std::cout << ss.str();
+            __debugbreak();
             throw std::runtime_error(message);
         }
     }
