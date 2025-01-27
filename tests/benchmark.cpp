@@ -26,10 +26,12 @@ static testing::ECS ecs;
 static std::thread::id renderThreadId;
 static std::thread::id scriptThreadId;
 static std::thread::id transformThreadId;
+static std::thread::id scriptTransactionThreadId;
 
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_ITERATIONS 100
 #define ADD_REMOVE_PER_LOOP 1000
+#define SCRIPT_UPDATES_PER_LOOP 10000
 #define SCRIPT_THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
@@ -42,7 +44,8 @@ void renderThread() {
     MultiTimer timer2("RenderThread Run");
     MultiTimer timer3("RenderThread Unlock");
     std::vector<std::string> bad;
-    double currentValue = 0;
+    double currentTransformValue = 0;
+    uint32_t currentScriptValue = 0;
     size_t readCount = 0;
     size_t badCount = 0;
     auto start = std::chrono::high_resolution_clock::now();
@@ -50,28 +53,31 @@ void renderThread() {
     while (running) {
         {
             Timer t(timer1);
-            auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
+            auto readLock = ecs.StartTransaction<Read<Renderable, Transform, Script>>();
             t = timer2;
 
             auto &validRenderables = readLock.EntitiesWith<Renderable>();
             auto &validTransforms = readLock.EntitiesWith<Transform>();
             auto &validEntities = validRenderables.size() > validTransforms.size() ? validTransforms : validRenderables;
             auto firstName = &validEntities[0].Get<Renderable>(readLock).name;
+            Entity firstScriptEntity;
             for (auto e : validEntities) {
                 if (e.Has<Renderable, Transform>(readLock)) {
+                    if (!firstScriptEntity && e.Has<Script>(readLock)) firstScriptEntity = e;
                     auto &renderable = e.Get<Renderable>(readLock);
                     auto &transform = e.Get<Transform>(readLock);
                     if (transform.pos[0] != transform.pos[1] || transform.pos[1] != transform.pos[2]) {
                         bad.emplace_back(renderable.name);
                     } else {
                         if (&renderable.name == firstName) {
-                            currentValue = transform.pos[0];
-                        } else if (transform.pos[0] != currentValue) {
+                            currentTransformValue = transform.pos[0];
+                        } else if (transform.pos[0] != currentTransformValue) {
                             bad.emplace_back(renderable.name);
                         }
                     }
                 }
             }
+            currentScriptValue = firstScriptEntity.Get<Script>(readLock).data[0];
 
             t = timer3;
         }
@@ -85,14 +91,19 @@ void renderThread() {
         std::this_thread::sleep_until(lastFrameEnd);
     }
     auto delta = std::chrono::high_resolution_clock::now() - start;
-    size_t durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+    int64_t durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
     double avgFrameRate = readCount * 1000 / (double)durationMs;
-    double avgUpdateRate = currentValue * 1000 / (double)durationMs;
     if (badCount != 0) {
         std::cerr << "[RenderThread Error] Detected " << badCount << " invalid entities during reading." << std::endl;
     }
     std::cout << "[RenderThread] Average frame rate: " << avgFrameRate << "Hz" << std::endl;
-    std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
+    if (currentScriptValue == 0) {
+        double avgUpdateRate = currentTransformValue * 1000 / (double)durationMs;
+        std::cout << "[TransformWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
+    } else {
+        double avgUpdateRate = (double)currentScriptValue * 1000 / (double)durationMs;
+        std::cout << "[ScriptTransactionmWorkerThread] Average update rate: " << avgUpdateRate << "Hz" << std::endl;
+    }
 }
 
 void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script>> lock, EntityView entities) {
@@ -100,7 +111,7 @@ void scriptWorkerThread(MultiTimer *workerTimer, Lock<testing::ECS, Write<Script
     for (auto &e : entities) {
         auto &script = e.Get<Script>(lock);
         // "Run" script
-        for (uint8_t &data : script.data) {
+        for (uint32_t &data : script.data) {
             data++;
         }
     }
@@ -142,6 +153,36 @@ void scriptThread() {
     }
 }
 #endif
+
+void scriptTransactionWorkerThread() {
+    scriptTransactionThreadId = std::this_thread::get_id();
+    MultiTimer timer1("ScriptTransactionWorkerThread StartTransaction");
+    MultiTimer timer2("ScriptTransactionWorkerThread Run");
+    MultiTimer timer3("ScriptTransactionWorkerThread Commit");
+    while (running) {
+        // auto start = std::chrono::high_resolution_clock::now();
+        {
+            Timer t(timer1);
+            auto writeLock = ecs.StartTransaction<Write<Script>>();
+            t = timer2;
+            auto &validScripts = writeLock.EntitiesWith<Script>();
+            size_t modulo = validScripts.size() / SCRIPT_UPDATES_PER_LOOP;
+            size_t i = 0;
+            for (auto e : validScripts) {
+                if (i % modulo == 0) {
+                    auto &script = e.Get<Script>(writeLock);
+                    script.data[0]++;
+                    script.data[1]++;
+                    script.data[2]++;
+                }
+                i++;
+            }
+            t = timer3;
+        }
+        std::this_thread::yield();
+        // std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
+    }
+}
 
 void transformWorkerThread() {
     transformThreadId = std::this_thread::get_id();
@@ -196,7 +237,7 @@ int main(int /* argc */, char ** /* argv */) {
                 e.Set<Renderable>(writeLock, "entity" + std::to_string(i));
             }
             if (i % SCRIPT_DIVISOR == 0) {
-                e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+                e.Set<Script>(writeLock, std::initializer_list<uint32_t>({0, 0, 0, 0}));
             }
         }
         t = timer3;
@@ -251,7 +292,7 @@ int main(int /* argc */, char ** /* argv */) {
                 e.Set<Renderable>(writeLock, removedEntity.name);
             }
             if (removedEntity.components[2]) {
-                e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+                e.Set<Script>(writeLock, std::initializer_list<uint32_t>({0, 0, 0, 0}));
             }
         }
         t = timer3;
@@ -262,13 +303,12 @@ int main(int /* argc */, char ** /* argv */) {
 #endif
 
     {
-        {
-            auto readLock = ecs.StartTransaction<>();
-            std::cout << "Running with " << readLock.Entities().size() << " Entities and " << ecs.GetComponentCount()
-                      << " Component types" << std::endl;
-        }
-
-        Timer t("Run threads");
+        auto readLock = ecs.StartTransaction<>();
+        std::cout << "Running with " << readLock.Entities().size() << " Entities and " << ecs.GetComponentCount()
+                  << " Component types" << std::endl;
+    }
+    {
+        Timer t("Run threads (all transforms update)");
         running = true;
 
         auto render = std::async(&renderThread);
@@ -288,12 +328,28 @@ int main(int /* argc */, char ** /* argv */) {
 #endif
     }
 
+    {
+        Timer t("Run threads (some scripts update)");
+        running = true;
+
+        auto render = std::async(&renderThread);
+        auto scriptTransaction = std::async(&scriptTransactionWorkerThread);
+
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+
+        running = false;
+
+        render.wait();
+        scriptTransaction.wait();
+    }
+
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     auto trace = ecs.StopTrace();
     trace.SetThreadName("Main");
     trace.SetThreadName("Render", renderThreadId);
     trace.SetThreadName("Script", scriptThreadId);
     trace.SetThreadName("Transform", transformThreadId);
+    trace.SetThreadName("ScriptTransaction", scriptTransactionThreadId);
     std::ofstream traceFile("benchmark-trace.csv");
     trace.SaveToCSV(traceFile);
     traceFile.close();

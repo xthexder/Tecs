@@ -137,7 +137,7 @@ int main(int /* argc */, char ** /* argv */) {
                 "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
 
             e.Set<Transform>(writeLock, 0.0, 0.0, 0.0);
-            e.Set<Script>(writeLock, std::initializer_list<uint8_t>({1, 2, 3, 4}));
+            e.Set<Script>(writeLock, std::initializer_list<uint32_t>({1, 2, 3, 4}));
             AssertHas<Transform, Script>(writeLock, e);
         }
     }
@@ -167,7 +167,7 @@ int main(int /* argc */, char ** /* argv */) {
             e.Set<Renderable>(writeLock, "entity" + std::to_string(i));
             AssertHas<Transform, Renderable>(writeLock, e);
 
-            e.Set<Script>(writeLock, std::initializer_list<uint8_t>({0, 0, 0, 0, 0, 0, 0, 0}));
+            e.Set<Script>(writeLock, std::initializer_list<uint32_t>({0, 0, 0, 0, 0, 0, 0, 0}));
             AssertHas<Transform, Renderable, Script>(writeLock, e);
 
             // Test removing a component
@@ -186,7 +186,7 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(script.data[6] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, (0), 0]");
             Assert(script.data[7] == 0, "Script component should have value [0, 0, 0, 0, 0, 0, 0, (0)]");
 
-            e.Set<Script>(writeLock, std::initializer_list<uint8_t>({1, 2, 3, 4}));
+            e.Set<Script>(writeLock, std::initializer_list<uint32_t>({1, 2, 3, 4}));
             AssertHas<Transform, Script>(writeLock, e);
 
             Assert(script.data.size() == 4, "Script component should have size 4");
@@ -873,7 +873,7 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test overlapping commit transactions don't deadlock");
         Tecs::Entity readIdA, readIdB;
         double previousValueA;
-        uint8_t previousValueB;
+        uint32_t previousValueB;
         {
             auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
             readIdA = readLock.EntitiesWith<Transform>()[0];
@@ -1181,7 +1181,7 @@ int main(int /* argc */, char ** /* argv */) {
                 entity = addLock.NewEntity();
                 entity.Set<Transform>(addLock, 42.0, 64.0, 128.0);
                 entity.Set<Renderable>(addLock, "test_value");
-                entity.Set<Script>(addLock, std::initializer_list<uint8_t>({56, 45, 34}));
+                entity.Set<Script>(addLock, std::initializer_list<uint32_t>({56, 45, 34}));
 
                 writeThreadTransform = std::thread([&] {
                     // Start a write transaction during the AddRemove so it starts immediately after
@@ -1216,7 +1216,7 @@ int main(int /* argc */, char ** /* argv */) {
                     // Start a write transaction during the AddRemove so it starts immediately after
                     auto writeLock = ecs.StartTransaction<Tecs::Write<Script>>();
                     try {
-                        auto &script = entity.Set<Script>(writeLock, std::initializer_list<uint8_t>({12, 23, 34}));
+                        auto &script = entity.Set<Script>(writeLock, std::initializer_list<uint32_t>({12, 23, 34}));
                         Assert(script.data.size() == 3.0, "Expected new Script to have correct size");
                         Assert(script.data[0] == 12, "Expected new Script to have correct value");
                         Assert(script.data[1] == 23, "Expected new Script to have correct value");
