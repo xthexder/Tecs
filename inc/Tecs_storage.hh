@@ -155,6 +155,7 @@ namespace Tecs {
 #endif
 
                         // Reset access flags
+                        writeAccessedCount = 0;
                         writeAccessedEntities.clear();
                         writeAccessedEntities.resize(writeComponents.size());
                         return true;
@@ -351,6 +352,7 @@ namespace Tecs {
         std::vector<Entity> writeValidEntities;
         std::vector<size_t> validEntityIndexes; // Size of writeComponents, Indexes into writeValidEntities
 
+        size_t writeAccessedCount = 0;
         std::vector<bool> writeAccessedEntities; // Size of writeComponents
 
         template<typename, typename...>
