@@ -154,6 +154,7 @@ namespace Tecs {
                 instance.metadata.writeComponents.resize(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
                 instance.metadata.writeAccessedEntities.resize(newSize, true);
+                instance.metadata.writeAccessedCount += TECS_ENTITY_ALLOCATION_BATCH_SIZE;
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
@@ -172,7 +173,10 @@ namespace Tecs {
             auto &validEntities = instance.metadata.writeValidEntities;
             instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
             validEntities.emplace_back(entity);
-            instance.metadata.writeAccessedEntities[entity.index] = true;
+            if (!instance.metadata.writeAccessedEntities[entity.index]) {
+                instance.metadata.writeAccessedEntities[entity.index] = true;
+                instance.metadata.writeAccessedCount++;
+            }
 
             return entity;
         }
@@ -366,6 +370,7 @@ namespace Tecs {
                 storage.writeComponents.resize(newSize);
                 storage.validEntityIndexes.resize(newSize);
                 storage.writeAccessedEntities.resize(newSize, true);
+                storage.writeAccessedCount += count;
             } else {
                 (void)count; // Unreferenced parameter warning on MSVC
             }
