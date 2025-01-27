@@ -1122,6 +1122,7 @@ int main(int /* argc */, char ** /* argv */) {
 
         blockingThread.join();
     }
+    size_t additionalTransactionCount = 0;
     {
         Timer t("Test continuous overlapping reads");
         std::thread blockingThread;
@@ -1160,6 +1161,7 @@ int main(int /* argc */, char ** /* argv */) {
                         auto readLock = ecs.StartTransaction<Tecs::ReadAll>();
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     });
+                    additionalTransactionCount++;
                 }
             }
         }
@@ -1291,7 +1293,8 @@ int main(int /* argc */, char ** /* argv */) {
         {
             auto readLock = ecs.StartTransaction<>();
             std::cout << "Total test transactions: " << readLock.GetTransactionId() << std::endl;
-            Assert(readLock.GetTransactionId() == 335, "Expected transaction id to be 335");
+            Assert(readLock.GetTransactionId() == 325 + additionalTransactionCount,
+                "Expected transaction id to be 325 + " + std::to_string(additionalTransactionCount));
         }
     }
 
