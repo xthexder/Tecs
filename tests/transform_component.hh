@@ -28,3 +28,5 @@ namespace testing {
         }
     };
 } // namespace testing
+
+TECS_NAME_COMPONENT(testing::Transform, "Transform");

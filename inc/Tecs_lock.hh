@@ -153,6 +153,8 @@ namespace Tecs {
                 }
                 instance.metadata.writeComponents.resize(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
+                instance.metadata.writeAccessedEntities.resize(newSize, true);
+                instance.metadata.writeAccessedCount += TECS_ENTITY_ALLOCATION_BATCH_SIZE;
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
@@ -171,6 +173,10 @@ namespace Tecs {
             auto &validEntities = instance.metadata.writeValidEntities;
             instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
             validEntities.emplace_back(entity);
+            if (!instance.metadata.writeAccessedEntities[entity.index]) {
+                instance.metadata.writeAccessedEntities[entity.index] = true;
+                instance.metadata.writeAccessedCount++;
+            }
 
             return entity;
         }
@@ -202,7 +208,7 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>(true);
+            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -251,7 +257,7 @@ namespace Tecs {
         inline T &Set(T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>(true);
+            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -279,7 +285,7 @@ namespace Tecs {
         inline T &Set(Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>(true);
+            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -357,11 +363,14 @@ namespace Tecs {
         template<typename T>
         inline void AllocateComponents(size_t count) const {
             if constexpr (!is_global_component<T>()) {
-                base->template SetAccessFlag<T>(true);
+                base->template SetAccessFlag<T>();
 
-                size_t newSize = instance.template Storage<T>().writeComponents.size() + count;
-                instance.template Storage<T>().writeComponents.resize(newSize);
-                instance.template Storage<T>().validEntityIndexes.resize(newSize);
+                auto &storage = instance.template Storage<T>();
+                size_t newSize = storage.writeComponents.size() + count;
+                storage.writeComponents.resize(newSize);
+                storage.validEntityIndexes.resize(newSize);
+                storage.writeAccessedEntities.resize(newSize, true);
+                storage.writeAccessedCount += count;
             } else {
                 (void)count; // Unreferenced parameter warning on MSVC
             }
@@ -373,7 +382,7 @@ namespace Tecs {
                 auto &metadata = instance.metadata.writeComponents[index];
                 if (instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
-                    base->template SetAccessFlag<T>(true);
+                    base->template SetAccessFlag<T>(index);
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = false;
                     auto &compIndex = instance.template Storage<T>();
@@ -391,7 +400,7 @@ namespace Tecs {
             auto &metadata = instance.globalWriteMetadata;
             if (instance.template BitsetHas<T>(metadata)) {
                 base->writeAccessedFlags[0] = true;
-                base->template SetAccessFlag<T>(true);
+                base->template SetAccessFlag<T>();
 
                 metadata[1 + instance.template GetComponentIndex<T>()] = false;
                 instance.template Storage<T>().writeComponents[0] = {};

@@ -74,8 +74,19 @@ namespace Tecs {
         std::bitset<1 + sizeof...(AllComponentTypes)> writeAccessedFlags;
 
         template<typename T>
-        inline void SetAccessFlag(bool value) {
-            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
+        inline void SetAccessFlag() {
+            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+        }
+
+        template<typename T>
+        inline void SetAccessFlag(size_t index) {
+            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+            auto &storage = instance.template Storage<T>();
+            if (index >= storage.writeAccessedEntities.size()) storage.writeAccessedEntities.resize(index + 1);
+            if (!storage.writeAccessedEntities[index]) {
+                storage.writeAccessedEntities[index] = true;
+                storage.writeAccessedCount++;
+            }
         }
 
         template<typename, typename...>
@@ -288,12 +299,8 @@ namespace Tecs {
                             storage.writeComponents = storage.readComponents;
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
-                            // Based on benchmarks, it is faster to bulk copy if more than
-                            // roughly 1/6 of the components are valid.
-                            if (storage.readValidEntities.size() > storage.readComponents.size() / 6) {
-                                storage.writeComponents = storage.readComponents;
-                            } else {
-                                for (auto &valid : storage.readValidEntities) {
+                            for (auto &valid : storage.readValidEntities) {
+                                if (storage.writeAccessedEntities[valid.index]) {
                                     storage.writeComponents[valid.index] = storage.readComponents[valid.index];
                                 }
                             }
