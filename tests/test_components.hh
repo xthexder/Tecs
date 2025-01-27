@@ -11,12 +11,12 @@
 
 namespace testing {
     struct Script {
-        std::vector<uint8_t> data;
+        std::vector<uint32_t> data;
         std::shared_ptr<std::string> filename;
 
         Script() {}
-        Script(uint8_t *data, size_t size) : data(data, data + size) {}
-        Script(std::initializer_list<uint8_t> init) : data(init) {}
+        Script(uint32_t *data, size_t size) : data(data, data + size) {}
+        Script(std::initializer_list<uint32_t> init) : data(init) {}
     };
 
     struct Renderable {
