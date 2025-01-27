@@ -299,16 +299,9 @@ namespace Tecs {
                             storage.writeComponents = storage.readComponents;
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
-                            // Based on benchmarks, it is faster to bulk copy if more than
-                            // roughly 1/6 of the components are valid and the component is trivially copyable.
-                            if (std::is_trivially_copyable<AllComponentTypes>() &&
-                                storage.writeAccessedCount > storage.readComponents.size() / 6) {
-                                storage.writeComponents = storage.readComponents;
-                            } else {
-                                for (auto &valid : storage.readValidEntities) {
-                                    if (storage.writeAccessedEntities[valid.index]) {
-                                        storage.writeComponents[valid.index] = storage.readComponents[valid.index];
-                                    }
+                            for (auto &valid : storage.readValidEntities) {
+                                if (storage.writeAccessedEntities[valid.index]) {
+                                    storage.writeComponents[valid.index] = storage.readComponents[valid.index];
                                 }
                             }
                         }
