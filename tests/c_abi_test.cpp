@@ -141,7 +141,7 @@ int main(int /* argc */, char ** /* argv */) {
                 "Expected Nth entity ecsId to be 1, was " + std::to_string(e));
 
             e.Set<Transform>(writeLock, 0.0, 0.0, 0.0);
-            e.Set<Script>(writeLock, std::initializer_list<uint8_t>({1, 2, 3, 4}));
+            e.Set<Script>(writeLock, std::initializer_list<uint32_t>({1, 2, 3, 4}));
             AssertHas<Transform, Script>(writeLock, e);
         }
     }

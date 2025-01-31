@@ -66,7 +66,7 @@ namespace benchmark {
         while (running) {
             {
                 Timer t(timer1);
-                auto readLock = ecs.StartTransaction<Read<Renderable, Transform>>();
+                auto readLock = ecs.StartTransaction<Read<Renderable, Transform, Script>>();
                 t = timer2;
 
                 auto &validRenderables = readLock.EntitiesWith<Renderable>();
