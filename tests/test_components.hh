@@ -34,3 +34,7 @@ namespace testing {
         GlobalComponent(size_t initial_value) : globalCounter(initial_value) {}
     };
 }; // namespace testing
+
+TECS_NAME_COMPONENT(testing::Script, "Script");
+TECS_NAME_COMPONENT(testing::Renderable, "Renderable");
+TECS_NAME_COMPONENT(testing::GlobalComponent, "GlobalComponent");

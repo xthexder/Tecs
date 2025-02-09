@@ -31,12 +31,12 @@ static std::thread::id scriptTransactionThreadId;
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_ITERATIONS 100
 #define ADD_REMOVE_PER_LOOP 1000
-#define SCRIPT_UPDATES_PER_LOOP 10000
+#define SCRIPT_UPDATES_PER_LOOP 50000
 #define SCRIPT_THREAD_COUNT 0
 
 #define TRANSFORM_DIVISOR 2
 #define RENDERABLE_DIVISOR 3
-#define SCRIPT_DIVISOR 10
+#define SCRIPT_DIVISOR 5
 
 void renderThread() {
     renderThreadId = std::this_thread::get_id();
@@ -209,6 +209,24 @@ void transformWorkerThread() {
     }
 }
 
+template<typename... AllComponentTypes>
+void printComponentCounts(const Lock<Tecs::ECS<AllComponentTypes...>> &lock) {
+    ( // For each AllComponentTypes
+        [&] {
+            std::cout << "  " << ecs.GetComponentName<AllComponentTypes>() << ": ";
+            if constexpr (is_global_component<AllComponentTypes>()) {
+                if (lock.template Has<AllComponentTypes>()) {
+                    std::cout << "1 global component" << std::endl;
+                } else {
+                    std::cout << "no global component" << std::endl;
+                }
+            } else {
+                std::cout << lock.template EntitiesWith<AllComponentTypes>().size() << " entities" << std::endl;
+            }
+        }(),
+        ...);
+}
+
 int main(int /* argc */, char ** /* argv */) {
 #if __cpp_lib_atomic_wait
     std::cout << "Compiled with C++20 atomic.wait()" << std::endl;
@@ -302,13 +320,20 @@ int main(int /* argc */, char ** /* argv */) {
     ecs.StartTrace();
 #endif
 
+    size_t transformCount = 0;
+    size_t scriptCount = 0;
     {
         auto readLock = ecs.StartTransaction<>();
+
         std::cout << "Running with " << readLock.Entities().size() << " Entities and " << ecs.GetComponentCount()
-                  << " Component types" << std::endl;
+                  << " Component types:" << std::endl;
+        printComponentCounts(readLock);
+
+        transformCount = readLock.EntitiesWith<Transform>().size();
+        scriptCount = readLock.EntitiesWith<Script>().size();
     }
     {
-        Timer t("Run threads (all transforms update)");
+        Timer t("Run threads (" + std::to_string(transformCount) + " transform updates)");
         running = true;
 
         auto render = std::async(&renderThread);
@@ -329,7 +354,8 @@ int main(int /* argc */, char ** /* argv */) {
     }
 
     {
-        Timer t("Run threads (some scripts update)");
+        Timer t("Run threads (" + std::to_string(SCRIPT_UPDATES_PER_LOOP) + " script updates out of " +
+                std::to_string(scriptCount) + ")");
         running = true;
 
         auto render = std::async(&renderThread);
