@@ -12,7 +12,6 @@
 
 #include <atomic>
 #include <cstddef>
-#include <set>
 #include <thread>
 #include <vector>
 
@@ -153,11 +152,6 @@ namespace Tecs {
                             tracyWrite.AfterTryLock(true);
                         }
 #endif
-
-                        // Reset access flags
-                        writeAccessedCount = 0;
-                        writeAccessedEntities.clear();
-                        writeAccessedEntities.resize(writeComponents.size());
                         return true;
                     }
                 }
@@ -298,6 +292,8 @@ namespace Tecs {
             readers.notify_all();
 #endif
 
+            writeAccessedEntities.clear();
+
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");
@@ -335,6 +331,16 @@ namespace Tecs {
             return sizeof(T) * 2 + sizeof(Entity) * 2 + sizeof(size_t);
         }
 
+        inline void AccessEntity(size_t index) {
+            writeAccessedEntities.emplace_back(index);
+
+            // Deduplicate and sort the access list
+            // auto it = std::lower_bound(writeAccessedEntities.begin(), writeAccessedEntities.end(), index);
+            // if (it == writeAccessedEntities.end() || *it != index) {
+            //     writeAccessedEntities.insert(it, index);
+            // }
+        }
+
     private:
         // Lock states
         static const uint32_t WRITER_FREE = 0;
@@ -350,10 +356,8 @@ namespace Tecs {
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
         std::vector<Entity> writeValidEntities;
-        std::vector<size_t> validEntityIndexes; // Size of writeComponents, Indexes into writeValidEntities
-
-        size_t writeAccessedCount = 0;
-        std::vector<bool> writeAccessedEntities; // Size of writeComponents
+        std::vector<size_t> validEntityIndexes;    // Size of writeComponents, Indexes into writeValidEntities
+        std::vector<size_t> writeAccessedEntities; // Indexes into writeComponents
 
         template<typename, typename...>
         friend class Lock;

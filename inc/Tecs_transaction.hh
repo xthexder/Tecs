@@ -81,12 +81,7 @@ namespace Tecs {
         template<typename T>
         inline void SetAccessFlag(size_t index) {
             writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
-            auto &storage = instance.template Storage<T>();
-            if (index >= storage.writeAccessedEntities.size()) storage.writeAccessedEntities.resize(index + 1);
-            if (!storage.writeAccessedEntities[index]) {
-                storage.writeAccessedEntities[index] = true;
-                storage.writeAccessedCount++;
-            }
+            instance.template Storage<T>().AccessEntity(index);
         }
 
         template<typename, typename...>
@@ -299,10 +294,8 @@ namespace Tecs {
                             storage.writeComponents = storage.readComponents;
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
-                            for (auto &valid : storage.readValidEntities) {
-                                if (storage.writeAccessedEntities[valid.index]) {
-                                    storage.writeComponents[valid.index] = storage.readComponents[valid.index];
-                                }
+                            for (auto &index : storage.writeAccessedEntities) {
+                                storage.writeComponents[index] = storage.readComponents[index];
                             }
                         }
                         storage.WriteUnlock();
@@ -314,8 +307,6 @@ namespace Tecs {
                     this->instance.metadata.writeComponents = this->instance.metadata.readComponents;
                     this->instance.metadata.writeValidEntities = this->instance.metadata.readValidEntities;
                 }
-            }
-            if constexpr (is_add_remove_allowed<LockType>()) {
                 this->instance.metadata.WriteUnlock();
             } else {
                 this->instance.metadata.ReadUnlock();
