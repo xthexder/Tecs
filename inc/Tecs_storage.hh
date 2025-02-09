@@ -12,7 +12,6 @@
 
 #include <atomic>
 #include <cstddef>
-#include <set>
 #include <thread>
 #include <vector>
 
@@ -293,6 +292,8 @@ namespace Tecs {
             readers.notify_all();
 #endif
 
+            writeAccessedEntities.clear();
+
             current = writer;
             if (current != WRITER_LOCKED && current != WRITER_COMMIT) {
                 throw std::runtime_error("WriteUnlock called outside of WriteLock");
@@ -330,6 +331,10 @@ namespace Tecs {
             return sizeof(T) * 2 + sizeof(Entity) * 2 + sizeof(size_t);
         }
 
+        inline void AccessEntity(size_t index) {
+            writeAccessedEntities.emplace_back(index);
+        }
+
     private:
         // Lock states
         static const uint32_t WRITER_FREE = 0;
@@ -345,12 +350,15 @@ namespace Tecs {
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
         std::vector<Entity> writeValidEntities;
-        std::vector<size_t> validEntityIndexes; // Indexes into writeValidEntities
+        std::vector<size_t> validEntityIndexes;    // Size of writeComponents, Indexes into writeValidEntities
+        std::vector<size_t> writeAccessedEntities; // Indexes into writeComponents
 
         template<typename, typename...>
         friend class Lock;
         template<typename, typename...>
         friend class Transaction;
+        template<template<typename...> typename, typename...>
+        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs
