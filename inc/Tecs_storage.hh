@@ -333,12 +333,6 @@ namespace Tecs {
 
         inline void AccessEntity(size_t index) {
             writeAccessedEntities.emplace_back(index);
-
-            // Deduplicate and sort the access list
-            // auto it = std::lower_bound(writeAccessedEntities.begin(), writeAccessedEntities.end(), index);
-            // if (it == writeAccessedEntities.end() || *it != index) {
-            //     writeAccessedEntities.insert(it, index);
-            // }
         }
 
     private:
