@@ -57,4 +57,10 @@ struct CodeGenerator<ECSType<AllComponentTypes...>> {
             Tecs::is_global_component<AllComponentTypes>()...,
         };
     }
+
+    static constexpr std::array<bool, sizeof...(AllComponentTypes)> GetComponentCopyableList() {
+        return {
+            std::is_trivially_copyable<AllComponentTypes>()...,
+        };
+    }
 };

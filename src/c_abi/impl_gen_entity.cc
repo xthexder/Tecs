@@ -4,6 +4,7 @@ template<typename T>
 void generateEntityCC(T &out) {
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
+    auto copyableList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCopyableList();
 #ifdef TECS_C_ABI_ECS_INCLUDE
     out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
 #endif
@@ -39,8 +40,8 @@ bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
             out << "        return false;" << std::endl;
         } else {
             out << "        return Tecs::Entity(entity).Has<" << names[i] << ">(*dynLock);" << std::endl;
@@ -48,7 +49,7 @@ bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return false;
     }
 }
@@ -69,8 +70,8 @@ bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
             out << "        return false;" << std::endl;
         } else {
             out << "        return Tecs::Entity(entity).Had<" << names[i] << ">(*dynLock);" << std::endl;
@@ -78,7 +79,7 @@ bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return false;
     }
 }
@@ -99,8 +100,8 @@ const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t component
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
             out << "        return nullptr;" << std::endl;
         } else {
             out << "        auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
@@ -114,7 +115,7 @@ const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t component
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -133,7 +134,7 @@ const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -149,8 +150,8 @@ void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
             out << "        return nullptr;" << std::endl;
         } else {
             out << "        auto lock1 = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
@@ -168,7 +169,7 @@ void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -187,7 +188,7 @@ void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -203,8 +204,8 @@ const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t compon
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
             out << "        return nullptr;" << std::endl;
         } else {
             out << "        auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
@@ -218,7 +219,7 @@ const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t compon
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -237,7 +238,7 @@ const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, si
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -253,8 +254,12 @@ void *Tecs_entity_set(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
+            out << "        return nullptr;" << std::endl;
+        } else if (!copyableList[i]) {
+            out << "        std::cerr << \"Error: Can't set component type unless it is trivially copyable: "
+                << names[i] << "\" << std::endl;" << std::endl;
             out << "        return nullptr;" << std::endl;
         } else {
             out << "        auto lock1 = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
@@ -274,7 +279,7 @@ void *Tecs_entity_set(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
         return nullptr;
     }
 }
@@ -290,8 +295,8 @@ void Tecs_entity_unset(TecsLock *dynLockPtr, TecsEntity entity, size_t component
             out << "    } else if (componentIndex == " << i << ") {" << std::endl;
         }
         if (globalList[i]) {
-            out << "        std::cerr << \"Entities can't have global components: " << names[i] << "\" << std::endl;"
-                << std::endl;
+            out << "        std::cerr << \"Error: Entities can't have global components: " << names[i]
+                << "\" << std::endl;" << std::endl;
         } else {
             out << "        auto lock = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
             out << "        if (!lock) {" << std::endl;
@@ -304,7 +309,7 @@ void Tecs_entity_unset(TecsLock *dynLockPtr, TecsEntity entity, size_t component
     }
     out << "    } else {";
     out << R"RAWSTR(
-        std::cerr << "Component index out of range: " << componentIndex << std::endl;
+        std::cerr << "Error: Component index out of range: " << componentIndex << std::endl;
     }
 }
 
