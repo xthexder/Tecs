@@ -412,11 +412,18 @@ namespace Tecs {
         friend struct Entity;
     };
 
+    template<typename>
+    struct is_dynamic_lock : std::false_type {};
+
+    template<typename ECS, typename... StaticPermissions>
+    struct is_dynamic_lock<DynamicLock<ECS, StaticPermissions...>> : std::true_type {};
+
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... StaticPermissions>
     class DynamicLock<ECSType<AllComponentTypes...>, StaticPermissions...>
         : public Lock<ECSType<AllComponentTypes...>, StaticPermissions...> {
     private:
         using ECS = ECSType<AllComponentTypes...>;
+        using BaseLockType = Lock<ECS, StaticPermissions...>;
 
         const std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
 
@@ -441,6 +448,15 @@ namespace Tecs {
         }
 
         template<typename LockType>
+        static inline constexpr auto generateReadBitset(const LockType &lock) {
+            if constexpr (is_dynamic_lock<LockType>()) {
+                return lock.readPermissions;
+            } else {
+                return generateReadBitset<LockType>();
+            }
+        }
+
+        template<typename LockType>
         static inline constexpr auto generateWriteBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
             if constexpr (sizeof...(AllComponentTypes) < 64) {
@@ -461,14 +477,14 @@ namespace Tecs {
         }
 
     public:
+        // Create from an existing static lock
         template<typename LockType>
-        DynamicLock(const LockType &lock)
-            : Lock<ECS, StaticPermissions...>(lock), readPermissions(generateReadBitset<LockType>()) {}
+        DynamicLock(const LockType &lock) : BaseLockType(lock), readPermissions(generateReadBitset(lock)) {}
 
         template<typename... DynamicPermissions>
         std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
             using DynamicLockType = Lock<ECS, DynamicPermissions...>;
-            if constexpr (Lock<ECS, StaticPermissions...>::template has_permissions<DynamicLockType>()) {
+            if constexpr (BaseLockType::template has_permissions<DynamicLockType>()) {
                 return DynamicLockType(this->instance, this->base, this->permissions);
             } else {
                 static constexpr auto requestedRead = generateReadBitset<DynamicLockType>();
@@ -480,5 +496,9 @@ namespace Tecs {
                 return {};
             }
         }
+
+    private:
+        template<typename, typename...>
+        friend class DynamicLock;
     };
 }; // namespace Tecs

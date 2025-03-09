@@ -961,7 +961,7 @@ int main(int /* argc */, char ** /* argv */) {
                 Assert(e.Get<Script>(readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
         }
-        { // Test DynamicLock typecast method
+        { // Test DynamicLock conversion
             Tecs::Lock<ECS, Tecs::Read<Transform, Renderable, Script>> readLockSubset = readLockAll;
             Tecs::DynamicLock<ECS, Tecs::Read<Transform>> dynamicLock = readLockSubset;
             for (Tecs::Entity e : dynamicLock.EntitiesWith<Transform>()) {
@@ -972,6 +972,22 @@ int main(int /* argc */, char ** /* argv */) {
             for (Tecs::Entity e : readLockScript->EntitiesWith<Script>()) {
                 Assert(e.Get<Script>(*readLockScript).data[0] == 1, "Expected script[0] to be 1");
             }
+            auto readLockGlobalCompoennt = dynamicLock.TryLock<Tecs::Read<GlobalComponent>>();
+            Assert(!readLockGlobalCompoennt.has_value(), "Expected readLockGlobalCompoennt to be invalid");
+        }
+        { // Test DynamicLock typecast
+            Tecs::DynamicLock<ECS, Tecs::Read<Transform, Script>> readLockSubset = readLockAll;
+            Tecs::DynamicLock<ECS, Tecs::Read<Transform>> dynamicLock = readLockSubset;
+            for (Tecs::Entity e : dynamicLock.EntitiesWith<Transform>()) {
+                Assert(e.Get<Transform>(dynamicLock).pos[0] == 1, "Expected position.x to be 1");
+            }
+            auto readLockScript = dynamicLock.TryLock<Tecs::Read<Script>>();
+            Assert(readLockScript.has_value(), "Expected readLockScript to be valid");
+            for (Tecs::Entity e : readLockScript->EntitiesWith<Script>()) {
+                Assert(e.Get<Script>(*readLockScript).data[0] == 1, "Expected script[0] to be 1");
+            }
+            auto readLockRenderable = dynamicLock.TryLock<Tecs::Read<Renderable>>();
+            Assert(readLockRenderable.has_value(), "Expected readLockRenderable to be valid");
             auto readLockGlobalCompoennt = dynamicLock.TryLock<Tecs::Read<GlobalComponent>>();
             Assert(!readLockGlobalCompoennt.has_value(), "Expected readLockGlobalCompoennt to be invalid");
         }
