@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Tecs_entity.h"
+#include "Tecs_export.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +15,9 @@ typedef struct TecsEntityView {
     size_t end_index = 0;
 } TecsEntityView;
 
-size_t Tecs_entity_view_storage_size(const TecsEntityView *view);
-const TecsEntity *Tecs_entity_view_begin(const TecsEntityView *view);
-const TecsEntity *Tecs_entity_view_end(const TecsEntityView *view);
+TECS_EXPORT size_t Tecs_entity_view_storage_size(const TecsEntityView *view);
+TECS_EXPORT const TecsEntity *Tecs_entity_view_begin(const TecsEntityView *view);
+TECS_EXPORT const TecsEntity *Tecs_entity_view_end(const TecsEntityView *view);
 
 #ifdef __cplusplus
 }

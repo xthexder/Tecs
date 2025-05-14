@@ -1,4 +1,6 @@
-#include "impl_gen_common.hh"
+#pragma once
+
+#include "gen_common.hh"
 
 template<typename T>
 void generateEntityCC(T &out) {
@@ -19,17 +21,17 @@ using DynamicLock = Tecs::DynamicLock<ECS>;
 
 extern "C" {
 
-bool Tecs_entity_exists(TecsLock *dynLockPtr, TecsEntity entity) {
+TECS_EXPORT bool Tecs_entity_exists(TecsLock *dynLockPtr, TecsEntity entity) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).Exists(*dynLock);
 }
 
-bool Tecs_entity_existed(TecsLock *dynLockPtr, TecsEntity entity) {
+TECS_EXPORT bool Tecs_entity_existed(TecsLock *dynLockPtr, TecsEntity entity) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).Existed(*dynLock);
 }
 
-bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -54,12 +56,12 @@ bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
     }
 }
 
-bool Tecs_entity_has_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
+TECS_EXPORT bool Tecs_entity_has_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).HasBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
 }
 
-bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -84,12 +86,12 @@ bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIn
     }
 }
 
-bool Tecs_entity_had_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
+TECS_EXPORT bool Tecs_entity_had_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).HadBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
 }
 
-const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -120,7 +122,7 @@ const void *Tecs_const_get_entity_storage(TecsLock *dynLockPtr, size_t component
     }
 }
 
-const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
 )RAWSTR";
     for (size_t i = 0; i < names.size(); i++) {
         if (i == 0) {
@@ -139,7 +141,7 @@ const void *Tecs_entity_const_get(TecsLock *dynLockPtr, TecsEntity entity, size_
     }
 }
 
-void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -174,7 +176,7 @@ void *Tecs_get_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     }
 }
 
-void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
 )RAWSTR";
     for (size_t i = 0; i < names.size(); i++) {
         if (i == 0) {
@@ -193,7 +195,7 @@ void *Tecs_entity_get(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
     }
 }
 
-const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -224,7 +226,7 @@ const void *Tecs_get_previous_entity_storage(TecsLock *dynLockPtr, size_t compon
     }
 }
 
-const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
 )RAWSTR";
     for (size_t i = 0; i < names.size(); i++) {
         if (i == 0) {
@@ -243,7 +245,7 @@ const void *Tecs_entity_get_previous(TecsLock *dynLockPtr, TecsEntity entity, si
     }
 }
 
-void *Tecs_entity_set(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex, const void *value) {
+TECS_EXPORT void *Tecs_entity_set(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex, const void *value) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -284,7 +286,7 @@ void *Tecs_entity_set(TecsLock *dynLockPtr, TecsEntity entity, size_t componentI
     }
 }
 
-void Tecs_entity_unset(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
+TECS_EXPORT void Tecs_entity_unset(TecsLock *dynLockPtr, TecsEntity entity, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -313,7 +315,7 @@ void Tecs_entity_unset(TecsLock *dynLockPtr, TecsEntity entity, size_t component
     }
 }
 
-void Tecs_entity_destroy(TecsLock *dynLockPtr, TecsEntity entity) {
+TECS_EXPORT void Tecs_entity_destroy(TecsLock *dynLockPtr, TecsEntity entity) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto lock = dynLock->TryLock<Tecs::AddRemove>();
     if (!lock) {
@@ -324,13 +326,4 @@ void Tecs_entity_destroy(TecsLock *dynLockPtr, TecsEntity entity) {
 }
 }
 )RAWSTR";
-}
-
-int main(int argc, char **argv) {
-    if (argc > 1) {
-        auto out = std::ofstream(argv[1], std::ios::trunc);
-        generateEntityCC(out);
-    } else {
-        generateEntityCC(std::cout);
-    }
 }

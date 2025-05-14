@@ -19,18 +19,14 @@
 using namespace testing;
 using namespace Tecs;
 
+TECS_IMPLEMENT_C_ABI
+
 namespace benchmark {
     using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
     using Entity = Tecs::abi::Entity;
 
-    AbiECS makeECS() {
-        static testing::ECS baseEcs;
-        std::shared_ptr<TecsECS> ecsPtr(&baseEcs, [](auto *) {});
-        return AbiECS(ecsPtr);
-    }
-
     std::atomic_bool running;
-    static AbiECS ecs = makeECS();
+    static AbiECS ecs = AbiECS();
     // static testing::ECS ecs;
 
     static std::thread::id renderThreadId;

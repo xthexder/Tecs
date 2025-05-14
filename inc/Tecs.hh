@@ -79,6 +79,10 @@ namespace Tecs {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
         }
 
+        inline size_t GetNextTransactionId() const {
+            return nextTransactionId;
+        }
+
         /**
          * Returns the index of a Component type for use in a bitset.
          */

@@ -1,4 +1,6 @@
-#include "impl_gen_common.hh"
+#pragma once
+
+#include "gen_common.hh"
 
 template<typename T>
 void generateECSCC(T &out) {
@@ -21,7 +23,16 @@ using DynamicLock = Tecs::DynamicLock<ECS>;
 
 extern "C" {
 
-TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPermissions,
+TECS_EXPORT TecsECS *Tecs_make_ecs_instance() {
+    return new ECS();
+}
+
+TECS_EXPORT void Tecs_release_ecs_instance(TecsECS *ecsPtr) {
+    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    delete ecs;
+}
+
+TECS_EXPORT TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPermissions,
     unsigned long long writePermissions) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     if constexpr (1 + ECS::GetComponentCount() > std::numeric_limits<unsigned long long>::digits) {
@@ -34,7 +45,7 @@ TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPer
     }
 }
 
-TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPermissions,
+TECS_EXPORT TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPermissions,
     const char *writePermissions) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return new DynamicLock(*ecs,
@@ -42,17 +53,22 @@ TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPer
         DynamicLock::PermissionBitset(std::string(writePermissions)));
 }
 
-size_t Tecs_ecs_get_instance_id(TecsECS *ecsPtr) {
+TECS_EXPORT size_t Tecs_ecs_get_instance_id(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return ecs->GetInstanceId();
 }
 
-size_t Tecs_ecs_get_component_count(TecsECS *ecsPtr) {
+TECS_EXPORT size_t Tecs_ecs_get_next_transaction_id(TecsECS *ecsPtr) {
+    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    return ecs->GetNextTransactionId();
+}
+
+TECS_EXPORT size_t Tecs_ecs_get_component_count(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return ecs->GetComponentCount();
 }
 
-size_t Tecs_ecs_get_component_name(TecsECS *ecsPtr, size_t componentIndex, size_t bufferSize, char *output) {
+TECS_EXPORT size_t Tecs_ecs_get_component_name(TecsECS *ecsPtr, size_t componentIndex, size_t bufferSize, char *output) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     std::string name;
     // For each component...
@@ -76,25 +92,16 @@ size_t Tecs_ecs_get_component_name(TecsECS *ecsPtr, size_t componentIndex, size_
     return name.size() + 1;
 }
 
-size_t Tecs_ecs_get_bytes_per_entity(TecsECS *ecsPtr) {
+TECS_EXPORT size_t Tecs_ecs_get_bytes_per_entity(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return ecs->GetBytesPerEntity();
 }
 
-void Tecs_lock_release(TecsLock *dynLockPtr) {
+TECS_EXPORT void Tecs_lock_release(TecsLock *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     delete dynLock;
 }
 
 } // extern "C"
 )RAWSTR";
-}
-
-int main(int argc, char **argv) {
-    if (argc > 1) {
-        auto out = std::ofstream(argv[1], std::ios::trunc);
-        generateECSCC(out);
-    } else {
-        generateECSCC(std::cout);
-    }
 }

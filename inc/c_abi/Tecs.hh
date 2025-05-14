@@ -23,16 +23,20 @@ namespace Tecs::abi {
     template<typename... Tn>
     class ECS {
     private:
-        std::shared_ptr<TecsECS> base;
+        TecsECS *base;
 
     public:
-        inline ECS(const std::shared_ptr<TecsECS> &ecs) : base(ecs) {
+        inline ECS() : base(Tecs_make_ecs_instance()) {
             auto count = GetComponentCount();
-            auto baseCount = Tecs_ecs_get_component_count(base.get());
+            auto baseCount = Tecs_ecs_get_component_count(base);
             if (count != baseCount) {
                 throw std::runtime_error("Component count missmatch: count " + std::to_string(count) + " != base " +
                                          std::to_string(baseCount));
             }
+        }
+
+        inline ~ECS() {
+            Tecs_release_ecs_instance(base);
         }
 
         /**
@@ -67,9 +71,9 @@ namespace Tecs::abi {
             // clang-format on
             TecsLock *l = nullptr;
             if constexpr (sizeof...(Tn) <= std::numeric_limits<unsigned long long>::digits) {
-                l = Tecs_ecs_start_transaction(base.get(), readPermissions.to_ullong(), writePermissions.to_ullong());
+                l = Tecs_ecs_start_transaction(base, readPermissions.to_ullong(), writePermissions.to_ullong());
             } else {
-                l = Tecs_ecs_start_transaction_bitstr(base.get(),
+                l = Tecs_ecs_start_transaction_bitstr(base,
                     readPermissions.to_string().c_str(),
                     writePermissions.to_string().c_str());
             }
@@ -81,11 +85,11 @@ namespace Tecs::abi {
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         inline void StartTrace() {
-            Tecs_ecs_start_perf_trace(base.get());
+            Tecs_ecs_start_perf_trace(base);
         }
 
         inline PerformanceTrace StopTrace() {
-            TecsPerfTrace *trace = Tecs_ecs_stop_perf_trace(base.get());
+            TecsPerfTrace *trace = Tecs_ecs_stop_perf_trace(base);
             return PerformanceTrace{std::shared_ptr<TecsPerfTrace>(trace, [](auto *ptr) {
                 Tecs_ecs_perf_trace_release(ptr);
             })};
@@ -93,7 +97,11 @@ namespace Tecs::abi {
 #endif
 
         inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
-            return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)Tecs_ecs_get_instance_id(base.get());
+            return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)Tecs_ecs_get_instance_id(base);
+        }
+
+        inline size_t GetNextTransactionId() const {
+            return Tecs_ecs_get_next_transaction_id(base);
         }
 
         /**
@@ -115,9 +123,9 @@ namespace Tecs::abi {
          * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
          */
         inline std::string GetComponentName(size_t componentIndex) {
-            size_t size = Tecs_ecs_get_component_name(base.get(), componentIndex, 0, nullptr);
+            size_t size = Tecs_ecs_get_component_name(base, componentIndex, 0, nullptr);
             std::string str(size, '\0');
-            Tecs_ecs_get_component_name(base.get(), componentIndex, size, str.data());
+            Tecs_ecs_get_component_name(base, componentIndex, size, str.data());
             return str;
         }
 
@@ -138,7 +146,7 @@ namespace Tecs::abi {
         }
 
         inline size_t GetBytesPerEntity() {
-            return Tecs_ecs_get_bytes_per_entity(base.get());
+            return Tecs_ecs_get_bytes_per_entity(base);
         }
 
     private:

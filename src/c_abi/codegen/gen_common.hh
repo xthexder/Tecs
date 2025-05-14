@@ -60,7 +60,7 @@ struct CodeGenerator<ECSType<AllComponentTypes...>> {
 
     static constexpr std::array<bool, sizeof...(AllComponentTypes)> GetComponentCopyableList() {
         return {
-            std::is_trivially_copyable<AllComponentTypes>()...,
+            std::is_copy_constructible<AllComponentTypes>()...,
         };
     }
 };

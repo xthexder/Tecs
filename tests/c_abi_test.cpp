@@ -13,13 +13,12 @@ using namespace testing;
 
 using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
 
-static ECS baseEcs;
+TECS_IMPLEMENT_C_ABI
 
 #define ENTITY_COUNT 10000
 
 int main(int /* argc */, char ** /* argv */) {
-    std::shared_ptr<TecsECS> ecsPtr(&baseEcs, [](auto *) {});
-    AbiECS ecs = AbiECS(ecsPtr);
+    AbiECS ecs = AbiECS();
 
     std::cout << "Running with " << ENTITY_COUNT << " entities and " << ecs.GetComponentCount() << " component types"
               << std::endl;
@@ -27,7 +26,7 @@ int main(int /* argc */, char ** /* argv */) {
               << " bytes total" << std::endl;
     std::cout << "Using C ABI" << std::endl;
 
-    Assert(Tecs::nextTransactionId == 0, "Expected next transaction id to be 0");
+    Assert(ecs.GetNextTransactionId() == 0, "Expected next transaction id to be 0");
 
     Tecs::Observer<ECS, Tecs::EntityEvent> entityObserver;
     Tecs::Observer<ECS, Tecs::ComponentEvent<Transform>> transformObserver;
@@ -42,7 +41,7 @@ int main(int /* argc */, char ** /* argv */) {
 
         Assert(writeLock.GetTransactionId() == 1, "Expected transaction id to be 1");
     }
-    Assert(Tecs::nextTransactionId == 1, "Expected next transaction id to be 1");
+    Assert(ecs.GetNextTransactionId() == 1, "Expected next transaction id to be 1");
     bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");

@@ -20,22 +20,23 @@ using ECS = Tecs::ECS<>;
 
 extern "C" {
 
-void Tecs_ecs_start_perf_trace(TecsECS *ecsPtr) {
+TECS_EXPORT void Tecs_ecs_start_perf_trace(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     ecs->StartTrace();
 }
 
-TecsPerfTrace *Tecs_ecs_stop_perf_trace(TecsECS *ecsPtr) {
+TECS_EXPORT TecsPerfTrace *Tecs_ecs_stop_perf_trace(TecsECS *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return new Tecs::PerformanceTrace(ecs->StopTrace());
 }
 
-void Tecs_perf_trace_set_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, const char *threadName) {
+TECS_EXPORT void Tecs_perf_trace_set_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, const char *threadName) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     trace->SetThreadName(std::string(threadName), threadIdHash);
 }
 
-size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, size_t bufferSize, char *output) {
+TECS_EXPORT size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, size_t bufferSize,
+    char *output) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     std::string name = trace->GetThreadName(threadIdHash);
     if (name.size() < bufferSize) {
@@ -44,12 +45,12 @@ size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t threadIdH
     return name.size() + 1;
 }
 
-void Tecs_perf_trace_save_to_csv(TecsPerfTrace *tracePtr, const char *filePath) {
+TECS_EXPORT void Tecs_perf_trace_save_to_csv(TecsPerfTrace *tracePtr, const char *filePath) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     trace->SaveToCSV(std::string(filePath));
 }
 
-void Tecs_ecs_perf_trace_release(TecsPerfTrace *tracePtr) {
+TECS_EXPORT void Tecs_ecs_perf_trace_release(TecsPerfTrace *tracePtr) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     delete trace;
 }
