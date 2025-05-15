@@ -8,6 +8,9 @@
 
 #include <bitset>
 
+// Declare this once in the root namespace
+#define TECS_IMPLEMENT_C_ABI thread_local size_t Tecs::abi::cacheInvalidationCounter;
+
 namespace Tecs::abi {
     /**
      * An ECS "world" is created by instantiating this class. Component types must be known at compile-time and are
@@ -24,9 +27,10 @@ namespace Tecs::abi {
     class ECS {
     private:
         TecsECS *base;
+        bool shouldReleaseBase = false;
 
     public:
-        inline ECS() : base(Tecs_make_ecs_instance()) {
+        inline ECS(TecsECS *base) : base(base) {
             auto count = GetComponentCount();
             auto baseCount = Tecs_ecs_get_component_count(base);
             if (count != baseCount) {
@@ -35,8 +39,12 @@ namespace Tecs::abi {
             }
         }
 
+        inline ECS() : ECS(Tecs_make_ecs_instance()) {
+            shouldReleaseBase = true;
+        }
+
         inline ~ECS() {
-            Tecs_release_ecs_instance(base);
+            if (shouldReleaseBase) Tecs_release_ecs_instance(base);
         }
 
         /**

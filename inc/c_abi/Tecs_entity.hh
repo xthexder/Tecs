@@ -3,6 +3,7 @@
 #include "../Tecs_permissions.hh"
 #include "Tecs_entity.h"
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -21,9 +22,6 @@
 #ifndef TECS_ENTITY_ECS_IDENTIFIER_TYPE
     #define TECS_ENTITY_ECS_IDENTIFIER_TYPE uint8_t
 #endif
-
-// Declare this once in the root namespace
-#define TECS_IMPLEMENT_C_ABI thread_local size_t Tecs::abi::cacheInvalidationCounter;
 
 static_assert(sizeof(TECS_ENTITY_GENERATION_TYPE) > sizeof(TECS_ENTITY_ECS_IDENTIFIER_TYPE),
     "TECS_ENTITY_ECS_IDENTIFIER_TYPE must fit within TECS_ENTITY_GENERATION_TYPE");
