@@ -1,5 +1,3 @@
-#pragma once
-
 #include "gen_ecs.hh"
 #include "gen_entity.hh"
 #include "gen_lock.hh"
