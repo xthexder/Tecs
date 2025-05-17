@@ -73,12 +73,18 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void SetAccessFlag(bool value) {
+        inline void SetAccessFlag() {
             if constexpr (std::is_same<T, AddRemove>()) {
-                writeAccessedFlags[0] = value;
+                writeAccessedFlags[0] = true;
             } else {
-                writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = value;
+                writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
             }
+        }
+
+        template<typename T>
+        inline void SetAccessFlag(size_t index) {
+            writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
+            instance.template Storage<T>().AccessEntity(index);
         }
 
 #ifndef TECS_HEADER_ONLY
@@ -270,14 +276,8 @@ namespace Tecs {
                             storage.writeComponents = storage.readComponents;
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
-                            // Based on benchmarks, it is faster to bulk copy if more than
-                            // roughly 1/6 of the components are valid.
-                            if (storage.readValidEntities.size() > storage.readComponents.size() / 6) {
-                                storage.writeComponents = storage.readComponents;
-                            } else {
-                                for (auto &valid : storage.readValidEntities) {
-                                    storage.writeComponents[valid.index] = storage.readComponents[valid.index];
-                                }
+                            for (auto &index : storage.writeAccessedEntities) {
+                                storage.writeComponents[index] = storage.readComponents[index];
                             }
                         }
                         storage.WriteUnlock();
