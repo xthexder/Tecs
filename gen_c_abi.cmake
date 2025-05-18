@@ -1,7 +1,7 @@
 function(TecsGenerateCHeaders)
     set(options OBJECT_TARGET)
     set(oneValueArgs TARGET_NAME ECS_INCLUDE_PATH ECS_NAME)
-    set(multiValueArgs LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS)
+    set(multiValueArgs SOURCES LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS)
     cmake_parse_arguments(PARSE_ARGV 0 arg "${options}" "${oneValueArgs}" "${multiValueArgs}")
 
     include(CheckIPOSupported)
@@ -45,6 +45,7 @@ function(TecsGenerateCHeaders)
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
+        ${arg_SOURCES}
     )
 
     if(arg_OBJECT_TARGET)

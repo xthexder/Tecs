@@ -5,14 +5,12 @@ TecsGenerateCHeaders(
     TARGET_NAME ${PROJECT_NAME}-benchmark-c-abi
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
+    SOURCES
+        transform_component.cpp
     INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}
     COMPILE_DEFINITIONS
         TECS_ENABLE_PERFORMANCE_TRACING
-)
-
-target_sources(${PROJECT_NAME}-benchmark-c-abi PRIVATE
-    transform_component.cpp
 )
 
 add_executable(${PROJECT_NAME}-benchmark
@@ -52,6 +50,8 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
         TARGET_NAME ${PROJECT_NAME}-benchmark-tracy-c-abi
         ECS_INCLUDE_PATH "test_components.hh"
         ECS_NAME testing::ECS
+        SOURCES
+            transform_component.cpp
         LINK_LIBRARIES
             TracyClient
         INCLUDE_DIRECTORIES
@@ -61,10 +61,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
             TECS_TRACY_INCLUDE_LOCKS
             TECS_TRACY_INCLUDE_DETAILED_COMMIT
             TECS_UNCHECKED_MODE
-    )
-
-    target_sources(${PROJECT_NAME}-benchmark-tracy-c-abi PRIVATE
-        transform_component.cpp
     )
 
     add_executable(${PROJECT_NAME}-benchmark-tracy
@@ -103,12 +99,10 @@ TecsGenerateCHeaders(
     TARGET_NAME ${PROJECT_NAME}-tests-c-abi
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
+    SOURCES
+        transform_component.cpp
     INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_sources(${PROJECT_NAME}-tests-c-abi PRIVATE
-    transform_component.cpp
 )
 
 add_executable(${PROJECT_NAME}-tests tests.cpp)
