@@ -57,20 +57,19 @@ namespace Tecs {
     struct Entity {
         // Workaround for Clang so that std::atomic<Tecs::Entity> operations can be inlined as if uint64. See issue:
         // https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs
-        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) +
-                sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_GENERATION_TYPE generation;
-        TECS_ENTITY_INDEX_TYPE index;
+        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) + sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_INDEX_TYPE index;
+        TECS_ENTITY_GENERATION_TYPE generation;
 
-        inline Entity() : generation(0), index(0) {}
+        inline Entity() : index(0), generation(0) {}
 
         inline Entity(uint64_t eid)
-            : generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)),
-              index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {}
+            : index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()),
+              generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
-            : generation(generation), index(index) {}
+            : index(index), generation(generation) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation,
             TECS_ENTITY_ECS_IDENTIFIER_TYPE ecsId)
-            : generation(GenerationWithIdentifier(generation, ecsId)), index(index) {}
+            : index(index), generation(GenerationWithIdentifier(generation, ecsId)) {}
 
     public:
         template<typename LockType>
