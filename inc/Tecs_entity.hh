@@ -103,8 +103,7 @@ namespace Tecs {
         }
 
         template<typename LockType,
-            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits),
-                int> = 0>
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits), int> = 0>
         inline bool HasBitset(const LockType &lock,
             const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
             auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
@@ -126,8 +125,7 @@ namespace Tecs {
         }
 
         template<typename LockType,
-            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits),
-                int> = 0>
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits), int> = 0>
         inline bool HadBitset(const LockType &lock,
             const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
             if (index >= lock.instance.metadata.readComponents.size()) return false;

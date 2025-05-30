@@ -471,10 +471,10 @@ namespace Tecs {
         template<typename LockType>
         static inline auto generateReadBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<uint64_t>::digits) {
                 // clang-format off
-                constexpr unsigned long long mask = 1 | ((
-                    ((unsigned long long)is_read_allowed<AllComponentTypes, LockType>())
+                constexpr uint64_t mask = 1 | ((
+                    ((uint64_t)is_read_allowed<AllComponentTypes, LockType>())
                         << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
                 ) | ...);
                 // clang-format on
@@ -500,10 +500,10 @@ namespace Tecs {
         template<typename LockType>
         static inline constexpr auto generateWriteBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
-            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<uint64_t>::digits) {
                 // clang-format off
-                constexpr unsigned long long mask = (unsigned long long)Tecs::is_add_remove_allowed<LockType>() | ((
-                    ((unsigned long long)is_write_allowed<AllComponentTypes, LockType>())
+                constexpr uint64_t mask = (uint64_t)Tecs::is_add_remove_allowed<LockType>() | ((
+                    ((uint64_t)is_write_allowed<AllComponentTypes, LockType>())
                         << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
                 ) | ...);
                 // clang-format on

@@ -56,7 +56,7 @@ TECS_EXPORT bool Tecs_entity_has(TecsLock *dynLockPtr, TecsEntity entity, size_t
     }
 }
 
-TECS_EXPORT bool Tecs_entity_has_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
+TECS_EXPORT bool Tecs_entity_has_bitset(TecsLock *dynLockPtr, TecsEntity entity, uint64_t componentBits) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).HasBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
 }
@@ -86,7 +86,7 @@ TECS_EXPORT bool Tecs_entity_had(TecsLock *dynLockPtr, TecsEntity entity, size_t
     }
 }
 
-TECS_EXPORT bool Tecs_entity_had_bitset(TecsLock *dynLockPtr, TecsEntity entity, unsigned long long componentBits) {
+TECS_EXPORT bool Tecs_entity_had_bitset(TecsLock *dynLockPtr, TecsEntity entity, uint64_t componentBits) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return Tecs::Entity(entity).HadBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
 }

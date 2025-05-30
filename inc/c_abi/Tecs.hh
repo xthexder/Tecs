@@ -78,7 +78,7 @@ namespace Tecs::abi {
             ), ...);
             // clang-format on
             TecsLock *l = nullptr;
-            if constexpr (sizeof...(Tn) <= std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (sizeof...(Tn) <= std::numeric_limits<uint64_t>::digits) {
                 l = Tecs_ecs_start_transaction(base, readPermissions.to_ullong(), writePermissions.to_ullong());
             } else {
                 l = Tecs_ecs_start_transaction_bitstr(base,

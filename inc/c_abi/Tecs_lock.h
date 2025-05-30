@@ -7,10 +7,12 @@
 #ifdef __cplusplus
 extern "C" {
 #else
+    #include <stdint.h>
+
 typedef uint8_t bool;
 #endif
 
-#include <stdint.h>
+#include <stddef.h>
 
 typedef void TecsLock;
 

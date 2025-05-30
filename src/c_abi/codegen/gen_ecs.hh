@@ -32,10 +32,9 @@ TECS_EXPORT void Tecs_release_ecs_instance(TecsECS *ecsPtr) {
     delete ecs;
 }
 
-TECS_EXPORT TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPermissions,
-    unsigned long long writePermissions) {
+TECS_EXPORT TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, uint64_t readPermissions, uint64_t writePermissions) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
-    if constexpr (1 + ECS::GetComponentCount() > std::numeric_limits<unsigned long long>::digits) {
+    if constexpr (1 + ECS::GetComponentCount() > std::numeric_limits<uint64_t>::digits) {
         std::cerr << "Too many components to use uint64 init: " << ECS::GetComponentCount() << std::endl;
         return nullptr;
     } else {

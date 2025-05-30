@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef void TecsECS;
@@ -14,8 +15,7 @@ typedef void TecsECS;
 TECS_EXPORT TecsECS *Tecs_make_ecs_instance();
 TECS_EXPORT void Tecs_release_ecs_instance(TecsECS *ecsPtr);
 
-TECS_EXPORT TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, unsigned long long readPermissions,
-    unsigned long long writePermissions);
+TECS_EXPORT TecsLock *Tecs_ecs_start_transaction(TecsECS *ecsPtr, uint64_t readPermissions, uint64_t writePermissions);
 TECS_EXPORT TecsLock *Tecs_ecs_start_transaction_bitstr(TecsECS *ecsPtr, const char *readPermissions,
     const char *writePermissions);
 

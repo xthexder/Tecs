@@ -89,7 +89,7 @@ namespace Tecs::abi {
         inline bool Has(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits) {
                 std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
                 componentBits[0] = true;
                 ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);
@@ -106,7 +106,7 @@ namespace Tecs::abi {
         inline bool Had(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
-            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<unsigned long long>::digits) {
+            if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits) {
                 std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
                 componentBits[0] = true;
                 ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);

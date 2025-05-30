@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
+#include <stddef.h>
 
 typedef struct TecsEntityView {
     const void *storage;
