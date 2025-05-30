@@ -66,8 +66,8 @@ namespace Tecs::abi {
         inline Entity() : index(0), generation(0) {}
 
         inline Entity(uint64_t eid)
-            : generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)),
-              index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {}
+            : index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()),
+              generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
             : index(index), generation(generation) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation,
