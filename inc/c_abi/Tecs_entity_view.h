@@ -10,9 +10,9 @@ extern "C" {
 #include <stdint.h>
 
 typedef struct TecsEntityView {
-    const void *storage = nullptr;
-    size_t start_index = 0;
-    size_t end_index = 0;
+    const void *storage;
+    size_t start_index;
+    size_t end_index;
 } TecsEntityView;
 
 TECS_EXPORT size_t Tecs_entity_view_storage_size(const TecsEntityView *view);

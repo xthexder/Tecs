@@ -5,8 +5,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#else
-typedef uint8_t bool;
 #endif
 
 #include <stdint.h>
