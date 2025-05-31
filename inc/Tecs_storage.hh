@@ -21,7 +21,7 @@
 
 static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic_int is not lock-free");
 
-typedef void TecsLock;
+typedef void tecs_lock_t;
 
 namespace Tecs {
     template<typename T>

@@ -1,6 +1,6 @@
 function(TecsGenerateCHeaders)
     set(options OBJECT_TARGET)
-    set(oneValueArgs TARGET_NAME ECS_INCLUDE_PATH ECS_NAME)
+    set(oneValueArgs TARGET_NAME ECS_INCLUDE_PATH ECS_C_INCLUDE_PATH ECS_NAME COMPONENT_TYPE_PREFIX)
     set(multiValueArgs SOURCES LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS)
     cmake_parse_arguments(PARSE_ARGV 0 arg "${options}" "${oneValueArgs}" "${multiValueArgs}")
 
@@ -18,21 +18,37 @@ function(TecsGenerateCHeaders)
             ${arg_INCLUDE_DIRECTORIES}
     )
     target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
-        TECS_C_ABI_ECS_INCLUDE="${arg_ECS_INCLUDE_PATH}"
         TECS_C_ABI_ECS_NAME=${arg_ECS_NAME}
+        TECS_C_ABI_TYPE_PREFIX="${arg_COMPONENT_TYPE_PREFIX}"
         TECS_SHARED_INTERNAL
         ${arg_COMPILE_DEFINITIONS}
     )
+
+    if(DEFINED arg_ECS_INCLUDE_PATH)
+        target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
+            TECS_C_ABI_ECS_INCLUDE="${arg_ECS_INCLUDE_PATH}"
+        )
+    endif()
+
+    if(DEFINED arg_ECS_C_INCLUDE_PATH)
+        target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
+            TECS_C_ABI_ECS_C_INCLUDE="${arg_ECS_C_INCLUDE_PATH}"
+        )
+    endif()
 
     string(REPLACE "-" "_" OUTPUT_PREFIX_NAME ${arg_TARGET_NAME})
 
     add_custom_command(
         OUTPUT
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_lock_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_entity_gen.h
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
         COMMAND
             ${arg_TARGET_NAME}-codegen
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_lock_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_entity_gen.h
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
             ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
@@ -58,6 +74,7 @@ function(TecsGenerateCHeaders)
         ${arg_TARGET_NAME}
         PUBLIC
             ${TECS_PROJECT_ROOT}/inc
+            ${CMAKE_CURRENT_BINARY_DIR}/include
         PRIVATE
             ${arg_INCLUDE_DIRECTORIES}
     )

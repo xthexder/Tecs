@@ -34,3 +34,19 @@ namespace testing {
         GlobalComponent(size_t initial_value) : globalCounter(initial_value) {}
     };
 }; // namespace testing
+
+typedef struct transform_t {
+    testing::Transform transform;
+} transform_t;
+
+typedef struct renderable_t {
+    testing::Renderable renderable;
+} renderable_t;
+
+typedef struct script_t {
+    testing::Script script;
+} script_t;
+
+typedef struct global_component_t {
+    testing::GlobalComponent global;
+} global_component_t;

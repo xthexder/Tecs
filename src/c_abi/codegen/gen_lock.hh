@@ -2,12 +2,73 @@
 
 #include "gen_common.hh"
 
-template<typename T>
-void generateLockCC(T &out) {
+template<typename S>
+void generateLockH(S &out) {
+    out << R"RAWSTR(#pragma once
+
+#include "c_abi/Tecs_entity.h"
+#include "c_abi/Tecs_entity_view.h"
+#include "c_abi/Tecs_export.h"
+
+#ifdef __cplusplus
+extern "C" {
+#else
+    #include <stdint.h>
+
+typedef uint8_t bool;
+#endif
+
+#include <stddef.h>
+)RAWSTR";
+#ifdef TECS_C_ABI_ECS_C_INCLUDE
+    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
+#endif
+    out << R"RAWSTR(
+
+typedef void tecs_lock_t;
+)RAWSTR";
+    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
+    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
+    for (size_t i = 0; i < snakeCaseNames.size(); i++) {
+        auto &scn = snakeCaseNames[i];
+        out << std::endl;
+        out << "TECS_EXPORT bool Tecs_lock_is_write_" << scn << "_allowed(tecs_lock_t *dynLockPtr);" << std::endl;
+        out << "TECS_EXPORT bool Tecs_lock_is_read_" << scn << "_allowed(tecs_lock_t *dynLockPtr);" << std::endl;
+
+        out << std::endl;
+        if (!globalList[i]) {
+
+            out << "TECS_EXPORT size_t Tecs_previous_entities_with_" << scn
+                << "(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output);" << std::endl;
+            out << "TECS_EXPORT size_t Tecs_entities_with_" << scn
+                << "(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output);" << std::endl;
+        } else {
+            out << "TECS_EXPORT bool Tecs_has_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+            out << "TECS_EXPORT bool Tecs_had_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+            out << "TECS_EXPORT const void *Tecs_const_get_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+            out << "TECS_EXPORT void *Tecs_get_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+            out << "TECS_EXPORT const void *Tecs_get_previous_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+            out << "TECS_EXPORT void *Tecs_set_" << scn << "(tecs_lock_t *dynLockPtr, const void *value);" << std::endl;
+            out << "TECS_EXPORT void Tecs_unset_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
+        }
+    }
+    out << R"RAWSTR(
+#ifdef __cplusplus
+}
+#endif
+)RAWSTR";
+}
+
+template<typename S>
+void generateLockCC(S &out) {
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
+    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
 #ifdef TECS_C_ABI_ECS_INCLUDE
     out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
+#endif
+#ifdef TECS_C_ABI_ECS_C_INCLUDE
+    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
 #endif
     out << R"RAWSTR(
 #include <Tecs.hh>
@@ -20,17 +81,17 @@ using DynamicLock = Tecs::DynamicLock<ECS>;
 
 extern "C" {
 
-TECS_EXPORT size_t Tecs_lock_get_transaction_id(TecsLock *dynLockPtr) {
+TECS_EXPORT size_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return dynLock->GetTransactionId();
 }
 
-TECS_EXPORT bool Tecs_lock_is_add_remove_allowed(TecsLock *dynLockPtr) {
+TECS_EXPORT bool Tecs_lock_is_add_remove_allowed(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return dynLock->TryLock<Tecs::AddRemove>().has_value();
 }
 
-TECS_EXPORT bool Tecs_lock_is_write_allowed(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT bool Tecs_lock_is_write_allowed(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -49,7 +110,7 @@ TECS_EXPORT bool Tecs_lock_is_write_allowed(TecsLock *dynLockPtr, size_t compone
     }
 }
 
-TECS_EXPORT bool Tecs_lock_is_read_allowed(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT bool Tecs_lock_is_read_allowed(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -68,7 +129,7 @@ TECS_EXPORT bool Tecs_lock_is_read_allowed(TecsLock *dynLockPtr, size_t componen
     }
 }
 
-TECS_EXPORT size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t componentIndex, TecsEntityView *output) {
+TECS_EXPORT size_t Tecs_previous_entities_with(tecs_lock_t *dynLockPtr, size_t componentIndex, tecs_entity_view_t *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     Tecs::EntityView view;
     // For each component...
@@ -92,7 +153,7 @@ TECS_EXPORT size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t comp
         std::cerr << "Component index out of range: " << componentIndex << std::endl;
         return 0;
     }
-    *output = TecsEntityView {
+    *output = tecs_entity_view_t {
         .storage = view.storage,
         .start_index = view.start_index,
         .end_index = view.end_index,
@@ -100,7 +161,7 @@ TECS_EXPORT size_t Tecs_previous_entities_with(TecsLock *dynLockPtr, size_t comp
     return view.size();
 }
 
-TECS_EXPORT size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentIndex, TecsEntityView *output) {
+TECS_EXPORT size_t Tecs_entities_with(tecs_lock_t *dynLockPtr, size_t componentIndex, tecs_entity_view_t *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     Tecs::EntityView view;
     // For each component...
@@ -124,7 +185,7 @@ TECS_EXPORT size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentInde
         std::cerr << "Component index out of range: " << componentIndex << std::endl;
         return 0;
     }
-    *output = TecsEntityView {
+    *output = tecs_entity_view_t {
         .storage = view.storage,
         .start_index = view.start_index,
         .end_index = view.end_index,
@@ -132,10 +193,10 @@ TECS_EXPORT size_t Tecs_entities_with(TecsLock *dynLockPtr, size_t componentInde
     return view.size();
 }
 
-TECS_EXPORT size_t Tecs_previous_entities(TecsLock *dynLockPtr, TecsEntityView *output) {
+TECS_EXPORT size_t Tecs_previous_entities(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto view = dynLock->PreviousEntities();
-    *output = TecsEntityView {
+    *output = tecs_entity_view_t {
         .storage = view.storage,
         .start_index = view.start_index,
         .end_index = view.end_index,
@@ -143,10 +204,10 @@ TECS_EXPORT size_t Tecs_previous_entities(TecsLock *dynLockPtr, TecsEntityView *
     return view.size();
 }
 
-TECS_EXPORT size_t Tecs_entities(TecsLock *dynLockPtr, TecsEntityView *output) {
+TECS_EXPORT size_t Tecs_entities(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto view = dynLock->Entities();
-    *output = TecsEntityView {
+    *output = tecs_entity_view_t {
         .storage = view.storage,
         .start_index = view.start_index,
         .end_index = view.end_index,
@@ -154,7 +215,7 @@ TECS_EXPORT size_t Tecs_entities(TecsLock *dynLockPtr, TecsEntityView *output) {
     return view.size();
 }
 
-TECS_EXPORT TecsEntity Tecs_new_entity(TecsLock *dynLockPtr) {
+TECS_EXPORT tecs_entity_t Tecs_new_entity(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     auto lock = dynLock->TryLock<Tecs::AddRemove>();
     if (!lock) {
@@ -164,7 +225,7 @@ TECS_EXPORT TecsEntity Tecs_new_entity(TecsLock *dynLockPtr) {
     return (size_t)lock->NewEntity();
 }
 
-TECS_EXPORT bool Tecs_has(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT bool Tecs_has(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -189,7 +250,7 @@ TECS_EXPORT bool Tecs_has(TecsLock *dynLockPtr, size_t componentIndex) {
     }
 }
 
-TECS_EXPORT bool Tecs_had(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT bool Tecs_had(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -214,7 +275,7 @@ TECS_EXPORT bool Tecs_had(TecsLock *dynLockPtr, size_t componentIndex) {
     }
 }
 
-TECS_EXPORT const void *Tecs_const_get(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_const_get(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -245,7 +306,7 @@ TECS_EXPORT const void *Tecs_const_get(TecsLock *dynLockPtr, size_t componentInd
     }
 }
 
-TECS_EXPORT void *Tecs_get(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT void *Tecs_get(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -280,7 +341,7 @@ TECS_EXPORT void *Tecs_get(TecsLock *dynLockPtr, size_t componentIndex) {
     }
 }
 
-TECS_EXPORT const void *Tecs_get_previous(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT const void *Tecs_get_previous(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -311,7 +372,7 @@ TECS_EXPORT const void *Tecs_get_previous(TecsLock *dynLockPtr, size_t component
     }
 }
 
-TECS_EXPORT void *Tecs_set(TecsLock *dynLockPtr, size_t componentIndex, const void *value) {
+TECS_EXPORT void *Tecs_set(tecs_lock_t *dynLockPtr, size_t componentIndex, const void *value) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -348,7 +409,7 @@ TECS_EXPORT void *Tecs_set(TecsLock *dynLockPtr, size_t componentIndex, const vo
     }
 }
 
-TECS_EXPORT void Tecs_unset(TecsLock *dynLockPtr, size_t componentIndex) {
+TECS_EXPORT void Tecs_unset(tecs_lock_t *dynLockPtr, size_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
 )RAWSTR";
@@ -376,11 +437,128 @@ TECS_EXPORT void Tecs_unset(TecsLock *dynLockPtr, size_t componentIndex) {
         std::cerr << "Component index out of range: " << componentIndex << std::endl;
     }
 }
+)RAWSTR";
+    for (size_t i = 0; i < snakeCaseNames.size(); i++) {
+        auto &scn = snakeCaseNames[i];
+        out << std::endl;
+        out << "TECS_EXPORT bool Tecs_lock_is_write_" << scn << "_allowed(tecs_lock_t *dynLockPtr) {" << std::endl;
+        out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+        out << "    return dynLock->TryLock<Tecs::Write<" << names[i] << ">>().has_value();" << std::endl;
+        out << "}" << std::endl;
+        out << std::endl;
+        out << "TECS_EXPORT bool Tecs_lock_is_read_" << scn << "_allowed(tecs_lock_t *dynLockPtr) {" << std::endl;
+        out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+        out << "    return dynLock->TryLock<Tecs::Read<" << names[i] << ">>().has_value();" << std::endl;
+        out << "}" << std::endl;
+        out << std::endl;
 
+        if (!globalList[i]) {
+            out << "TECS_EXPORT size_t Tecs_previous_entities_with_" << scn
+                << "(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    Tecs::EntityView view = dynLock->PreviousEntitiesWith<" << names[i] << ">();" << std::endl;
+            out << "    *output = tecs_entity_view_t{" << std::endl;
+            out << "        .storage = view.storage," << std::endl;
+            out << "        .start_index = view.start_index," << std::endl;
+            out << "        .end_index = view.end_index," << std::endl;
+            out << "    };" << std::endl;
+            out << "    return view.size();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT size_t Tecs_entities_with_" << scn
+                << "(tecs_lock_t *dynLockPtr, tecs_entity_view_t *output) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    Tecs::EntityView view = dynLock->EntitiesWith<" << names[i] << ">();" << std::endl;
+            out << "    *output = tecs_entity_view_t{" << std::endl;
+            out << "        .storage = view.storage," << std::endl;
+            out << "        .start_index = view.start_index," << std::endl;
+            out << "        .end_index = view.end_index," << std::endl;
+            out << "    };" << std::endl;
+            out << "    return view.size();" << std::endl;
+            out << "}" << std::endl;
+        } else {
+            out << "TECS_EXPORT bool Tecs_has_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    return dynLock->Has<" << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT bool Tecs_had_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    return dynLock->Had<" << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT const void *Tecs_const_get_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
+            out << "    if (!lock) {" << std::endl;
+            out << "        std::cerr << \"Error: Lock does not have " << names[i]
+                << " read permissions\" << std::endl;" << std::endl;
+            out << "        return nullptr;" << std::endl;
+            out << "    }" << std::endl;
+            out << "    return &lock->Get<const " << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT void *Tecs_get_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    auto lock1 = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
+            out << "    if (lock1) {" << std::endl;
+            out << "        return &lock1->Get<" << names[i] << ">();" << std::endl;
+            out << "    }" << std::endl;
+            out << "    auto lock2 = dynLock->TryLock<Tecs::Write<" << names[i] << ">>();" << std::endl;
+            out << "    if (!lock2) {" << std::endl;
+            out << "        std::cerr << \"Error: Lock does not have " << names[i]
+                << " write permissions\" << std::endl;" << std::endl;
+            out << "        return nullptr;" << std::endl;
+            out << "    }" << std::endl;
+            out << "    return &lock2->Get<" << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT const void *Tecs_get_previous_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
+            out << "    if (!lock) {" << std::endl;
+            out << "        std::cerr << \"Error: Lock does not have " << names[i]
+                << " read permissions\" << std::endl;" << std::endl;
+            out << "        return nullptr;" << std::endl;
+            out << "    }" << std::endl;
+            out << "    return &lock->GetPrevious<const " << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT void *Tecs_set_" << scn << "(tecs_lock_t *dynLockPtr, const void *value) {"
+                << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    auto lock1 = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
+            out << "    if (lock1) {" << std::endl;
+            out << "        return &lock1->Set<" << names[i] << ">(*static_cast<const " << names[i] << "*>(value));"
+                << std::endl;
+            out << "    }" << std::endl;
+            out << "    auto lock2 = dynLock->TryLock<Tecs::Write<" << names[i] << ">>();" << std::endl;
+            out << "    if (!lock2) {" << std::endl;
+            out << "        std::cerr << \"Error: Lock does not have " << names[i]
+                << " write permissions\" << std::endl;" << std::endl;
+            out << "        return nullptr;" << std::endl;
+            out << "    }" << std::endl;
+            out << "    return &lock2->Set<" << names[i] << ">(*static_cast<const " << names[i] << "*>(value));"
+                << std::endl;
+            out << "}" << std::endl;
+            out << std::endl;
+            out << "TECS_EXPORT void Tecs_unset_" << scn << "(tecs_lock_t *dynLockPtr) {" << std::endl;
+            out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
+            out << "    auto lock = dynLock->TryLock<Tecs::AddRemove>();" << std::endl;
+            out << "    if (!lock) {" << std::endl;
+            out << "        std::cerr << \"Error: Lock does not have AddRemove permissions\" << std::endl;"
+                << std::endl;
+            out << "        return;" << std::endl;
+            out << "    }" << std::endl;
+            out << "    lock->Unset<" << names[i] << ">();" << std::endl;
+            out << "}" << std::endl;
+        }
+    }
+    out << R"RAWSTR(
 // Observer<Event> Watch();
 // void StopWatching(Observer<Event> observer);
 
-TECS_EXPORT TecsLock *Tecs_lock_read_only(TecsLock *dynLockPtr) {
+TECS_EXPORT tecs_lock_t *Tecs_lock_read_only(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return new DynamicLock(dynLock->ReadOnlySubset());
 }

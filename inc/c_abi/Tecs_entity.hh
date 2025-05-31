@@ -77,12 +77,12 @@ namespace Tecs::abi {
     public:
         template<typename LockType>
         inline bool Exists(const LockType &lock) const {
-            return Tecs_entity_exists(lock.base.get(), (TecsEntity)(*this));
+            return Tecs_entity_exists(lock.base.get(), (tecs_entity_t)(*this));
         }
 
         template<typename LockType>
         inline bool Existed(const LockType &lock) const {
-            return Tecs_entity_existed(lock.base.get(), (TecsEntity)(*this));
+            return Tecs_entity_existed(lock.base.get(), (tecs_entity_t)(*this));
         }
 
         template<typename... Tn, typename LockType>
@@ -93,10 +93,10 @@ namespace Tecs::abi {
                 std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
                 componentBits[0] = true;
                 ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);
-                return Tecs_entity_has_bitset(lock.base.get(), (TecsEntity)(*this), componentBits.to_ullong());
+                return Tecs_entity_has_bitset(lock.base.get(), (tecs_entity_t)(*this), componentBits.to_ullong());
             } else {
                 return (Tecs_entity_has(lock.base.get(),
-                            (TecsEntity)(*this),
+                            (tecs_entity_t)(*this),
                             LockType::ECS::template GetComponentIndex<Tn>()) &&
                         ...);
             }
@@ -110,10 +110,10 @@ namespace Tecs::abi {
                 std::bitset<1 + LockType::ECS::GetComponentCount()> componentBits;
                 componentBits[0] = true;
                 ((componentBits[1 + LockType::ECS::template GetComponentIndex<Tn>()] = true), ...);
-                return Tecs_entity_had_bitset(lock.base.get(), (TecsEntity)(*this), componentBits.to_ullong());
+                return Tecs_entity_had_bitset(lock.base.get(), (tecs_entity_t)(*this), componentBits.to_ullong());
             } else {
                 return (Tecs_entity_had(lock.base.get(),
-                            (TecsEntity)(*this),
+                            (tecs_entity_t)(*this),
                             LockType::ECS::template GetComponentIndex<Tn>()) &&
                         ...);
             }
@@ -182,7 +182,7 @@ namespace Tecs::abi {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
 
             constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
-            return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (TecsEntity)(*this), componentIndex, &value));
+            return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (tecs_entity_t)(*this), componentIndex, &value));
         }
 
         template<typename T, typename LockType, typename... Args>
@@ -193,7 +193,7 @@ namespace Tecs::abi {
             T temp = T(std::forward<Args>(args)...);
 
             constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
-            return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (TecsEntity)(*this), componentIndex, &temp));
+            return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (tecs_entity_t)(*this), componentIndex, &temp));
         }
 
         template<typename... Tn, typename LockType>
@@ -202,7 +202,9 @@ namespace Tecs::abi {
             static_assert(!contains_global_components<Tn...>(),
                 "Global components must be removed through lock.Unset()");
 
-            (Tecs_entity_unset(lock.base.get(), (TecsEntity)(*this), LockType::ECS::template GetComponentIndex<Tn>()),
+            (Tecs_entity_unset(lock.base.get(),
+                 (tecs_entity_t)(*this),
+                 LockType::ECS::template GetComponentIndex<Tn>()),
                 ...);
         }
 
@@ -210,7 +212,7 @@ namespace Tecs::abi {
         inline void Destroy(const LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
 
-            Tecs_entity_destroy(lock.base.get(), (TecsEntity)(*this));
+            Tecs_entity_destroy(lock.base.get(), (tecs_entity_t)(*this));
         }
 
         template<typename LockType>

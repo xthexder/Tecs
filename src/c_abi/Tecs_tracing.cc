@@ -20,22 +20,23 @@ using ECS = Tecs::ECS<>;
 
 extern "C" {
 
-TECS_EXPORT void Tecs_ecs_start_perf_trace(TecsECS *ecsPtr) {
+TECS_EXPORT void Tecs_ecs_start_perf_trace(tecs_ecs_t *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     ecs->StartTrace();
 }
 
-TECS_EXPORT TecsPerfTrace *Tecs_ecs_stop_perf_trace(TecsECS *ecsPtr) {
+TECS_EXPORT tecs_perf_trace_t *Tecs_ecs_stop_perf_trace(tecs_ecs_t *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return new Tecs::PerformanceTrace(ecs->StopTrace());
 }
 
-TECS_EXPORT void Tecs_perf_trace_set_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, const char *threadName) {
+TECS_EXPORT void Tecs_perf_trace_set_thread_name(tecs_perf_trace_t *tracePtr, size_t threadIdHash,
+    const char *threadName) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     trace->SetThreadName(std::string(threadName), threadIdHash);
 }
 
-TECS_EXPORT size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size_t threadIdHash, size_t bufferSize,
+TECS_EXPORT size_t Tecs_perf_trace_get_thread_name(tecs_perf_trace_t *tracePtr, size_t threadIdHash, size_t bufferSize,
     char *output) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     std::string name = trace->GetThreadName(threadIdHash);
@@ -45,12 +46,12 @@ TECS_EXPORT size_t Tecs_perf_trace_get_thread_name(TecsPerfTrace *tracePtr, size
     return name.size() + 1;
 }
 
-TECS_EXPORT void Tecs_perf_trace_save_to_csv(TecsPerfTrace *tracePtr, const char *filePath) {
+TECS_EXPORT void Tecs_perf_trace_save_to_csv(tecs_perf_trace_t *tracePtr, const char *filePath) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     trace->SaveToCSV(std::string(filePath));
 }
 
-TECS_EXPORT void Tecs_ecs_perf_trace_release(TecsPerfTrace *tracePtr) {
+TECS_EXPORT void Tecs_ecs_perf_trace_release(tecs_perf_trace_t *tracePtr) {
     Tecs::PerformanceTrace *trace = static_cast<Tecs::PerformanceTrace *>(tracePtr);
     delete trace;
 }

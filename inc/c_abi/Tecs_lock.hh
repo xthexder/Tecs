@@ -11,7 +11,7 @@ namespace Tecs::abi {
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
-        std::shared_ptr<TecsLock> base;
+        std::shared_ptr<tecs_lock_t> base;
 
         mutable std::tuple<AllComponentTypes *...> cachedStorage;
         mutable std::tuple<const AllComponentTypes *...> cachedConstStorage;
@@ -19,7 +19,7 @@ namespace Tecs::abi {
         mutable size_t cacheCounter;
 
     public:
-        inline Lock(const std::shared_ptr<TecsLock> &lock) : base(lock) {
+        inline Lock(const std::shared_ptr<tecs_lock_t> &lock) : base(lock) {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 if (!Tecs_lock_is_add_remove_allowed(lock.get())) {
                     throw std::runtime_error("Lock is missing AddRemove permissions");
@@ -78,7 +78,7 @@ namespace Tecs::abi {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
-            TecsEntityView view = {};
+            tecs_entity_view_t view = {};
             (void)Tecs_previous_entities_with(base.get(), componentIndex, &view);
             return EntityView(view);
         }
@@ -88,19 +88,19 @@ namespace Tecs::abi {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
-            TecsEntityView view = {};
+            tecs_entity_view_t view = {};
             (void)Tecs_entities_with(base.get(), componentIndex, &view);
             return EntityView(view);
         }
 
         inline const EntityView PreviousEntities() const {
-            TecsEntityView view = {};
+            tecs_entity_view_t view = {};
             (void)Tecs_previous_entities(base.get(), &view);
             return EntityView(view);
         }
 
         inline const EntityView Entities() const {
-            TecsEntityView view = {};
+            tecs_entity_view_t view = {};
             (void)Tecs_entities(base.get(), &view);
             return EntityView(view);
         }

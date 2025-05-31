@@ -8,7 +8,7 @@
 
 namespace Tecs::abi {
     struct PerformanceTrace {
-        std::shared_ptr<TecsPerfTrace> base;
+        std::shared_ptr<tecs_perf_trace_t> base;
 
         void SetThreadName(const std::string &name, size_t threadIdHash) {
             Tecs_perf_trace_set_thread_name(base.get(), threadIdHash, name.c_str());

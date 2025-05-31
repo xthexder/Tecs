@@ -26,7 +26,7 @@ namespace Tecs::abi {
             typedef const Entity &reference;
             typedef std::random_access_iterator_tag iterator_category;
 
-            iterator(const TecsEntityView &view, size_t index = 0)
+            iterator(const tecs_entity_view_t &view, size_t index = 0)
                 : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(cacheInvalidationCounter) {}
 
             inline const Entity *begin_uncached() const {
@@ -117,7 +117,7 @@ namespace Tecs::abi {
                 return view.storage != other.view.storage || i != other.i;
             }
 
-            const TecsEntityView &view;
+            const tecs_entity_view_t &view;
             size_t i;
 
             mutable const Entity *cachedBase;
@@ -127,7 +127,7 @@ namespace Tecs::abi {
         typedef std::reverse_iterator<iterator> reverse_iterator;
 
         EntityView() {}
-        EntityView(const TecsEntityView &view) : base(view) {
+        EntityView(const tecs_entity_view_t &view) : base(view) {
 #ifndef TECS_UNCHECKED_MODE
             if (view.storage == nullptr) {
                 throw std::runtime_error("EntityView storage is null");
@@ -181,11 +181,11 @@ namespace Tecs::abi {
 #ifndef TECS_UNCHECKED_MODE
             if (base.storage == nullptr) throw std::runtime_error("EntityView::subview storage is null");
 #endif
-            return TecsEntityView{base.storage,
+            return tecs_entity_view_t{base.storage,
                 base.start_index + offset,
                 std::min(base.end_index, base.start_index + offset + count)};
         }
 
-        TecsEntityView base;
+        tecs_entity_view_t base;
     };
 }; // namespace Tecs::abi

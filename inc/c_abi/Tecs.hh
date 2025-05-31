@@ -26,17 +26,28 @@ namespace Tecs::abi {
     template<typename... Tn>
     class ECS {
     private:
-        TecsECS *base;
+        tecs_ecs_t *base;
         bool shouldReleaseBase = false;
 
     public:
-        inline ECS(TecsECS *base) : base(base) {
+        inline ECS(tecs_ecs_t *base) : base(base) {
             auto count = GetComponentCount();
-            auto baseCount = Tecs_ecs_get_component_count(base);
+            auto baseCount = Tecs_ecs_get_component_count();
             if (count != baseCount) {
                 throw std::runtime_error("Component count missmatch: count " + std::to_string(count) + " != base " +
                                          std::to_string(baseCount));
             }
+            (
+                [&] {
+                    auto size = sizeof(Tn);
+                    auto baseSize = Tecs_ecs_get_component_size(GetComponentIndex<Tn>());
+                    if (size != baseSize) {
+                        throw std::runtime_error("Component " + std::string(typeid(Tn).name()) +
+                                                 " size missmatch: size " + std::to_string(size) + " != base " +
+                                                 std::to_string(baseSize));
+                    }
+                }(),
+                ...);
         }
 
         inline ECS() : ECS(Tecs_make_ecs_instance()) {
@@ -77,7 +88,7 @@ namespace Tecs::abi {
                 writePermissions[1 + GetComponentIndex<Tn>()] = is_write_allowed<Tn, LockType>()
             ), ...);
             // clang-format on
-            TecsLock *l = nullptr;
+            tecs_lock_t *l = nullptr;
             if constexpr (sizeof...(Tn) <= std::numeric_limits<uint64_t>::digits) {
                 l = Tecs_ecs_start_transaction(base, readPermissions.to_ullong(), writePermissions.to_ullong());
             } else {
@@ -85,7 +96,7 @@ namespace Tecs::abi {
                     readPermissions.to_string().c_str(),
                     writePermissions.to_string().c_str());
             }
-            std::shared_ptr<TecsLock> lockPtr(l, [](auto *ptr) {
+            std::shared_ptr<tecs_lock_t> lockPtr(l, [](auto *ptr) {
                 Tecs_lock_release(ptr);
             });
             return LockType(lockPtr);
@@ -97,8 +108,8 @@ namespace Tecs::abi {
         }
 
         inline PerformanceTrace StopTrace() {
-            TecsPerfTrace *trace = Tecs_ecs_stop_perf_trace(base);
-            return PerformanceTrace{std::shared_ptr<TecsPerfTrace>(trace, [](auto *ptr) {
+            tecs_perf_trace_t *trace = Tecs_ecs_stop_perf_trace(base);
+            return PerformanceTrace{std::shared_ptr<tecs_perf_trace_t>(trace, [](auto *ptr) {
                 Tecs_ecs_perf_trace_release(ptr);
             })};
         }
@@ -131,9 +142,9 @@ namespace Tecs::abi {
          * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
          */
         inline std::string GetComponentName(size_t componentIndex) {
-            size_t size = Tecs_ecs_get_component_name(base, componentIndex, 0, nullptr);
+            size_t size = Tecs_ecs_get_component_name(componentIndex, 0, nullptr);
             std::string str(size, '\0');
-            Tecs_ecs_get_component_name(base, componentIndex, size, str.data());
+            Tecs_ecs_get_component_name(componentIndex, size, str.data());
             return str;
         }
 
@@ -154,7 +165,7 @@ namespace Tecs::abi {
         }
 
         inline size_t GetBytesPerEntity() {
-            return Tecs_ecs_get_bytes_per_entity(base);
+            return Tecs_ecs_get_bytes_per_entity();
         }
 
     private:
