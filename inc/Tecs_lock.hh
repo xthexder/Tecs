@@ -47,22 +47,23 @@ namespace Tecs {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
     class Lock<ECSType<AllComponentTypes...>, Permissions...> {
     private:
+        using PermissionBitset = std::bitset<1 + sizeof...(AllComponentTypes)>;
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
         ECS &instance;
         std::shared_ptr<Transaction<ECS>> transaction;
-        std::bitset<1 + sizeof...(AllComponentTypes)> writePermissions;
+        PermissionBitset writePermissions;
 
         // Private constructor for DynamicLock to Lock conversion
         template<typename... PermissionsSource>
-        inline Lock(ECS &instance, decltype(transaction) transaction, decltype(writePermissions) writePermissions)
+        inline Lock(ECS &instance, decltype(transaction) transaction, PermissionBitset writePermissions)
             : instance(instance), transaction(transaction), writePermissions(writePermissions) {}
 
     public:
         // Start a new transaction
         inline Lock(ECS &instance) : instance(instance) {
-            std::bitset<1 + sizeof...(AllComponentTypes)> readPermissions;
+            PermissionBitset readPermissions;
             readPermissions[0] = true;
             writePermissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
@@ -468,6 +469,12 @@ namespace Tecs {
 
         const PermissionBitset readPermissions;
 
+        // Private constructor for DynamicLock to DynamicLock conversion in TryLock
+        template<typename... PermissionsSource>
+        inline DynamicLock(ECS &instance, decltype(BaseLockType::transaction) transaction,
+            PermissionBitset readPermissions, PermissionBitset writePermissions)
+            : BaseLockType(instance, transaction, writePermissions), readPermissions(readPermissions) {}
+
         template<typename LockType>
         static inline auto generateReadBitset() {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
@@ -530,16 +537,22 @@ namespace Tecs {
               readPermissions(readPermissions) {}
 
         template<typename... DynamicPermissions>
-        std::optional<Lock<ECS, DynamicPermissions...>> TryLock() const {
-            using DynamicLockType = Lock<ECS, DynamicPermissions...>;
+        std::optional<DynamicLock<ECS, DynamicPermissions...>> TryLock() const {
+            using DynamicLockType = DynamicLock<ECS, DynamicPermissions...>;
             if constexpr (BaseLockType::template has_permissions<DynamicLockType>()) {
-                return DynamicLockType(this->instance, this->transaction, this->writePermissions);
+                return DynamicLockType(this->instance,
+                    this->transaction,
+                    this->readPermissions,
+                    this->writePermissions);
             } else {
                 static const auto requestedRead = generateReadBitset<DynamicLockType>();
                 static const auto requestedWrite = generateWriteBitset<DynamicLockType>();
                 if ((requestedRead & readPermissions) == requestedRead &&
                     (requestedWrite & this->writePermissions) == requestedWrite) {
-                    return DynamicLockType(this->instance, this->transaction, this->writePermissions);
+                    return DynamicLockType(this->instance,
+                        this->transaction,
+                        this->readPermissions,
+                        this->writePermissions);
                 }
                 return {};
             }
