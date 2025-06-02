@@ -58,6 +58,8 @@ function(TecsGenerateCHeaders)
     set(BUILD_FILE_LIST
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_entity_view.cc
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_tracing.cc
+        ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_lock_gen.h
+        ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_entity_gen.h
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
