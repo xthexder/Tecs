@@ -55,11 +55,18 @@ function(TecsGenerateCHeaders)
         DEPENDS ${arg_TARGET_NAME}-codegen
     )
 
+    add_custom_target(${arg_TARGET_NAME}-codegen-output
+        DEPENDS
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_lock_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_entity_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
+            ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
+            ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
+    )
+
     set(BUILD_FILE_LIST
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_entity_view.cc
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_tracing.cc
-        ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_lock_gen.h
-        ${CMAKE_CURRENT_BINARY_DIR}/include/c_abi/${OUTPUT_PREFIX_NAME}_entity_gen.h
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_ecs_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_entity_gen.cc
         ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_PREFIX_NAME}_lock_gen.cc
@@ -80,6 +87,7 @@ function(TecsGenerateCHeaders)
         PRIVATE
             ${arg_INCLUDE_DIRECTORIES}
     )
+    add_dependencies(${arg_TARGET_NAME} ${arg_TARGET_NAME}-codegen-output)
     target_compile_definitions(${arg_TARGET_NAME} PRIVATE TECS_SHARED_INTERNAL ${arg_COMPILE_DEFINITIONS})
     if(lto_supported)
         if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
