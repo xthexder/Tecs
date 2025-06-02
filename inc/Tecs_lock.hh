@@ -452,6 +452,12 @@ namespace Tecs {
     };
 
     template<typename>
+    struct is_lock : std::false_type {};
+
+    template<typename ECS, typename... StaticPermissions>
+    struct is_lock<Lock<ECS, StaticPermissions...>> : std::true_type {};
+
+    template<typename>
     struct is_dynamic_lock : std::false_type {};
 
     template<typename ECS, typename... StaticPermissions>
