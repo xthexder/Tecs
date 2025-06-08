@@ -131,25 +131,20 @@ namespace Tecs::abi {
 
             if (cacheInvalidationCounter != lock.cacheCounter) {
                 lock.cachedStorage = {};
-                lock.cachedConstStorage = {};
                 lock.cachedPreviousStorage = {};
                 lock.cacheCounter = cacheInvalidationCounter;
             }
 
             constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
             if constexpr (std::is_const<ReturnType>()) {
-                auto *&cachedConstStorage = std::get<const CompType *>(lock.cachedConstStorage);
-                if (!cachedConstStorage) {
-                    cachedConstStorage =
-                        static_cast<const CompType *>(Tecs_const_get_entity_storage(lock.base.get(), componentIndex));
-                }
-                return cachedConstStorage[index];
-            } else {
-                auto *&cachedStorage = std::get<CompType *>(lock.cachedStorage);
+                auto *&cachedStorage = std::get<const CompType *>(lock.cachedStorage);
                 if (!cachedStorage) {
-                    cachedStorage = static_cast<CompType *>(Tecs_get_entity_storage(lock.base.get(), componentIndex));
+                    cachedStorage =
+                        static_cast<const CompType *>(Tecs_get_entity_storage(lock.base.get(), componentIndex));
                 }
                 return cachedStorage[index];
+            } else {
+                return *static_cast<T *>(Tecs_entity_get(lock.base.get(), (tecs_entity_t)(*this), componentIndex));
             }
         }
 
@@ -162,7 +157,6 @@ namespace Tecs::abi {
 
             if (cacheInvalidationCounter != lock.cacheCounter) {
                 lock.cachedStorage = {};
-                lock.cachedConstStorage = {};
                 lock.cachedPreviousStorage = {};
                 lock.cacheCounter = cacheInvalidationCounter;
             }

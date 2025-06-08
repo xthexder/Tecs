@@ -13,8 +13,7 @@ namespace Tecs::abi {
 
         std::shared_ptr<tecs_lock_t> base;
 
-        mutable std::tuple<AllComponentTypes *...> cachedStorage;
-        mutable std::tuple<const AllComponentTypes *...> cachedConstStorage;
+        mutable std::tuple<const AllComponentTypes *...> cachedStorage;
         mutable std::tuple<const AllComponentTypes *...> cachedPreviousStorage;
         mutable size_t cacheCounter;
 
