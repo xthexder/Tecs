@@ -4,7 +4,7 @@
 
 int main(int argc, char **argv) {
     if (argc != 6) {
-        std::cerr << "Usage: codegen out/lock.h out/entity.h out/ecs.cc out/entity.cc out/lock.cc";
+        std::cerr << "Usage: codegen out/lock.h out/entity.h out/ecs.cc out/entity.cc out/lock.cc" << std::endl;
         return -1;
     }
     {

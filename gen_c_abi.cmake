@@ -23,6 +23,9 @@ function(TecsGenerateCHeaders)
         TECS_SHARED_INTERNAL
         ${arg_COMPILE_DEFINITIONS}
     )
+    set_target_properties(${arg_TARGET_NAME}-codegen PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
 
     if(DEFINED arg_ECS_INCLUDE_PATH)
         target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
