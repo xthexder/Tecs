@@ -4,6 +4,8 @@
 #include "Tecs_entity_view.hh"
 #include "Tecs_lock.h"
 
+#include <memory>
+
 namespace Tecs::abi {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
     class Lock<ECSType<AllComponentTypes...>, Permissions...> {

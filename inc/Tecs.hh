@@ -151,7 +151,7 @@ namespace Tecs {
         inline static constexpr size_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
 
-            if constexpr (std::is_same<U, typename std::tuple_element<I, std::tuple<Tn...>>::type>::value) {
+            if constexpr (std::is_same<U, typename std::tuple_element_t<I, std::tuple<Tn...>>>()) {
                 return I;
             } else {
                 return GetComponentIndex<I + 1, U>();
