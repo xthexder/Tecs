@@ -312,7 +312,7 @@ namespace Tecs {
 
             // It is possible for *this to be a reference to a component's writeValidEntities list
             // Copy the index before removing components so we can complete the removal.
-            size_t copy = index;
+            TECS_ENTITY_INDEX_TYPE copy = index;
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);

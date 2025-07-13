@@ -156,10 +156,9 @@ namespace Tecs {
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
-                    instance.metadata.AccessEntity(nextIndex + count);
-                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count),
-                        1,
-                        (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
+                    TECS_ENTITY_INDEX_TYPE newIndex = (TECS_ENTITY_INDEX_TYPE)(nextIndex + count);
+                    instance.metadata.AccessEntity(newIndex);
+                    instance.freeEntities.emplace_back(newIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
                 entity = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
             } else {
@@ -314,20 +313,69 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline Observer<ECS, Event> Watch() const {
+        inline Observer<ECS, Event> Watch(EventTypeMask eventMask) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
-            auto &observerList = instance.template Observers<Event>();
-            auto &eventList = observerList.observers.emplace_back(std::make_shared<std::deque<Event>>());
-            return Observer(instance, eventList);
+            auto eventList = std::make_shared<std::deque<Event>>();
+            if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
+                if (eventMask & EVENT_MASK_ADDED) {
+                    instance.entityAddEvents.observers.emplace_back(eventList);
+                }
+                if (eventMask & EVENT_MASK_REMOVED) {
+                    instance.entityRemoveEvents.observers.emplace_back(eventList);
+                }
+                if (eventMask & EVENT_MASK_MODIFIED) {
+                    throw std::runtime_error("EntityAddRemoveEvent does not support MODIFIED event types");
+                }
+            } else if constexpr (Event::isAddRemove) {
+                if (eventMask & EVENT_MASK_ADDED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    storage.componentAddEvents.observers.emplace_back(eventList);
+                }
+                if (eventMask & EVENT_MASK_REMOVED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    storage.componentRemoveEvents.observers.emplace_back(eventList);
+                }
+            } else {
+                if (eventMask & EVENT_MASK_MODIFIED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    storage.componentModifyEvents.observers.emplace_back(eventList);
+                }
+            }
+            return Observer(instance, eventList, eventMask);
         }
 
         template<typename Event>
         inline void StopWatching(Observer<ECS, Event> &observer) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
-            auto &observers = instance.template Observers<Event>().observers;
-            observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+            if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
+                if (observer.eventMask & EVENT_MASK_ADDED) {
+                    auto &observers = instance.entityAddEvents.observers;
+                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                }
+                if (observer.eventMask & EVENT_MASK_REMOVED) {
+                    auto &observers = instance.entityRemoveEvents.observers;
+                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                }
+            } else if constexpr (Event::isAddRemove) {
+                if (observer.eventMask & EVENT_MASK_ADDED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    auto &observers = storage.componentAddEvents.observers;
+                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                }
+                if (observer.eventMask & EVENT_MASK_REMOVED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    auto &observers = storage.componentRemoveEvents.observers;
+                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                }
+            } else {
+                if (observer.eventMask & EVENT_MASK_MODIFIED) {
+                    auto &storage = instance.template Storage<typename Event::ComponentType>();
+                    auto &observers = storage.componentModifyEvents.observers;
+                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                }
+            }
             observer.eventListWeak.reset();
         }
 
@@ -371,7 +419,7 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void RemoveComponents(size_t index) const {
+        inline void RemoveComponents(TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<T>()) { // Ignore global components
                 auto &metadata = instance.metadata.writeComponents[index];
                 if (instance.template BitsetHas<T>(metadata)) {
@@ -401,7 +449,7 @@ namespace Tecs {
             }
         }
 
-        inline void RemoveAllComponents(size_t index) const {
+        inline void RemoveAllComponents(TECS_ENTITY_INDEX_TYPE index) const {
             (RemoveComponents<AllComponentTypes>(index), ...);
         }
 
