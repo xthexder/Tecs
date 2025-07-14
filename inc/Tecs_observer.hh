@@ -9,18 +9,17 @@
 #include <tuple>
 #include <type_traits>
 
+#ifdef TECS_ENABLE_TRACY
+    #include <cstring>
+    #include <tracy/Tracy.hpp>
+#endif
+
 namespace Tecs {
     enum class EventType : uint32_t {
         INVALID = 0,
         ADDED,
         REMOVED,
-        MODIFIED,
     };
-
-    typedef uint32_t EventTypeMask;
-    static const uint32_t EVENT_MASK_ADDED = 1 << 0;
-    static const uint32_t EVENT_MASK_REMOVED = 1 << 1;
-    static const uint32_t EVENT_MASK_MODIFIED = 1 << 2;
 
     template<typename T>
     struct ComponentAddRemoveEvent {
@@ -29,7 +28,7 @@ namespace Tecs {
         T component;
 
         using ComponentType = T;
-        static constexpr bool isAddRemove = true;
+        using isAddRemove = std::true_type;
 
         ComponentAddRemoveEvent() : type(EventType::INVALID), entity(), component() {}
         ComponentAddRemoveEvent(EventType type, const Entity &entity, const T &component)
@@ -37,15 +36,12 @@ namespace Tecs {
     };
 
     template<typename T>
-    struct ComponentModifiedEvent {
-        EventType type;
-        Entity entity;
-
+    struct ComponentModifiedEvent : Entity {
         using ComponentType = T;
-        static constexpr bool isAddRemove = false;
+        using isAddRemove = std::false_type;
 
-        ComponentModifiedEvent() : type(EventType::INVALID), entity() {}
-        ComponentModifiedEvent(EventType type, const Entity &entity) : type(type), entity(entity) {}
+        ComponentModifiedEvent() : Entity() {}
+        ComponentModifiedEvent(const Entity &entity) : Entity(entity) {}
     };
 
     struct EntityAddRemoveEvent {
@@ -53,7 +49,7 @@ namespace Tecs {
         Entity entity;
 
         using ComponentType = void;
-        static constexpr bool isAddRemove = true;
+        using isAddRemove = std::true_type;
 
         EntityAddRemoveEvent() : type(EventType::INVALID), entity() {}
         EntityAddRemoveEvent(EventType type, const Entity &entity) : type(type), entity(entity) {}
@@ -70,8 +66,8 @@ namespace Tecs {
     class Observer {
     public:
         Observer() : ecs(nullptr) {}
-        Observer(ECSType &ecs, std::shared_ptr<std::deque<EventType>> &eventList, EventTypeMask eventMask)
-            : ecs(&ecs), eventMask(eventMask), eventListWeak(eventList) {}
+        Observer(ECSType &ecs, std::shared_ptr<std::deque<EventType>> &eventList)
+            : ecs(&ecs), eventListWeak(eventList) {}
 
         /**
          * Poll for the next event that occured. Returns false if there are no more events.
@@ -97,12 +93,11 @@ namespace Tecs {
 
         friend bool operator==(const std::shared_ptr<std::deque<EventType>> &lhs,
             const Observer<ECSType, EventType> &rhs) {
-            return lhs.eventMask == rhs.eventMask && lhs == rhs.eventListWeak.lock();
+            return lhs == rhs.eventListWeak.lock();
         }
 
     private:
         ECSType *ecs;
-        EventTypeMask eventMask;
         std::weak_ptr<std::deque<EventType>> eventListWeak;
 
         template<typename, typename...>
@@ -118,7 +113,14 @@ namespace Tecs {
             if (!writeQueue) writeQueue = std::make_shared<std::deque<Event>>();
         }
 
+        template<typename... Args>
+        void AddEvent(Args &&...args) {
+            if (observers.empty()) return;
+            writeQueue->emplace_back(std::forward<Args>(args)...);
+        }
+
         void Commit() {
+            if (writeQueue->empty()) return;
             for (auto &observer : observers) {
                 observer->insert(observer->end(), writeQueue->begin(), writeQueue->end());
             }

@@ -313,36 +313,22 @@ namespace Tecs {
         }
 
         template<typename Event>
-        inline Observer<ECS, Event> Watch(EventTypeMask eventMask) const {
+        inline Observer<ECS, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
             auto eventList = std::make_shared<std::deque<Event>>();
             if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
-                if (eventMask & EVENT_MASK_ADDED) {
-                    instance.entityAddEvents.observers.emplace_back(eventList);
-                }
-                if (eventMask & EVENT_MASK_REMOVED) {
-                    instance.entityRemoveEvents.observers.emplace_back(eventList);
-                }
-                if (eventMask & EVENT_MASK_MODIFIED) {
-                    throw std::runtime_error("EntityAddRemoveEvent does not support MODIFIED event types");
-                }
-            } else if constexpr (Event::isAddRemove) {
-                if (eventMask & EVENT_MASK_ADDED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    storage.componentAddEvents.observers.emplace_back(eventList);
-                }
-                if (eventMask & EVENT_MASK_REMOVED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    storage.componentRemoveEvents.observers.emplace_back(eventList);
-                }
+                instance.entityAddEvents.observers.emplace_back(eventList);
+                instance.entityRemoveEvents.observers.emplace_back(eventList);
+            } else if constexpr (Event::isAddRemove()) {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                storage.componentAddEvents.observers.emplace_back(eventList);
+                storage.componentRemoveEvents.observers.emplace_back(eventList);
             } else {
-                if (eventMask & EVENT_MASK_MODIFIED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    storage.componentModifyEvents.observers.emplace_back(eventList);
-                }
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                storage.componentModifyEvents.observers.emplace_back(eventList);
             }
-            return Observer(instance, eventList, eventMask);
+            return Observer(instance, eventList);
         }
 
         template<typename Event>
@@ -350,31 +336,20 @@ namespace Tecs {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
             if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
-                if (observer.eventMask & EVENT_MASK_ADDED) {
-                    auto &observers = instance.entityAddEvents.observers;
-                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
-                }
-                if (observer.eventMask & EVENT_MASK_REMOVED) {
-                    auto &observers = instance.entityRemoveEvents.observers;
-                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
-                }
-            } else if constexpr (Event::isAddRemove) {
-                if (observer.eventMask & EVENT_MASK_ADDED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    auto &observers = storage.componentAddEvents.observers;
-                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
-                }
-                if (observer.eventMask & EVENT_MASK_REMOVED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    auto &observers = storage.componentRemoveEvents.observers;
-                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
-                }
+                auto &observers = instance.entityAddEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                auto &observers2 = instance.entityRemoveEvents.observers;
+                observers2.erase(std::remove(observers2.begin(), observers2.end(), eventList), observers2.end());
+            } else if constexpr (Event::isAddRemove()) {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                auto &observers = storage.componentAddEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                auto &observers2 = storage.componentRemoveEvents.observers;
+                observers2.erase(std::remove(observers2.begin(), observers2.end(), eventList), observers2.end());
             } else {
-                if (observer.eventMask & EVENT_MASK_MODIFIED) {
-                    auto &storage = instance.template Storage<typename Event::ComponentType>();
-                    auto &observers = storage.componentModifyEvents.observers;
-                    observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
-                }
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                auto &observers = storage.componentModifyEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
             }
             observer.eventListWeak.reset();
         }

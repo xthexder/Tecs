@@ -32,11 +32,9 @@ int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
-        entityObserver = writeLock.Watch<Tecs::EntityAddRemoveEvent>(Tecs::EVENT_MASK_ADDED | Tecs::EVENT_MASK_REMOVED);
-        transformObserver = writeLock.Watch<Tecs::ComponentAddRemoveEvent<Transform>>(
-            Tecs::EVENT_MASK_ADDED | Tecs::EVENT_MASK_REMOVED);
-        globalCompObserver = writeLock.Watch<Tecs::ComponentAddRemoveEvent<GlobalComponent>>(
-            Tecs::EVENT_MASK_ADDED | Tecs::EVENT_MASK_REMOVED);
+        entityObserver = writeLock.Watch<Tecs::EntityAddRemoveEvent>();
+        transformObserver = writeLock.Watch<Tecs::ComponentAddRemoveEvent<Transform>>();
+        globalCompObserver = writeLock.Watch<Tecs::ComponentAddRemoveEvent<GlobalComponent>>();
 
         Assert(writeLock.GetTransactionId() == 1, "Expected transaction id to be 1");
     }

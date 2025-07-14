@@ -256,6 +256,9 @@ namespace Tecs {
                 // Commit observers
                 if constexpr (is_add_remove_allowed<LockType>()) {
                     if (this->writeAccessedFlags[0]) {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                        ZoneNamedN(tracyCommitScope3, "CommitEntityEvent", true);
+#endif
                         this->instance.entityAddEvents.Commit();
                         this->instance.entityRemoveEvents.Commit();
                     }
@@ -263,15 +266,14 @@ namespace Tecs {
                 ( // For each AllComponentTypes
                     [&] {
                         if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
-#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
-                            ZoneNamedN(tracyCommitScope3, "CommitEvent", true);
-                            ZoneTextV(tracyCommitScope3,
-                                typeid(AllComponentTypes).name(),
-                                std::strlen(typeid(AllComponentTypes).name()));
-#endif
-                            auto &storage = this->instance.template Storage<AllComponentTypes>();
-
                             if (this->instance.template BitsetHas<AllComponentTypes>(this->writeAccessedFlags)) {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                                ZoneNamedN(tracyCommitScope3, "CommitComponentEvent", true);
+                                ZoneTextV(tracyCommitScope3,
+                                    typeid(AllComponentTypes).name(),
+                                    std::strlen(typeid(AllComponentTypes).name()));
+#endif
+                                auto &storage = this->instance.template Storage<AllComponentTypes>();
                                 if constexpr (is_add_remove_allowed<LockType>()) {
                                     storage.componentAddEvents.Commit();
                                     storage.componentRemoveEvents.Commit();
@@ -380,11 +382,11 @@ namespace Tecs {
                 // Compare new and old metadata to notify observers
                 if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
                     if (oldMetadata[0]) {
-                        this->instance.entityRemoveEvents.writeQueue->emplace_back(EventType::REMOVED,
+                        this->instance.entityRemoveEvents.AddEvent(EventType::REMOVED,
                             Entity(index, oldMetadata.generation));
                     }
                     if (newMetadata[0]) {
-                        this->instance.entityAddEvents.writeQueue->emplace_back(EventType::ADDED,
+                        this->instance.entityAddEvents.AddEvent(EventType::ADDED,
                             Entity(index, newMetadata.generation));
                     }
                 }
@@ -410,14 +412,10 @@ namespace Tecs {
                     const auto &newMetadata = this->instance.globalWriteMetadata;
                     if (this->instance.template BitsetHas<U>(newMetadata)) {
                         if (!this->instance.template BitsetHas<U>(oldMetadata)) {
-                            storage.componentAddEvents.writeQueue->emplace_back(EventType::ADDED,
-                                Entity(),
-                                storage.writeComponents[0]);
+                            storage.componentAddEvents.AddEvent(EventType::ADDED, Entity(), storage.writeComponents[0]);
                         }
                     } else if (this->instance.template BitsetHas<U>(oldMetadata)) {
-                        storage.componentRemoveEvents.writeQueue->emplace_back(EventType::REMOVED,
-                            Entity(),
-                            storage.readComponents[0]);
+                        storage.componentRemoveEvents.AddEvent(EventType::REMOVED, Entity(), storage.readComponents[0]);
                     }
                 }
                 if (this->instance.template BitsetHas<U>(this->writeAccessedFlags)) {
@@ -429,7 +427,7 @@ namespace Tecs {
                         if constexpr (is_equals_comparable<U>()) {
                             if (storage.writeComponents[0] == storage.readComponents[0]) continue;
                         }
-                        storage.componentModifyEvents.writeQueue->emplace_back(EventType::MODIFIED, Entity());
+                        storage.componentModifyEvents.AddEvent();
                     }
                 }
             } else {
@@ -456,12 +454,12 @@ namespace Tecs {
                         bool oldExists = this->instance.template BitsetHas<U>(oldMetadata);
                         if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
                             if (oldExists) {
-                                storage.componentRemoveEvents.writeQueue->emplace_back(EventType::REMOVED,
+                                storage.componentRemoveEvents.AddEvent(EventType::REMOVED,
                                     Entity(index, oldMetadata.generation),
                                     storage.readComponents[index]);
                             }
                             if (newExists) {
-                                storage.componentAddEvents.writeQueue->emplace_back(EventType::ADDED,
+                                storage.componentAddEvents.AddEvent(EventType::ADDED,
                                     Entity(index, newMetadata.generation),
                                     storage.writeComponents[index]);
                             }
@@ -481,8 +479,7 @@ namespace Tecs {
                             if constexpr (is_equals_comparable<U>()) {
                                 if (storage.writeComponents[index] == storage.readComponents[index]) continue;
                             }
-                            storage.componentModifyEvents.writeQueue->emplace_back(EventType::MODIFIED,
-                                Entity(index, newMetadata.generation));
+                            storage.componentModifyEvents.AddEvent(Entity(index, newMetadata.generation));
                         }
                     }
                 }
