@@ -12,7 +12,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
     set(TRACY_ONLY_LOCALHOST ON CACHE BOOL "" FORCE)
     add_subdirectory(tracy)
     if(UNIX)
-        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field)
+        target_compile_options(TracyClient PRIVATE -Wno-unused-result)
     endif()
 
     add_executable(${PROJECT_NAME}-benchmark-tracy benchmark.cpp transform_component.cpp)
