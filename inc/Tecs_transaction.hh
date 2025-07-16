@@ -425,9 +425,12 @@ namespace Tecs {
                     if (this->instance.template BitsetHas<U>(newMetadata) &&
                         this->instance.template BitsetHas<U>(oldMetadata)) {
                         if constexpr (is_equals_comparable<U>()) {
-                            if (storage.writeComponents[0] == storage.readComponents[0]) continue;
+                            if (storage.writeComponents[0] != storage.readComponents[0]) {
+                                storage.componentModifyEvents.AddEvent();
+                            }
+                        } else {
+                            storage.componentModifyEvents.AddEvent();
                         }
-                        storage.componentModifyEvents.AddEvent();
                     }
                 }
             } else {
