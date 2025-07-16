@@ -320,7 +320,7 @@ namespace Tecs {
             if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
                 instance.entityAddEvents.observers.emplace_back(eventList);
                 instance.entityRemoveEvents.observers.emplace_back(eventList);
-            } else if constexpr (Event::isAddRemove()) {
+            } else if constexpr (Event::isAddRemove::value) {
                 auto &storage = instance.template Storage<typename Event::ComponentType>();
                 storage.componentAddEvents.observers.emplace_back(eventList);
                 storage.componentRemoveEvents.observers.emplace_back(eventList);
@@ -340,7 +340,7 @@ namespace Tecs {
                 observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
                 auto &observers2 = instance.entityRemoveEvents.observers;
                 observers2.erase(std::remove(observers2.begin(), observers2.end(), eventList), observers2.end());
-            } else if constexpr (Event::isAddRemove()) {
+            } else if constexpr (Event::isAddRemove::value) {
                 auto &storage = instance.template Storage<typename Event::ComponentType>();
                 auto &observers = storage.componentAddEvents.observers;
                 observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
