@@ -28,9 +28,9 @@ int main(int /* argc */, char ** /* argv */) {
 
     Assert(ecs.GetNextTransactionId() == 0, "Expected next transaction id to be 0");
 
-    Tecs::Observer<ECS, Tecs::EntityEvent> entityObserver;
-    Tecs::Observer<ECS, Tecs::ComponentEvent<Transform>> transformObserver;
-    Tecs::Observer<ECS, Tecs::ComponentEvent<GlobalComponent>> globalCompObserver;
+    Tecs::Observer<ECS, Tecs::EntityAddRemoveEvent> entityObserver;
+    Tecs::Observer<ECS, Tecs::ComponentAddRemoveEvent<Transform>> transformObserver;
+    Tecs::Observer<ECS, Tecs::ComponentAddRemoveEvent<GlobalComponent>> globalCompObserver;
     {
         Timer t("Test creating new observers");
         auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();

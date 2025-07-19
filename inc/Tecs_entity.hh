@@ -144,8 +144,6 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
-            if constexpr (!std::is_const<ReturnType>()) lock.transaction->template SetAccessFlag<CompType>(index);
-
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
                                                           : lock.instance.metadata.readComponents;
@@ -169,6 +167,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<CompType>(metadata)) {
                     lock.transaction->template SetAccessFlag<AddRemove>();
+                    lock.instance.metadata.AccessEntity(index);
 
                     // Reset value before allowing reading.
                     storage.writeComponents[index] = {};
@@ -184,6 +183,7 @@ namespace Tecs {
 #endif
             }
 
+            if constexpr (!std::is_const<ReturnType>()) lock.transaction->template SetAccessFlag<CompType>(index);
             if (lock.instance.template BitsetHas<CompType>(lock.writePermissions)) {
                 return storage.writeComponents[index];
             } else {
@@ -220,7 +220,6 @@ namespace Tecs {
         inline T &Set(const LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.transaction->template SetAccessFlag<T>(index);
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
@@ -243,6 +242,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.transaction->template SetAccessFlag<AddRemove>();
+                    lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
@@ -254,6 +254,8 @@ namespace Tecs {
                 throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            lock.transaction->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = value;
         }
 
@@ -261,7 +263,6 @@ namespace Tecs {
         inline T &Set(const LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.transaction->template SetAccessFlag<T>(index);
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
@@ -284,6 +285,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.transaction->template SetAccessFlag<AddRemove>();
+                    lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
@@ -295,6 +297,8 @@ namespace Tecs {
                 throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            lock.transaction->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = T(std::forward<Args>(args)...);
         }
 
@@ -320,7 +324,6 @@ namespace Tecs {
         template<typename LockType>
         inline void Destroy(const LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
-            lock.transaction->template SetAccessFlag<AddRemove>();
 
 #ifndef TECS_UNCHECKED_MODE
             if (index >= lock.instance.metadata.writeComponents.size()) {
@@ -334,10 +337,12 @@ namespace Tecs {
 
             // It is possible for *this to be a reference to a component's writeValidEntities list
             // Copy the index before removing components so we can complete the removal.
-            size_t copy = index;
+            TECS_ENTITY_INDEX_TYPE copy = index;
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);
+            lock.transaction->template SetAccessFlag<AddRemove>();
+            lock.instance.metadata.AccessEntity(copy);
             lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];
             lock.instance.metadata.writeValidEntities[validIndex] = Entity();

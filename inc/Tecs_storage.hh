@@ -333,7 +333,7 @@ namespace Tecs {
             return sizeof(T) * 2 + sizeof(Entity) * 2 + sizeof(size_t);
         }
 
-        inline void AccessEntity(size_t index) {
+        inline void AccessEntity(TECS_ENTITY_INDEX_TYPE index) {
             writeAccessedEntities.emplace_back(index);
         }
 
@@ -352,8 +352,12 @@ namespace Tecs {
         std::vector<T> writeComponents;
         std::vector<Entity> readValidEntities;
         std::vector<Entity> writeValidEntities;
-        std::vector<size_t> validEntityIndexes;    // Size of writeComponents, Indexes into writeValidEntities
-        std::vector<size_t> writeAccessedEntities; // Indexes into writeComponents
+        std::vector<size_t> validEntityIndexes; // Size of writeComponents, Indexes into writeValidEntities
+        std::vector<TECS_ENTITY_INDEX_TYPE> writeAccessedEntities; // Indexes into writeComponents
+
+        ObserverList<ComponentAddRemoveEvent<T>> componentAddEvents;
+        ObserverList<ComponentAddRemoveEvent<T>> componentRemoveEvents;
+        ObserverList<ComponentModifiedEvent<T>> componentModifyEvents;
 
         template<typename, typename...>
         friend class Lock;

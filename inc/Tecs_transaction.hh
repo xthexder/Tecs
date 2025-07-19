@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 
 namespace Tecs {
 #ifndef TECS_HEADER_ONLY
@@ -82,7 +83,7 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void SetAccessFlag(size_t index) {
+        inline void SetAccessFlag(TECS_ENTITY_INDEX_TYPE index) {
             writeAccessedFlags[1 + instance.template GetComponentIndex<T>()] = true;
             instance.template Storage<T>().AccessEntity(index);
         }
@@ -176,11 +177,16 @@ namespace Tecs {
 
             if (IsAddRemoveAllowed()) {
                 // Init observer event queues
-                std::apply(
-                    [](auto &...args) {
-                        (args.Init(), ...);
-                    },
-                    instance.eventLists);
+                instance.entityAddEvents.Init();
+                instance.entityRemoveEvents.Init();
+                ( // For each AllComponentTypes, unlock any Noop Writes or Read locks early
+                    [&] {
+                        auto &storage = instance.template Storage<AllComponentTypes>();
+                        storage.componentAddEvents.Init();
+                        storage.componentRemoveEvents.Init();
+                        storage.componentModifyEvents.Init();
+                    }(),
+                    ...);
             }
         }
         // Delete copy constructor
@@ -190,10 +196,7 @@ namespace Tecs {
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
-            if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
-                PreCommitAddRemoveMetadata();
-                (PreCommitAddRemove<AllComponentTypes>(), ...);
-            }
+            if (IsAddRemoveAllowed() && writeAccessedFlags[0]) PreCommitAddRemoveMetadata();
 
             ( // For each AllComponentTypes, unlock any Noop Writes or Read locks early
                 [&] {
@@ -204,6 +207,12 @@ namespace Tecs {
                     } else if (IsReadAllowed<AllComponentTypes>()) {
                         instance.template Storage<AllComponentTypes>().ReadUnlock();
                     }
+                }(),
+                ...);
+
+            ( // For each AllComponentTypes, run pre-commit event handlers
+                [&] {
+                    if (IsWriteAllowed<AllComponentTypes>()) PreCommitComponent<AllComponentTypes>();
                 }(),
                 ...);
 
@@ -227,14 +236,35 @@ namespace Tecs {
 #if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
                 ZoneNamedN(tracyCommitScope2, "Commit", true);
 #endif
-                if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
-                    // Commit observers
-                    std::apply(
-                        [](auto &...args) {
-                            (args.Commit(), ...);
-                        },
-                        instance.eventLists);
 
+                // Commit observers
+                if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                    ZoneNamedN(tracyCommitScope3, "CommitEntityEvent", true);
+#endif
+                    instance.entityAddEvents.Commit();
+                    instance.entityRemoveEvents.Commit();
+                }
+                ( // For each AllComponentTypes
+                    [&] {
+                        if (IsWriteAllowed<AllComponentTypes>() &&
+                            instance.template BitsetHas<AllComponentTypes>(writeAccessedFlags)) {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                            ZoneNamedN(tracyCommitScope3, "CommitComponentEvent", true);
+                            ZoneTextV(tracyCommitScope3,
+                                typeid(AllComponentTypes).name(),
+                                std::strlen(typeid(AllComponentTypes).name()));
+#endif
+                            auto &storage = instance.template Storage<AllComponentTypes>();
+                            if (IsAddRemoveAllowed()) {
+                                storage.componentAddEvents.Commit();
+                                storage.componentRemoveEvents.Commit();
+                            }
+                            storage.componentModifyEvents.Commit();
+                        }
+                    }(),
+                    ...);
+                if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
                     instance.metadata.readComponents.swap(instance.metadata.writeComponents);
                     instance.metadata.readValidEntities.swap(instance.metadata.writeValidEntities);
                     instance.globalReadMetadata = instance.globalWriteMetadata;
@@ -273,7 +303,13 @@ namespace Tecs {
                         if constexpr (is_global_component<AllComponentTypes>()) {
                             storage.writeComponents = storage.readComponents;
                         } else if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
-                            storage.writeComponents = storage.readComponents;
+                            if (storage.writeComponents.size() != storage.readComponents.size()) {
+                                storage.writeComponents.resize(storage.readComponents.size());
+                            }
+                            for (auto &index : storage.writeAccessedEntities) {
+                                if (index >= storage.writeComponents.size()) continue;
+                                storage.writeComponents[index] = storage.readComponents[index];
+                            }
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
                             for (auto &index : storage.writeAccessedEntities) {
@@ -330,70 +366,104 @@ namespace Tecs {
 
                 // Compare new and old metadata to notify observers
                 if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
-                    auto &observerList = instance.template Observers<EntityEvent>();
                     if (oldMetadata[0]) {
-                        observerList.writeQueue->emplace_back(EventType::REMOVED,
-                            Entity(index, oldMetadata.generation));
+                        instance.entityRemoveEvents.AddEvent(EventType::REMOVED, Entity(index, oldMetadata.generation));
                     }
                     if (newMetadata[0]) {
-                        observerList.writeQueue->emplace_back(EventType::ADDED, Entity(index, newMetadata.generation));
+                        instance.entityAddEvents.AddEvent(EventType::ADDED, Entity(index, newMetadata.generation));
                     }
                 }
             }
         }
 
+        template<typename T>
+        struct is_equals_comparable : std::false_type {};
+#if __cpp_lib_concepts
+        template<std::equality_comparable T>
+        struct is_equals_comparable<T> : std::true_type {};
+#endif
+
         template<typename U>
-        inline void PreCommitAddRemove() const {
+        inline void PreCommitComponent() const {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+            ZoneNamedN(tracyPreCommitScope, "PreCommitComponent", true);
+#endif
+            auto &storage = instance.template Storage<U>();
             if constexpr (is_global_component<U>()) {
-                const auto &oldMetadata = instance.globalReadMetadata;
-                const auto &newMetadata = instance.globalWriteMetadata;
-                if (instance.template BitsetHas<U>(newMetadata)) {
-                    if (!instance.template BitsetHas<U>(oldMetadata)) {
-                        auto &observerList = instance.template Observers<ComponentEvent<U>>();
-                        observerList.writeQueue->emplace_back(EventType::ADDED,
-                            Entity(),
-                            instance.template Storage<U>().writeComponents[0]);
+                if (writeAccessedFlags[0]) {
+                    const auto &oldMetadata = instance.globalReadMetadata;
+                    const auto &newMetadata = instance.globalWriteMetadata;
+                    if (instance.template BitsetHas<U>(newMetadata)) {
+                        if (!instance.template BitsetHas<U>(oldMetadata)) {
+                            storage.componentAddEvents.AddEvent(EventType::ADDED, Entity(), storage.writeComponents[0]);
+                        }
+                    } else if (instance.template BitsetHas<U>(oldMetadata)) {
+                        storage.componentRemoveEvents.AddEvent(EventType::REMOVED, Entity(), storage.readComponents[0]);
                     }
-                } else if (instance.template BitsetHas<U>(oldMetadata)) {
-                    auto &observerList = instance.template Observers<ComponentEvent<U>>();
-                    observerList.writeQueue->emplace_back(EventType::REMOVED,
-                        Entity(),
-                        instance.template Storage<U>().readComponents[0]);
+                }
+                if (instance.template BitsetHas<U>(writeAccessedFlags)) {
+                    const auto &newMetadata =
+                        IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
+                    const auto &oldMetadata = instance.globalReadMetadata;
+                    if (instance.template BitsetHas<U>(newMetadata) && instance.template BitsetHas<U>(oldMetadata)) {
+                        if constexpr (is_equals_comparable<U>()) {
+                            if (storage.writeComponents[0] != storage.readComponents[0]) {
+                                storage.componentModifyEvents.AddEvent();
+                            }
+                        } else {
+                            storage.componentModifyEvents.AddEvent();
+                        }
+                    }
                 }
             } else {
-                auto &storage = instance.template Storage<U>();
+                if (writeAccessedFlags[0]) {
+                    // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
+                    storage.writeValidEntities.clear();
 
-                // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
-                storage.writeValidEntities.clear();
+                    const auto &writeMetadataList = instance.metadata.writeComponents;
+                    for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
+                        const auto &newMetadata = writeMetadataList[index];
+                        const auto &oldMetadata = index >= instance.metadata.readComponents.size()
+                                                      ? emptyMetadata
+                                                      : instance.metadata.readComponents[index];
 
-                const auto &writeMetadataList = instance.metadata.writeComponents;
-                for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
-                    const auto &newMetadata = writeMetadataList[index];
-                    const auto &oldMetadata = index >= instance.metadata.readComponents.size()
-                                                  ? emptyMetadata
-                                                  : instance.metadata.readComponents[index];
+                        // If this index exists, add it to the valid entity lists.
+                        if (newMetadata[0] && instance.template BitsetHas<U>(newMetadata)) {
 
-                    // If this index exists, add it to the valid entity lists.
-                    if (newMetadata[0] && instance.template BitsetHas<U>(newMetadata)) {
-
-                        storage.validEntityIndexes[index] = storage.writeValidEntities.size();
-                        storage.writeValidEntities.emplace_back(index, newMetadata.generation);
-                    }
-
-                    // Compare new and old metadata to notify observers
-                    bool newExists = instance.template BitsetHas<U>(newMetadata);
-                    bool oldExists = instance.template BitsetHas<U>(oldMetadata);
-                    if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
-                        auto &observerList = instance.template Observers<ComponentEvent<U>>();
-                        if (oldExists) {
-                            observerList.writeQueue->emplace_back(EventType::REMOVED,
-                                Entity(index, oldMetadata.generation),
-                                storage.readComponents[index]);
+                            storage.validEntityIndexes[index] = storage.writeValidEntities.size();
+                            storage.writeValidEntities.emplace_back(index, newMetadata.generation);
                         }
-                        if (newExists) {
-                            observerList.writeQueue->emplace_back(EventType::ADDED,
-                                Entity(index, newMetadata.generation),
-                                storage.writeComponents[index]);
+
+                        // Compare new and old metadata to notify observers
+                        bool newExists = instance.template BitsetHas<U>(newMetadata);
+                        bool oldExists = instance.template BitsetHas<U>(oldMetadata);
+                        if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
+                            if (oldExists) {
+                                storage.componentRemoveEvents.AddEvent(EventType::REMOVED,
+                                    Entity(index, oldMetadata.generation),
+                                    storage.readComponents[index]);
+                            }
+                            if (newExists) {
+                                storage.componentAddEvents.AddEvent(EventType::ADDED,
+                                    Entity(index, newMetadata.generation),
+                                    storage.writeComponents[index]);
+                            }
+                        }
+                    }
+                }
+                if (instance.template BitsetHas<U>(writeAccessedFlags)) {
+                    for (auto &index : storage.writeAccessedEntities) {
+                        const auto &newMetadata = IsAddRemoveAllowed() ? instance.metadata.writeComponents[index]
+                                                                       : instance.metadata.readComponents[index];
+                        const auto &oldMetadata = index >= instance.metadata.readComponents.size()
+                                                      ? emptyMetadata
+                                                      : instance.metadata.readComponents[index];
+                        if (instance.template BitsetHas<U>(newMetadata) &&
+                            instance.template BitsetHas<U>(oldMetadata)) {
+                            if constexpr (is_equals_comparable<U>()) {
+                                if (storage.writeComponents[index] == storage.readComponents[index]) continue;
+                            }
+                            storage.componentModifyEvents.AddEvent(Entity(index, newMetadata.generation));
                         }
                     }
                 }
@@ -482,4 +552,4 @@ namespace Tecs {
     #endif
 #endif
     };
-}; // namespace Tecs
+} // namespace Tecs

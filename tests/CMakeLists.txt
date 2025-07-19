@@ -10,7 +10,7 @@ TecsGenerateCHeaders(
     INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}
     COMPILE_DEFINITIONS
-        TECS_ENABLE_PERFORMANCE_TRACING
+        # TECS_ENABLE_PERFORMANCE_TRACING
 )
 
 add_executable(${PROJECT_NAME}-benchmark
@@ -22,7 +22,7 @@ target_include_directories(
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_ENABLE_PERFORMANCE_TRACING TECS_UNCHECKED_MODE)
+target_compile_definitions(${PROJECT_NAME}-benchmark PRIVATE TECS_UNCHECKED_MODE) # TECS_ENABLE_PERFORMANCE_TRACING
 if(WIN32)
     # Link winmm library for timeBeginPeriod()
     target_link_libraries(${PROJECT_NAME}-benchmark winmm)
@@ -42,8 +42,10 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
     set(TRACY_NO_EXIT ON CACHE BOOL "" FORCE)
     set(TRACY_ONLY_LOCALHOST ON CACHE BOOL "" FORCE)
     add_subdirectory(tracy)
-    if(UNIX)
-        target_compile_options(TracyClient PRIVATE -Wno-unused-result -Wno-unused-private-field)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(TracyClient PRIVATE -Wno-unused-result)
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field)
     endif()
 
     TecsGenerateCHeaders(

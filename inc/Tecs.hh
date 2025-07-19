@@ -2,6 +2,7 @@
 
 #include "Tecs_entity.hh"
 #include "Tecs_lock.hh"
+#include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
 #include "Tecs_storage.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
@@ -130,23 +131,6 @@ namespace Tecs {
         }
 
     private:
-        template<typename Event>
-        struct ObserverList {
-            std::vector<std::shared_ptr<std::deque<Event>>> observers;
-            std::shared_ptr<std::deque<Event>> writeQueue;
-
-            void Init() {
-                if (!writeQueue) writeQueue = std::make_shared<std::deque<Event>>();
-            }
-
-            void Commit() {
-                for (auto &observer : observers) {
-                    observer->insert(observer->end(), writeQueue->begin(), writeQueue->end());
-                }
-                writeQueue->clear();
-            }
-        };
-
         template<size_t I, typename U>
         inline static constexpr size_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
@@ -187,19 +171,14 @@ namespace Tecs {
             return std::get<ComponentIndex<T>>(indexes);
         }
 
-        template<typename Event>
-        inline constexpr ObserverList<Event> &Observers() {
-            static_assert(contains<Event, EntityEvent, ComponentEvent<Tn>...>(), "Event is not registered with Tecs");
-            return std::get<ObserverList<Event>>(eventLists);
-        }
-
         ComponentIndex<EntityMetadata> metadata;
         ComponentBitset globalReadMetadata;
         ComponentBitset globalWriteMetadata;
         std::tuple<ComponentIndex<Tn>...> indexes;
         std::deque<Entity> freeEntities;
 
-        std::tuple<ObserverList<EntityEvent>, ObserverList<ComponentEvent<Tn>>...> eventLists;
+        ObserverList<EntityAddRemoveEvent> entityAddEvents;
+        ObserverList<EntityAddRemoveEvent> entityRemoveEvents;
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo transactionTrace;

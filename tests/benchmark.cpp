@@ -26,6 +26,7 @@ namespace benchmark {
     using Entity = Tecs::abi::Entity;
 
     std::atomic_bool running;
+    std::atomic_bool success;
     static AbiECS ecs = AbiECS();
     // static testing::ECS ecs;
 
@@ -33,6 +34,9 @@ namespace benchmark {
     static std::thread::id scriptThreadId;
     static std::thread::id transformThreadId;
     static std::thread::id scriptTransactionThreadId;
+
+    Observer<testing::ECS, ComponentModifiedEvent<Script>> scriptObserver;
+    std::atomic_size_t scriptUpdateCount;
 
 #define ENTITY_COUNT 1000000
 #define ADD_REMOVE_ITERATIONS 100
@@ -173,6 +177,7 @@ namespace benchmark {
         MultiTimer timer1("ScriptTransactionWorkerThread StartTransaction");
         MultiTimer timer2("ScriptTransactionWorkerThread Run");
         MultiTimer timer3("ScriptTransactionWorkerThread Commit");
+        size_t iteration = 0;
         while (running) {
             // auto start = std::chrono::high_resolution_clock::now();
             {
@@ -191,10 +196,25 @@ namespace benchmark {
                     }
                     i++;
                 }
+                // if (iteration % 10 == 9) {
+                //     ComponentModifiedEvent<Script> scriptEventEntity;
+                //     while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
+                //         size_t updateNumber = scriptUpdateCount++;
+                //         size_t expectedEntity =
+                //             (updateNumber * validScripts.size() / SCRIPT_UPDATES_PER_LOOP) % validScripts.size();
+                //         if (scriptEventEntity != validScripts[expectedEntity] && success) {
+                //             std::cerr << "Script modify event #" << (updateNumber + 1) << " "
+                //                       << std::to_string(scriptEventEntity) << " != expected "
+                //                       << std::to_string(validScripts[expectedEntity]) << std::endl;
+                //             success = false;
+                //         }
+                //     }
+                // }
                 t = timer3;
             }
             std::this_thread::yield();
             // std::this_thread::sleep_until(start + std::chrono::milliseconds(11));
+            iteration++;
         }
     }
 
@@ -332,11 +352,22 @@ namespace benchmark {
             }
             t = timer3;
         }
+        // {
+        //     MultiTimer timer1("Watch for script events Start");
+        //     MultiTimer timer2("Watch for script events Run");
+        //     MultiTimer timer3("Watch for script events Commit");
+        //     Timer t(timer1);
+        //     auto writeLock = ecs.StartTransaction<AddRemove>();
+        //     t = timer2;
+        //     scriptObserver = writeLock.Watch<ComponentModifiedEvent<Script>>();
+        //     t = timer3;
+        // }
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         ecs.StartTrace();
 #endif
 
+        success = true;
         size_t transformCount = 0;
         size_t scriptCount = 0;
         {
@@ -396,6 +427,48 @@ namespace benchmark {
         trace.SaveToCSV("benchmark-trace.csv");
 #endif
 
+        // {
+        //     MultiTimer timer1("Read script modified events Start");
+        //     MultiTimer timer2("Read script modified events Run");
+        //     MultiTimer timer3("Read script modified events Commit");
+        //     Timer t(timer1);
+        //     auto readLock = ecs.StartTransaction<Read<Script>>();
+        //     t = timer2;
+        //     auto &validScripts = readLock.EntitiesWith<Script>();
+        //     ComponentModifiedEvent<Script> scriptEventEntity;
+        //     while (scriptObserver.Poll(readLock, scriptEventEntity)) {
+        //         size_t updateNumber = scriptUpdateCount++;
+        //         size_t expectedEntity = (updateNumber * scriptCount / SCRIPT_UPDATES_PER_LOOP) % scriptCount;
+        //         if (scriptEventEntity != validScripts[expectedEntity] && success) {
+        //             std::cerr << "Script modify event #" << (updateNumber + 1) << " "
+        //                       << std::to_string(scriptEventEntity) << " != expected "
+        //                       << std::to_string(validScripts[expectedEntity]) << std::endl;
+        //             success = false;
+        //         }
+        //     }
+        //     const Entity &lastScript = validScripts[validScripts.size() / SCRIPT_DIVISOR];
+        //     auto &script = lastScript.Get<Script>(readLock);
+        //     size_t iterations = (size_t)script.data[0];
+        //     size_t expectedCount = iterations * SCRIPT_UPDATES_PER_LOOP;
+        //     if (scriptUpdateCount != expectedCount) {
+        //         std::cerr << "Script modify count " << scriptUpdateCount << " != expected " << expectedCount
+        //                   << std::endl;
+        //         success = false;
+        //     }
+        //     t = timer3;
+        // }
+
+        // {
+        //     MultiTimer timer1("Stop watching script events Start");
+        //     MultiTimer timer2("Stop watching script events Run");
+        //     MultiTimer timer3("Stop watching script events Commit");
+        //     Timer t(timer1);
+        //     auto writeLock = ecs.StartTransaction<AddRemove>();
+        //     t = timer2;
+        //     scriptObserver.Stop(writeLock);
+        //     t = timer3;
+        // }
+
         std::vector<Transform> transforms;
         {
             Timer t("Copy entities to std::vector");
@@ -438,6 +511,7 @@ namespace benchmark {
             }
             if (invalid != 0) {
                 std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl;
+                success = false;
             }
             std::cout << entityList.size() << " total components (" << valid << " with value " << commonValue << ")"
                       << std::endl;
@@ -470,12 +544,18 @@ namespace benchmark {
             }
             if (invalid != 0) {
                 std::cerr << "Error: " << std::to_string(invalid) << " invalid components" << std::endl;
+                success = false;
             }
             std::cout << transforms.size() << " total components (" << valid << " with value " << commonValue << ")"
                       << std::endl;
         }
 
-        return 0;
+        if (!success) {
+            std::cerr << "!!! BENCHMARK FAILED !!!" << std::endl;
+        } else {
+            std::cout << "Benchmark success" << std::endl;
+        }
+        return success ? 0 : 1;
     }
 
 } // namespace benchmark

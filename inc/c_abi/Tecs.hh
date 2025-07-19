@@ -26,7 +26,7 @@ namespace Tecs::abi {
     template<typename... Tn>
     class ECS {
     private:
-        tecs_ecs_t *base;
+        tecs_ecs_t *base = nullptr;
         bool shouldReleaseBase = false;
 
     public:

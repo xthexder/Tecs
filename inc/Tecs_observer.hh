@@ -9,30 +9,50 @@
 #include <tuple>
 #include <type_traits>
 
+#ifdef TECS_ENABLE_TRACY
+    #include <cstring>
+    #include <tracy/Tracy.hpp>
+#endif
+
 namespace Tecs {
-    enum class EventType {
+    enum class EventType : uint32_t {
         INVALID = 0,
         ADDED,
         REMOVED,
     };
 
     template<typename T>
-    struct ComponentEvent {
+    struct ComponentAddRemoveEvent {
         EventType type;
         Entity entity;
         T component;
 
-        ComponentEvent() : type(EventType::INVALID), entity(), component() {}
-        ComponentEvent(EventType type, const Entity &entity, const T &component)
+        using ComponentType = T;
+        using isAddRemove = std::true_type;
+
+        ComponentAddRemoveEvent() : type(EventType::INVALID), entity(), component() {}
+        ComponentAddRemoveEvent(EventType type, const Entity &entity, const T &component)
             : type(type), entity(entity), component(component) {}
     };
 
-    struct EntityEvent {
+    template<typename T>
+    struct ComponentModifiedEvent : Entity {
+        using ComponentType = T;
+        using isAddRemove = std::false_type;
+
+        ComponentModifiedEvent() : Entity() {}
+        ComponentModifiedEvent(const Entity &entity) : Entity(entity) {}
+    };
+
+    struct EntityAddRemoveEvent {
         EventType type;
         Entity entity;
 
-        EntityEvent() : type(EventType::INVALID), entity() {}
-        EntityEvent(EventType type, const Entity &entity) : type(type), entity(entity) {}
+        using ComponentType = void;
+        using isAddRemove = std::true_type;
+
+        EntityAddRemoveEvent() : type(EventType::INVALID), entity() {}
+        EntityAddRemoveEvent(EventType type, const Entity &entity) : type(type), entity(entity) {}
     };
 
     /**
@@ -82,5 +102,29 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
+    };
+
+    template<typename Event>
+    struct ObserverList {
+        std::vector<std::shared_ptr<std::deque<Event>>> observers;
+        std::shared_ptr<std::deque<Event>> writeQueue;
+
+        void Init() {
+            if (!writeQueue) writeQueue = std::make_shared<std::deque<Event>>();
+        }
+
+        template<typename... Args>
+        void AddEvent(Args &&...args) {
+            if (observers.empty()) return;
+            writeQueue->emplace_back(std::forward<Args>(args)...);
+        }
+
+        void Commit() {
+            if (writeQueue->empty()) return;
+            for (auto &observer : observers) {
+                observer->insert(observer->end(), writeQueue->begin(), writeQueue->end());
+            }
+            writeQueue->clear();
+        }
     };
 }; // namespace Tecs
