@@ -196,20 +196,20 @@ namespace benchmark {
                     }
                     i++;
                 }
-                // if (iteration % 10 == 9) {
-                //     ComponentModifiedEvent<Script> scriptEventEntity;
-                //     while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
-                //         size_t updateNumber = scriptUpdateCount++;
-                //         size_t expectedEntity =
-                //             (updateNumber * validScripts.size() / SCRIPT_UPDATES_PER_LOOP) % validScripts.size();
-                //         if (scriptEventEntity != validScripts[expectedEntity] && success) {
-                //             std::cerr << "Script modify event #" << (updateNumber + 1) << " "
-                //                       << std::to_string(scriptEventEntity) << " != expected "
-                //                       << std::to_string(validScripts[expectedEntity]) << std::endl;
-                //             success = false;
-                //         }
-                //     }
-                // }
+                if (iteration % 10 == 9) {
+                    // ComponentModifiedEvent<Script> scriptEventEntity;
+                    // while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
+                    //     size_t updateNumber = scriptUpdateCount++;
+                    //     size_t expectedEntity =
+                    //         (updateNumber * validScripts.size() / SCRIPT_UPDATES_PER_LOOP) % validScripts.size();
+                    //     if (scriptEventEntity != validScripts[expectedEntity] && success) {
+                    //         std::cerr << "Script modify event #" << (updateNumber + 1) << " "
+                    //                   << std::to_string(scriptEventEntity) << " != expected "
+                    //                   << std::to_string(validScripts[expectedEntity]) << std::endl;
+                    //         success = false;
+                    //     }
+                    // }
+                }
                 t = timer3;
             }
             std::this_thread::yield();
