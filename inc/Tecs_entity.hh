@@ -122,8 +122,6 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
-            if constexpr (!std::is_const<ReturnType>()) lock.base->template SetAccessFlag<CompType>(index);
-
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList =
                 lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
@@ -147,6 +145,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<CompType>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
+                    lock.instance.metadata.AccessEntity(index);
 
                     // Reset value before allowing reading.
                     storage.writeComponents[index] = {};
@@ -162,6 +161,7 @@ namespace Tecs {
 #endif
             }
 
+            if constexpr (!std::is_const<ReturnType>()) lock.base->template SetAccessFlag<CompType>(index);
             if (lock.instance.template BitsetHas<CompType>(lock.permissions)) {
                 return storage.writeComponents[index];
             } else {
@@ -198,7 +198,6 @@ namespace Tecs {
         inline T &Set(const LockType &lock, T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->template SetAccessFlag<T>(index);
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList =
@@ -221,6 +220,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
+                    lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
@@ -232,6 +232,8 @@ namespace Tecs {
                 throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            lock.base->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = value;
         }
 
@@ -239,7 +241,6 @@ namespace Tecs {
         inline T &Set(const LockType &lock, Args... args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
-            lock.base->template SetAccessFlag<T>(index);
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadataList =
@@ -262,6 +263,7 @@ namespace Tecs {
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
                     lock.base->writeAccessedFlags[0] = true;
+                    lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
                     auto &validEntities = lock.instance.template Storage<T>().writeValidEntities;
@@ -273,6 +275,8 @@ namespace Tecs {
                 throw std::runtime_error("Entity does not have a component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            lock.base->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = T(std::forward<Args>(args)...);
         }
 
@@ -298,7 +302,6 @@ namespace Tecs {
         template<typename LockType>
         inline void Destroy(const LockType &lock) const {
             static_assert(is_add_remove_allowed<LockType>(), "Entities cannot be destroyed without an AddRemove lock.");
-            lock.base->writeAccessedFlags[0] = true;
 
 #ifndef TECS_UNCHECKED_MODE
             if (index >= lock.instance.metadata.writeComponents.size()) {
@@ -316,6 +319,7 @@ namespace Tecs {
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);
+            lock.base->writeAccessedFlags[0] = true;
             lock.instance.metadata.AccessEntity(copy);
             lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];

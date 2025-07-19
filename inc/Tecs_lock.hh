@@ -157,7 +157,6 @@ namespace Tecs {
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
                     TECS_ENTITY_INDEX_TYPE newIndex = (TECS_ENTITY_INDEX_TYPE)(nextIndex + count);
-                    instance.metadata.AccessEntity(newIndex);
                     instance.freeEntities.emplace_back(newIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
                 entity = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
@@ -203,8 +202,6 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>();
-
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
@@ -227,6 +224,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
 #endif
             }
+
+            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>();
             if (instance.template BitsetHas<CompType>(permissions)) {
                 return storage.writeComponents[0];
             } else {
@@ -252,7 +251,6 @@ namespace Tecs {
         inline T &Set(T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -273,6 +271,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            base->template SetAccessFlag<T>();
             return instance.template Storage<T>().writeComponents[0] = value;
         }
 
@@ -280,7 +280,6 @@ namespace Tecs {
         inline T &Set(Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -301,6 +300,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            base->template SetAccessFlag<T>();
             return instance.template Storage<T>().writeComponents[0] = T(std::forward<Args>(args)...);
         }
 
@@ -399,6 +400,7 @@ namespace Tecs {
                 auto &metadata = instance.metadata.writeComponents[index];
                 if (instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
+                    instance.metadata.AccessEntity(index);
                     base->template SetAccessFlag<T>(index);
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = false;
