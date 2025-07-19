@@ -326,7 +326,12 @@ namespace Tecs {
                         if constexpr (is_global_component<AllComponentTypes>()) {
                             storage.writeComponents = storage.readComponents;
                         } else if (is_add_remove_allowed<LockType>() && this->writeAccessedFlags[0]) {
-                            storage.writeComponents = storage.readComponents;
+                            if (storage.writeComponents.size() < storage.readComponents.size()) {
+                                storage.writeComponents.resize(storage.readComponents.size());
+                            }
+                            for (auto &index : storage.writeAccessedEntities) {
+                                storage.writeComponents[index] = storage.readComponents[index];
+                            }
                             storage.writeValidEntities = storage.readValidEntities;
                         } else {
                             for (auto &index : storage.writeAccessedEntities) {

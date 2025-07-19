@@ -316,6 +316,7 @@ namespace Tecs {
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);
+            lock.instance.metadata.AccessEntity(copy);
             lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];
             lock.instance.metadata.writeValidEntities[validIndex] = Entity();

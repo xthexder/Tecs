@@ -145,7 +145,6 @@ namespace Tecs {
             Entity entity;
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
-                (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
                 size_t nextIndex = instance.metadata.writeComponents.size();
                 size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
                 if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
@@ -153,6 +152,7 @@ namespace Tecs {
                 }
                 instance.metadata.writeComponents.resize(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
+                (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
