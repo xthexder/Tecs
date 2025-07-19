@@ -60,8 +60,9 @@ correct permissions.
 
 ### Event Types
 
- - `EntityEvent`
- - `ComponentEvent<ComponentType>`
+ - `EntityAddRemoveEvent`
+ - `ComponentAddRemoveEvent<ComponentType>`
+ - `ComponentModifiedEvent<ComponentType>`
 
 ## Examples
 

@@ -145,7 +145,6 @@ namespace Tecs {
             Entity entity;
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
-                (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
                 size_t nextIndex = instance.metadata.writeComponents.size();
                 size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
                 if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
@@ -153,13 +152,12 @@ namespace Tecs {
                 }
                 instance.metadata.writeComponents.resize(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
+                (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
 
                 // Add all but 1 of the new Entity ids to the free list.
                 for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
-                    instance.metadata.AccessEntity(nextIndex + count);
-                    instance.freeEntities.emplace_back((TECS_ENTITY_INDEX_TYPE)(nextIndex + count),
-                        1,
-                        (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
+                    TECS_ENTITY_INDEX_TYPE newIndex = (TECS_ENTITY_INDEX_TYPE)(nextIndex + count);
+                    instance.freeEntities.emplace_back(newIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
                 entity = Entity((TECS_ENTITY_INDEX_TYPE)nextIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
             } else {
@@ -204,8 +202,6 @@ namespace Tecs {
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>();
-
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
@@ -228,6 +224,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
 #endif
             }
+
+            if (!std::is_const<ReturnType>()) base->template SetAccessFlag<CompType>();
             if (instance.template BitsetHas<CompType>(permissions)) {
                 return storage.writeComponents[0];
             } else {
@@ -253,7 +251,6 @@ namespace Tecs {
         inline T &Set(T &value) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -274,6 +271,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            base->template SetAccessFlag<T>();
             return instance.template Storage<T>().writeComponents[0] = value;
         }
 
@@ -281,7 +280,6 @@ namespace Tecs {
         inline T &Set(Args &&...args) const {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
-            base->template SetAccessFlag<T>();
 
 #ifndef TECS_UNCHECKED_MODE
             auto &metadata = permissions[0] ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -302,6 +300,8 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(T).name()));
 #endif
             }
+
+            base->template SetAccessFlag<T>();
             return instance.template Storage<T>().writeComponents[0] = T(std::forward<Args>(args)...);
         }
 
@@ -317,8 +317,18 @@ namespace Tecs {
         inline Observer<ECS, Event> Watch() const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to watch for ecs changes.");
 
-            auto &observerList = instance.template Observers<Event>();
-            auto &eventList = observerList.observers.emplace_back(std::make_shared<std::deque<Event>>());
+            auto eventList = std::make_shared<std::deque<Event>>();
+            if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
+                instance.entityAddEvents.observers.emplace_back(eventList);
+                instance.entityRemoveEvents.observers.emplace_back(eventList);
+            } else if constexpr (Event::isAddRemove::value) {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                storage.componentAddEvents.observers.emplace_back(eventList);
+                storage.componentRemoveEvents.observers.emplace_back(eventList);
+            } else {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                storage.componentModifyEvents.observers.emplace_back(eventList);
+            }
             return Observer(instance, eventList);
         }
 
@@ -326,8 +336,22 @@ namespace Tecs {
         inline void StopWatching(Observer<ECS, Event> &observer) const {
             static_assert(is_add_remove_allowed<LockType>(), "An AddRemove lock is required to stop an observer.");
             auto eventList = observer.eventListWeak.lock();
-            auto &observers = instance.template Observers<Event>().observers;
-            observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+            if constexpr (std::is_same<Event, EntityAddRemoveEvent>()) {
+                auto &observers = instance.entityAddEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                auto &observers2 = instance.entityRemoveEvents.observers;
+                observers2.erase(std::remove(observers2.begin(), observers2.end(), eventList), observers2.end());
+            } else if constexpr (Event::isAddRemove::value) {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                auto &observers = storage.componentAddEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+                auto &observers2 = storage.componentRemoveEvents.observers;
+                observers2.erase(std::remove(observers2.begin(), observers2.end(), eventList), observers2.end());
+            } else {
+                auto &storage = instance.template Storage<typename Event::ComponentType>();
+                auto &observers = storage.componentModifyEvents.observers;
+                observers.erase(std::remove(observers.begin(), observers.end(), eventList), observers.end());
+            }
             observer.eventListWeak.reset();
         }
 
@@ -371,11 +395,12 @@ namespace Tecs {
         }
 
         template<typename T>
-        inline void RemoveComponents(size_t index) const {
+        inline void RemoveComponents(TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<T>()) { // Ignore global components
                 auto &metadata = instance.metadata.writeComponents[index];
                 if (instance.template BitsetHas<T>(metadata)) {
                     base->writeAccessedFlags[0] = true;
+                    instance.metadata.AccessEntity(index);
                     base->template SetAccessFlag<T>(index);
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = false;
@@ -401,7 +426,7 @@ namespace Tecs {
             }
         }
 
-        inline void RemoveAllComponents(size_t index) const {
+        inline void RemoveAllComponents(TECS_ENTITY_INDEX_TYPE index) const {
             (RemoveComponents<AllComponentTypes>(index), ...);
         }
 
