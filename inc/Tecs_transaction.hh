@@ -343,6 +343,9 @@ namespace Tecs {
         inline static const EntityMetadata emptyMetadata = {};
 
         inline void PreCommitAddRemoveMetadata() const {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+            ZoneNamedN(tracyScope, "PreCommitAddRemoveMetadata", true);
+#endif
             // Rebuild writeValidEntities, validEntityIndexes, and freeEntities with the new entity set.
             instance.metadata.writeValidEntities.clear();
             instance.freeEntities.clear();
@@ -366,10 +369,10 @@ namespace Tecs {
 
                 // Compare new and old metadata to notify observers
                 if (newMetadata[0] != oldMetadata[0] || newMetadata.generation != oldMetadata.generation) {
-                    if (oldMetadata[0]) {
+                    if (oldMetadata[0] && !instance.entityRemoveEvents.IsEmpty()) {
                         instance.entityRemoveEvents.AddEvent(EventType::REMOVED, Entity(index, oldMetadata.generation));
                     }
-                    if (newMetadata[0]) {
+                    if (newMetadata[0] && !instance.entityAddEvents.IsEmpty()) {
                         instance.entityAddEvents.AddEvent(EventType::ADDED, Entity(index, newMetadata.generation));
                     }
                 }
@@ -386,7 +389,8 @@ namespace Tecs {
         template<typename U>
         inline void PreCommitComponent() const {
 #if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
-            ZoneNamedN(tracyPreCommitScope, "PreCommitComponent", true);
+            ZoneNamedN(tracyScope, "PreCommitComponent", true);
+            ZoneTextV(tracyScope, typeid(U).name(), std::strlen(typeid(U).name()));
 #endif
             auto &storage = instance.template Storage<U>();
             if constexpr (is_global_component<U>()) {
@@ -394,14 +398,15 @@ namespace Tecs {
                     const auto &oldMetadata = instance.globalReadMetadata;
                     const auto &newMetadata = instance.globalWriteMetadata;
                     if (instance.template BitsetHas<U>(newMetadata)) {
-                        if (!instance.template BitsetHas<U>(oldMetadata)) {
+                        if (!instance.template BitsetHas<U>(oldMetadata) && !storage.componentAddEvents.IsEmpty()) {
                             storage.componentAddEvents.AddEvent(EventType::ADDED, Entity(), storage.writeComponents[0]);
                         }
-                    } else if (instance.template BitsetHas<U>(oldMetadata)) {
+                    } else if (instance.template BitsetHas<U>(oldMetadata) &&
+                               !storage.componentRemoveEvents.IsEmpty()) {
                         storage.componentRemoveEvents.AddEvent(EventType::REMOVED, Entity(), storage.readComponents[0]);
                     }
                 }
-                if (instance.template BitsetHas<U>(writeAccessedFlags)) {
+                if (instance.template BitsetHas<U>(writeAccessedFlags) && !storage.componentModifyEvents.IsEmpty()) {
                     const auto &newMetadata =
                         IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
                     const auto &oldMetadata = instance.globalReadMetadata;
@@ -417,41 +422,58 @@ namespace Tecs {
                 }
             } else {
                 if (writeAccessedFlags[0]) {
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
+                    ZoneNamedN(tracyScope2, "RebuildValid", true);
+                    ZoneTextV(tracyScope2, typeid(U).name(), std::strlen(typeid(U).name()));
+#endif
                     // Rebuild writeValidEntities and validEntityIndexes with the new entity set.
                     storage.writeValidEntities.clear();
 
                     const auto &writeMetadataList = instance.metadata.writeComponents;
-                    for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
-                        const auto &newMetadata = writeMetadataList[index];
-                        const auto &oldMetadata = index >= instance.metadata.readComponents.size()
-                                                      ? emptyMetadata
-                                                      : instance.metadata.readComponents[index];
+                    if (storage.componentRemoveEvents.IsEmpty() && storage.componentAddEvents.IsEmpty()) {
+                        // Fast version skipping event checks
+                        for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
+                            const auto &newMetadata = writeMetadataList[index];
 
-                        // If this index exists, add it to the valid entity lists.
-                        if (newMetadata[0] && instance.template BitsetHas<U>(newMetadata)) {
-
-                            storage.validEntityIndexes[index] = storage.writeValidEntities.size();
-                            storage.writeValidEntities.emplace_back(index, newMetadata.generation);
-                        }
-
-                        // Compare new and old metadata to notify observers
-                        bool newExists = instance.template BitsetHas<U>(newMetadata);
-                        bool oldExists = instance.template BitsetHas<U>(oldMetadata);
-                        if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
-                            if (oldExists) {
-                                storage.componentRemoveEvents.AddEvent(EventType::REMOVED,
-                                    Entity(index, oldMetadata.generation),
-                                    storage.readComponents[index]);
+                            if (newMetadata[0] && instance.template BitsetHas<U>(newMetadata)) {
+                                // If this index exists, add it to the valid entity lists.
+                                storage.validEntityIndexes[index] = storage.writeValidEntities.size();
+                                storage.writeValidEntities.emplace_back(index, newMetadata.generation);
                             }
+                        }
+                    } else {
+                        // Slightly slower version with event checks
+                        for (TECS_ENTITY_INDEX_TYPE index = 0; index < writeMetadataList.size(); index++) {
+                            const auto &newMetadata = writeMetadataList[index];
+                            bool newExists = newMetadata[0] && instance.template BitsetHas<U>(newMetadata);
+
                             if (newExists) {
-                                storage.componentAddEvents.AddEvent(EventType::ADDED,
-                                    Entity(index, newMetadata.generation),
-                                    storage.writeComponents[index]);
+                                // If this index exists, add it to the valid entity lists.
+                                storage.validEntityIndexes[index] = storage.writeValidEntities.size();
+                                storage.writeValidEntities.emplace_back(index, newMetadata.generation);
+                            }
+
+                            // Compare new and old metadata to notify observers
+                            const auto &oldMetadata = index >= instance.metadata.readComponents.size()
+                                                          ? emptyMetadata
+                                                          : instance.metadata.readComponents[index];
+                            bool oldExists = oldMetadata[0] && instance.template BitsetHas<U>(oldMetadata);
+                            if (newExists != oldExists || newMetadata.generation != oldMetadata.generation) {
+                                if (oldExists) {
+                                    storage.componentRemoveEvents.AddEvent(EventType::REMOVED,
+                                        Entity(index, oldMetadata.generation),
+                                        storage.readComponents[index]);
+                                }
+                                if (newExists) {
+                                    storage.componentAddEvents.AddEvent(EventType::ADDED,
+                                        Entity(index, newMetadata.generation),
+                                        storage.writeComponents[index]);
+                                }
                             }
                         }
                     }
                 }
-                if (instance.template BitsetHas<U>(writeAccessedFlags)) {
+                if (instance.template BitsetHas<U>(writeAccessedFlags) && !storage.componentModifyEvents.IsEmpty()) {
                     for (auto &index : storage.writeAccessedEntities) {
                         const auto &newMetadata = IsAddRemoveAllowed() ? instance.metadata.writeComponents[index]
                                                                        : instance.metadata.readComponents[index];

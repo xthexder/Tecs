@@ -19,23 +19,32 @@
 using namespace testing;
 using namespace Tecs;
 
+#ifdef BENCHMARK_CABI
 TECS_IMPLEMENT_C_ABI
+#endif
 
 namespace benchmark {
+#ifdef BENCHMARK_CABI
     using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
     using Entity = Tecs::abi::Entity;
+#endif
 
     std::atomic_bool running;
     std::atomic_bool success;
+#ifdef BENCHMARK_CABI
     static AbiECS ecs = AbiECS();
-    // static testing::ECS ecs;
+#else
+    static testing::ECS ecs;
+#endif
 
     static std::thread::id renderThreadId;
     static std::thread::id scriptThreadId;
     static std::thread::id transformThreadId;
     static std::thread::id scriptTransactionThreadId;
 
+#ifndef BENCHMARK_CABI
     Observer<testing::ECS, ComponentModifiedEvent<Script>> scriptObserver;
+#endif
     std::atomic_size_t scriptUpdateCount;
 
 #define ENTITY_COUNT 1000000
@@ -197,18 +206,20 @@ namespace benchmark {
                     i++;
                 }
                 if (iteration % 10 == 9) {
-                    // ComponentModifiedEvent<Script> scriptEventEntity;
-                    // while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
-                    //     size_t updateNumber = scriptUpdateCount++;
-                    //     size_t expectedEntity =
-                    //         (updateNumber * validScripts.size() / SCRIPT_UPDATES_PER_LOOP) % validScripts.size();
-                    //     if (scriptEventEntity != validScripts[expectedEntity] && success) {
-                    //         std::cerr << "Script modify event #" << (updateNumber + 1) << " "
-                    //                   << std::to_string(scriptEventEntity) << " != expected "
-                    //                   << std::to_string(validScripts[expectedEntity]) << std::endl;
-                    //         success = false;
-                    //     }
-                    // }
+#ifndef BENCHMARK_CABI
+                    ComponentModifiedEvent<Script> scriptEventEntity;
+                    while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
+                        size_t updateNumber = scriptUpdateCount++;
+                        size_t expectedEntity =
+                            (updateNumber * validScripts.size() / SCRIPT_UPDATES_PER_LOOP) % validScripts.size();
+                        if (scriptEventEntity != validScripts[expectedEntity] && success) {
+                            std::cerr << "Script modify event #" << (updateNumber + 1) << " "
+                                      << std::to_string(scriptEventEntity) << " != expected "
+                                      << std::to_string(validScripts[expectedEntity]) << std::endl;
+                            success = false;
+                        }
+                    }
+#endif
                 }
                 t = timer3;
             }
@@ -265,6 +276,9 @@ namespace benchmark {
     }
 
     int runBenchmark() {
+#ifdef BENCHMARK_CABI
+        std::cout << "Compiled against Tecs C ABI" << std::endl;
+#endif
 #if __cpp_lib_atomic_wait
         std::cout << "Compiled with C++20 atomic.wait()" << std::endl;
 #endif
@@ -352,16 +366,18 @@ namespace benchmark {
             }
             t = timer3;
         }
-        // {
-        //     MultiTimer timer1("Watch for script events Start");
-        //     MultiTimer timer2("Watch for script events Run");
-        //     MultiTimer timer3("Watch for script events Commit");
-        //     Timer t(timer1);
-        //     auto writeLock = ecs.StartTransaction<AddRemove>();
-        //     t = timer2;
-        //     scriptObserver = writeLock.Watch<ComponentModifiedEvent<Script>>();
-        //     t = timer3;
-        // }
+#ifndef BENCHMARK_CABI
+        {
+            MultiTimer timer1("Watch for script events Start");
+            MultiTimer timer2("Watch for script events Run");
+            MultiTimer timer3("Watch for script events Commit");
+            Timer t(timer1);
+            auto writeLock = ecs.StartTransaction<AddRemove>();
+            t = timer2;
+            scriptObserver = writeLock.Watch<ComponentModifiedEvent<Script>>();
+            t = timer3;
+        }
+#endif
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         ecs.StartTrace();
@@ -427,47 +443,49 @@ namespace benchmark {
         trace.SaveToCSV("benchmark-trace.csv");
 #endif
 
-        // {
-        //     MultiTimer timer1("Read script modified events Start");
-        //     MultiTimer timer2("Read script modified events Run");
-        //     MultiTimer timer3("Read script modified events Commit");
-        //     Timer t(timer1);
-        //     auto readLock = ecs.StartTransaction<Read<Script>>();
-        //     t = timer2;
-        //     auto &validScripts = readLock.EntitiesWith<Script>();
-        //     ComponentModifiedEvent<Script> scriptEventEntity;
-        //     while (scriptObserver.Poll(readLock, scriptEventEntity)) {
-        //         size_t updateNumber = scriptUpdateCount++;
-        //         size_t expectedEntity = (updateNumber * scriptCount / SCRIPT_UPDATES_PER_LOOP) % scriptCount;
-        //         if (scriptEventEntity != validScripts[expectedEntity] && success) {
-        //             std::cerr << "Script modify event #" << (updateNumber + 1) << " "
-        //                       << std::to_string(scriptEventEntity) << " != expected "
-        //                       << std::to_string(validScripts[expectedEntity]) << std::endl;
-        //             success = false;
-        //         }
-        //     }
-        //     const Entity &lastScript = validScripts[validScripts.size() / SCRIPT_DIVISOR];
-        //     auto &script = lastScript.Get<Script>(readLock);
-        //     size_t iterations = (size_t)script.data[0];
-        //     size_t expectedCount = iterations * SCRIPT_UPDATES_PER_LOOP;
-        //     if (scriptUpdateCount != expectedCount) {
-        //         std::cerr << "Script modify count " << scriptUpdateCount << " != expected " << expectedCount
-        //                   << std::endl;
-        //         success = false;
-        //     }
-        //     t = timer3;
-        // }
+#ifndef BENCHMARK_CABI
+        {
+            MultiTimer timer1("Read script modified events Start");
+            MultiTimer timer2("Read script modified events Run");
+            MultiTimer timer3("Read script modified events Commit");
+            Timer t(timer1);
+            auto readLock = ecs.StartTransaction<Read<Script>>();
+            t = timer2;
+            auto &validScripts = readLock.EntitiesWith<Script>();
+            ComponentModifiedEvent<Script> scriptEventEntity;
+            while (scriptObserver.Poll(readLock, scriptEventEntity)) {
+                size_t updateNumber = scriptUpdateCount++;
+                size_t expectedEntity = (updateNumber * scriptCount / SCRIPT_UPDATES_PER_LOOP) % scriptCount;
+                if (scriptEventEntity != validScripts[expectedEntity] && success) {
+                    std::cerr << "Script modify event #" << (updateNumber + 1) << " "
+                              << std::to_string(scriptEventEntity) << " != expected "
+                              << std::to_string(validScripts[expectedEntity]) << std::endl;
+                    success = false;
+                }
+            }
+            const Entity &lastScript = validScripts[validScripts.size() / SCRIPT_DIVISOR];
+            auto &script = lastScript.Get<Script>(readLock);
+            size_t iterations = (size_t)script.data[0];
+            size_t expectedCount = iterations * SCRIPT_UPDATES_PER_LOOP;
+            if (scriptUpdateCount != expectedCount) {
+                std::cerr << "Script modify count " << scriptUpdateCount << " != expected " << expectedCount
+                          << std::endl;
+                success = false;
+            }
+            t = timer3;
+        }
 
-        // {
-        //     MultiTimer timer1("Stop watching script events Start");
-        //     MultiTimer timer2("Stop watching script events Run");
-        //     MultiTimer timer3("Stop watching script events Commit");
-        //     Timer t(timer1);
-        //     auto writeLock = ecs.StartTransaction<AddRemove>();
-        //     t = timer2;
-        //     scriptObserver.Stop(writeLock);
-        //     t = timer3;
-        // }
+        {
+            MultiTimer timer1("Stop watching script events Start");
+            MultiTimer timer2("Stop watching script events Run");
+            MultiTimer timer3("Stop watching script events Commit");
+            Timer t(timer1);
+            auto writeLock = ecs.StartTransaction<AddRemove>();
+            t = timer2;
+            scriptObserver.Stop(writeLock);
+            t = timer3;
+        }
+#endif
 
         std::vector<Transform> transforms;
         {
