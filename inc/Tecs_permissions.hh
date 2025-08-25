@@ -183,29 +183,26 @@ namespace Tecs {
         }
     };
 
-    template<typename>
-    struct tuple_to_read {
-        using type = Read<>;
-    };
-    template<typename... Tn>
-    struct tuple_to_read<std::tuple<Tn...>> {
-        using type = Read<std::remove_pointer_t<Tn>...>;
-    };
+    namespace detail {
+        template<typename>
+        struct tuple_to_read {
+            using type = Read<>;
+        };
+        template<typename... Tn>
+        struct tuple_to_read<std::tuple<Tn...>> {
+            using type = Read<std::remove_pointer_t<Tn>...>;
+        };
 
-    template<typename>
-    struct tuple_to_write {
-        using type = Write<>;
-    };
-    template<typename... Tn>
-    struct tuple_to_write<std::tuple<Tn...>> {
-        using type = Write<std::remove_pointer_t<Tn>...>;
-    };
+        template<typename>
+        struct tuple_to_write {
+            using type = Write<>;
+        };
+        template<typename... Tn>
+        struct tuple_to_write<std::tuple<Tn...>> {
+            using type = Write<std::remove_pointer_t<Tn>...>;
+        };
 
-    template<typename LockType, typename... AllComponentTypes>
-    struct FlattenPermissions {
-        using AllTuple = std::tuple<AllComponentTypes...>;
-
-        template<size_t... Indices>
+        template<typename LockType, typename AllTuple, size_t... Indices>
         static constexpr auto flatten_read(std::index_sequence<Indices...>) {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
@@ -217,7 +214,7 @@ namespace Tecs {
             // clang-format on
         }
 
-        template<size_t... Indices>
+        template<typename LockType, typename AllTuple, size_t... Indices>
         static constexpr auto flatten_readonly(std::index_sequence<Indices...>) {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
@@ -228,7 +225,7 @@ namespace Tecs {
             // clang-format on
         }
 
-        template<size_t... Indices>
+        template<typename LockType, typename AllTuple, size_t... Indices>
         static constexpr auto flatten_write(std::index_sequence<Indices...>) {
             // clang-format off
             return std::tuple_cat(std::conditional_t<
@@ -239,20 +236,23 @@ namespace Tecs {
             // clang-format on
         }
 
+        template<typename LockType, typename AllTuple>
         static constexpr auto flatten() {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 return TransactionPermissions<AddRemove>{};
             } else {
-                using ReadPerm = decltype(flatten_read(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                using WritePerm = decltype(flatten_write(std::make_index_sequence<sizeof...(AllComponentTypes)>()));
-                if constexpr (std::is_same_v<ReadPerm, std::tuple<>>) {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                using ReadPerm =
+                    decltype(flatten_read<LockType, AllTuple>(std::make_index_sequence<std::tuple_size_v<AllTuple>>()));
+                using WritePerm = decltype(flatten_write<LockType, AllTuple>(
+                    std::make_index_sequence<std::tuple_size_v<AllTuple>>()));
+                if constexpr (std::is_same<ReadPerm, std::tuple<>>()) {
+                    if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
                         return TransactionPermissions<>{};
                     } else {
                         return TransactionPermissions<typename tuple_to_write<WritePerm>::type>{};
                     }
                 } else {
-                    if constexpr (std::is_same_v<WritePerm, std::tuple<>>) {
+                    if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
                         return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
                     } else {
                         return TransactionPermissions<typename tuple_to_read<ReadPerm>::type,
@@ -261,9 +261,14 @@ namespace Tecs {
                 }
             }
         }
+    } // namespace detail
 
-        using type = decltype(flatten());
-        using type_readonly = typename tuple_to_read<decltype(flatten_readonly(
+    template<typename LockType, typename... AllComponentTypes>
+    struct FlattenPermissions {
+        using AllTuple = std::tuple<AllComponentTypes...>;
+
+        using type = decltype(detail::flatten<LockType, AllTuple>());
+        using type_readonly = typename detail::tuple_to_read<decltype(detail::flatten_readonly<LockType, AllTuple>(
             std::make_index_sequence<sizeof...(AllComponentTypes)>()))>::type;
     };
 }; // namespace Tecs

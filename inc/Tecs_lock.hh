@@ -473,7 +473,7 @@ namespace Tecs {
         }
 
         template<typename LockType>
-        static inline constexpr auto generateReadBitset(const LockType &lock) {
+        static inline constexpr auto generateReadBitset([[maybe_unused]] const LockType &lock) {
             if constexpr (is_dynamic_lock<LockType>()) {
                 return lock.readPermissions;
             } else {
