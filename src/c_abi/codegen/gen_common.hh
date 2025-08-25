@@ -22,23 +22,24 @@ using ECS = Tecs::ECS<>;
 
 template<typename T>
 auto EmbedTypeIntoSignature() {
-    return std::string_view{std::source_location::current().function_name()};
+    const char *funcName = std::source_location::current().function_name();
+    return std::string_view(std::strcmp("EmbedTypeIntoSignature", funcName) == 0 ? typeid(T).name() : funcName);
 }
 
 template<typename T>
 auto TypeToString() {
-    auto dummyInt = EmbedTypeIntoSignature<int>();
-    auto intStart = dummyInt.find("int");
-    auto tailLength = dummyInt.size() - intStart - std::string("int").length();
+    auto dummyChar = EmbedTypeIntoSignature<unsigned char>();
+    auto charStart = dummyChar.find("unsigned char");
+    auto tailLength = dummyChar.size() - charStart - std::string("unsigned char").size();
 
-    auto typeStart = intStart;
+    auto typeStart = charStart;
     auto embeddingSignature = EmbedTypeIntoSignature<T>();
-    auto enumStart = embeddingSignature.find("enum ", intStart);
-    if (enumStart == intStart) typeStart += std::string("enum ").length();
-    auto classStart = embeddingSignature.find("class ", intStart);
-    if (classStart == intStart) typeStart += std::string("class ").length();
-    auto structStart = embeddingSignature.find("struct ", intStart);
-    if (structStart == intStart) typeStart += std::string("struct ").length();
+    auto enumStart = embeddingSignature.find("enum ", charStart);
+    if (enumStart == charStart) typeStart += std::string("enum ").length();
+    auto classStart = embeddingSignature.find("class ", charStart);
+    if (classStart == charStart) typeStart += std::string("class ").length();
+    auto structStart = embeddingSignature.find("struct ", charStart);
+    if (structStart == charStart) typeStart += std::string("struct ").length();
 
     auto typeLength = embeddingSignature.size() - typeStart - tailLength;
     return embeddingSignature.substr(typeStart, typeLength);
