@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Tecs.hh>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
