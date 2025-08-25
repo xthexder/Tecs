@@ -74,6 +74,7 @@ namespace Tecs {
          * Events will be returned in the order they occured, up until the start of the current transaction.
          */
         bool Poll(Lock<ECSType> lock, EventType &eventOut) const {
+            (void)lock; // Fix unused warning
             auto eventList = eventListWeak.lock();
             if (eventList && !eventList->empty()) {
                 eventOut = eventList->front();
