@@ -114,9 +114,12 @@ namespace Tecs {
             if (!writeQueue) writeQueue = std::make_shared<std::deque<Event>>();
         }
 
+        bool IsEmpty() const {
+            return observers.empty();
+        }
+
         template<typename... Args>
         void AddEvent(Args &&...args) {
-            if (observers.empty()) return;
             writeQueue->emplace_back(std::forward<Args>(args)...);
         }
 

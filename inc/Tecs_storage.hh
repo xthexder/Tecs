@@ -21,6 +21,8 @@
 
 static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic_int is not lock-free");
 
+typedef void tecs_lock_t;
+
 namespace Tecs {
     template<typename T>
     class ComponentIndex {
@@ -359,10 +361,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
-        template<template<typename...> typename, typename...>
-        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs

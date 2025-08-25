@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Tecs_entity.hh"
+#include "Tecs_entity_view.h"
 
 #include <iterator>
 #include <limits>
 #include <vector>
 
-namespace Tecs {
+namespace Tecs::abi {
     class EntityView {
     public:
         typedef const Entity element_type;
@@ -25,7 +26,20 @@ namespace Tecs {
             typedef const Entity &reference;
             typedef std::random_access_iterator_tag iterator_category;
 
-            iterator(const EntityView &view, size_t index = 0) : view(view), i(index) {}
+            iterator(const tecs_entity_view_t &view, size_t index = 0)
+                : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(cacheInvalidationCounter) {}
+
+            inline const Entity *begin_uncached() const {
+                return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&view));
+            }
+
+            inline const Entity *begin() const {
+                if (cacheInvalidationCounter != cacheCounter) {
+                    cachedBase = begin_uncached();
+                    cacheCounter = cacheInvalidationCounter;
+                }
+                return cachedBase;
+            }
 
             inline reference operator*() const {
 #ifndef TECS_UNCHECKED_MODE
@@ -33,7 +47,7 @@ namespace Tecs {
                     throw std::runtime_error("EntityView::iterator::operator*: index out of bounds");
                 }
 #endif
-                return (*view.storage)[i];
+                return begin()[i];
             }
 
             inline pointer operator->() const {
@@ -42,7 +56,7 @@ namespace Tecs {
                     throw std::runtime_error("EntityView::iterator::operator->: index out of bounds");
                 }
 #endif
-                return &(*view.storage)[i];
+                return begin() + i;
             }
 
             inline reference operator[](difference_type n) const {
@@ -52,7 +66,7 @@ namespace Tecs {
                     throw std::runtime_error("EntityView::iterator::operator[]: index out of bounds");
                 }
 #endif
-                return (*view.storage)[index];
+                return begin()[index];
             }
 
             inline iterator &operator++() noexcept {
@@ -103,70 +117,75 @@ namespace Tecs {
                 return view.storage != other.view.storage || i != other.i;
             }
 
-            const EntityView &view;
+            const tecs_entity_view_t &view;
             size_t i;
+
+            mutable const Entity *cachedBase;
+            mutable size_t cacheCounter;
         };
 
         typedef std::reverse_iterator<iterator> reverse_iterator;
 
         EntityView() {}
-        EntityView(const std::vector<Entity> &storage) : storage(&storage), start_index(0), end_index(storage.size()) {}
-        EntityView(const std::vector<Entity> &storage, size_t start, size_t end)
-            : storage(&storage), start_index(start), end_index(end) {
+        EntityView(const tecs_entity_view_t &view) : base(view) {
 #ifndef TECS_UNCHECKED_MODE
-            if (start > storage.size()) {
-                throw std::runtime_error("EntityView start index out of range: " + std::to_string(start));
-            } else if (end > storage.size()) {
-                throw std::runtime_error("EntityView end index out of range: " + std::to_string(end));
-            } else if (start > end) {
-                throw std::runtime_error(
-                    "EntityView start index is past end index: " + std::to_string(start) + " > " + std::to_string(end));
+            if (view.storage == nullptr) {
+                throw std::runtime_error("EntityView storage is null");
+            }
+            size_t storage_size = Tecs_entity_view_storage_size(&view);
+            if (view.start_index > storage_size) {
+                throw std::runtime_error("EntityView start index out of range: " + std::to_string(view.start_index));
+            } else if (view.end_index > storage_size) {
+                throw std::runtime_error("EntityView end index out of range: " + std::to_string(view.end_index));
+            } else if (view.start_index > view.end_index) {
+                throw std::runtime_error("EntityView start index is past end index: " +
+                                         std::to_string(view.start_index) + " > " + std::to_string(view.end_index));
             }
 #endif
         }
 
         inline iterator begin() const noexcept {
-            return iterator(*this, start_index);
+            return iterator(base, base.start_index);
         }
 
         inline iterator end() const noexcept {
-            return iterator(*this, end_index);
+            return iterator(base, base.end_index);
         }
 
         inline reverse_iterator rbegin() const noexcept {
-            return reverse_iterator(iterator{*this, end_index});
+            return reverse_iterator(iterator{base, base.end_index});
         }
 
         inline reverse_iterator rend() const noexcept {
-            return reverse_iterator(iterator{*this, start_index + 1});
+            return reverse_iterator(iterator{base, base.start_index + 1});
         }
 
         inline reference operator[](size_type index) const {
 #ifndef TECS_UNCHECKED_MODE
-            if (index < start_index || index >= end_index) {
+            if (index < base.start_index || index >= base.end_index) {
                 throw std::runtime_error("EntityView index out of range: " + std::to_string(index));
             }
 #endif
-            return (*storage)[index];
+            return reinterpret_cast<const Entity *>(Tecs_entity_view_begin(&base))[index];
         }
 
         inline size_type size() const noexcept {
-            return end_index - start_index;
+            return base.end_index - base.start_index;
         }
 
         inline bool empty() const noexcept {
-            return end_index <= start_index;
+            return base.end_index <= base.start_index;
         }
 
         inline EntityView subview(size_type offset, size_type count = std::numeric_limits<size_type>::max()) const {
 #ifndef TECS_UNCHECKED_MODE
-            if (storage == nullptr) throw std::runtime_error("EntityView::subview storage is null");
+            if (base.storage == nullptr) throw std::runtime_error("EntityView::subview storage is null");
 #endif
-            return EntityView(*storage, start_index + offset, std::min(end_index, start_index + offset + count));
+            return tecs_entity_view_t{base.storage,
+                base.start_index + offset,
+                std::min(base.end_index, base.start_index + offset + count)};
         }
 
-        const std::vector<Entity> *storage = nullptr;
-        size_t start_index = 0;
-        size_t end_index = 0;
+        tecs_entity_view_t base;
     };
-} // namespace Tecs
+}; // namespace Tecs::abi

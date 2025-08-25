@@ -80,6 +80,10 @@ namespace Tecs {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
         }
 
+        inline size_t GetNextTransactionId() const {
+            return nextTransactionId;
+        }
+
         /**
          * Returns the index of a Component type for use in a bitset.
          */
@@ -108,6 +112,13 @@ namespace Tecs {
         }
 
         /**
+         * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
+         */
+        inline static std::string GetComponentName(size_t componentIndex) {
+            return GetComponentName<Tn...>(componentIndex);
+        }
+
+        /**
          * Returns true if the Component type is part of this ECS.
          */
         template<typename U>
@@ -124,10 +135,22 @@ namespace Tecs {
         inline static constexpr size_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
 
-            if constexpr (std::is_same<U, typename std::tuple_element<I, std::tuple<Tn...>>::type>::value) {
+            if constexpr (std::is_same<U, typename std::tuple_element_t<I, std::tuple<Tn...>>>()) {
                 return I;
             } else {
                 return GetComponentIndex<I + 1, U>();
+            }
+        }
+
+        template<typename U, typename... Un>
+        inline static std::string GetComponentName(size_t index) {
+            if (index == 0) {
+                return GetComponentName<U>();
+            }
+            if constexpr (sizeof...(Un) > 0) {
+                return GetComponentName<Un...>(index - 1);
+            } else {
+                throw std::runtime_error("Component does not exist");
             }
         }
 
@@ -167,10 +190,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
-        template<template<typename...> typename, typename...>
-        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs
