@@ -409,8 +409,9 @@ namespace Tecs {
                 if (instance.template BitsetHas<U>(writeAccessedFlags) && !storage.componentModifyEvents.IsEmpty()) {
                     const auto &newMetadata =
                         IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
-                    const auto &oldMetadata = instance.globalReadMetadata;
-                    if (instance.template BitsetHas<U>(newMetadata) && instance.template BitsetHas<U>(oldMetadata)) {
+                    // const auto &oldMetadata = instance.globalReadMetadata;
+                    if (instance.template BitsetHas<U>(newMetadata)) {
+                        // && instance.template BitsetHas<U>(oldMetadata)) {
                         if constexpr (is_equals_comparable<U>()) {
                             if (storage.writeComponents[0] != storage.readComponents[0]) {
                                 storage.componentModifyEvents.AddEvent();
@@ -480,11 +481,21 @@ namespace Tecs {
                         const auto &oldMetadata = index >= instance.metadata.readComponents.size()
                                                       ? emptyMetadata
                                                       : instance.metadata.readComponents[index];
-                        if (instance.template BitsetHas<U>(newMetadata) &&
-                            instance.template BitsetHas<U>(oldMetadata)) {
-                            if constexpr (is_equals_comparable<U>()) {
+                        if constexpr (is_equals_comparable<U>()) {
+                            // If this is the same entity, check the equality operator
+                            if (instance.template BitsetHas<U>(newMetadata) &&
+                                instance.template BitsetHas<U>(oldMetadata) &&
+                                newMetadata.generation == oldMetadata.generation) {
                                 if (storage.writeComponents[index] == storage.readComponents[index]) continue;
                             }
+                        }
+                        // If the generation was changed or the entity was removed, consider the old generation modified
+                        if (instance.template BitsetHas<U>(oldMetadata) &&
+                            (!instance.template BitsetHas<U>(newMetadata) ||
+                                newMetadata.generation != oldMetadata.generation)) {
+                            storage.componentModifyEvents.AddEvent(Entity(index, oldMetadata.generation));
+                        }
+                        if (instance.template BitsetHas<U>(newMetadata)) {
                             storage.componentModifyEvents.AddEvent(Entity(index, newMetadata.generation));
                         }
                     }
