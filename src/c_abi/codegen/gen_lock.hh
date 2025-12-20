@@ -12,13 +12,14 @@ void generateLockH(S &out) {
 
 #ifdef __cplusplus
 extern "C" {
-#else
-    #include <stdint.h>
-
-typedef uint8_t bool;
 #endif
 
+#include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+static_assert(sizeof(bool) == 1, "Unexpected bool size");
 )RAWSTR";
 #ifdef TECS_C_ABI_ECS_C_INCLUDE
     out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
