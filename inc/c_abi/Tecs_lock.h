@@ -6,13 +6,14 @@
 
 #ifdef __cplusplus
 extern "C" {
-#else
-    #include <stdint.h>
-
-typedef uint8_t bool;
 #endif
 
+#include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+static_assert(sizeof(bool) == 1, "Unexpected bool size");
 
 typedef void tecs_lock_t;
 
