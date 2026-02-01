@@ -9,14 +9,15 @@
 
 #ifdef TECS_ENABLE_TRACY
     #include <cstring>
+    #include <sstream>
     #include <tracy/Tracy.hpp>
 #endif
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bitset>
 #include <cstddef>
-#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 
