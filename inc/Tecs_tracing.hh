@@ -171,7 +171,7 @@ namespace Tecs {
         inline nonstd::span<TraceEvent> StopTrace() {
             if (!traceEnabled) throw std::runtime_error("No trace has been started");
             traceEnabled = false;
-            return nonstd::span<TraceEvent>(events.data(), std::min(events.size(), (size_t)nextEventIndex.load()));
+            return nonstd::span<TraceEvent>(events.data(), std::min((uint32_t)events.size(), nextEventIndex.load()));
         }
 
     private:

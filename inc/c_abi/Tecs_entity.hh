@@ -135,7 +135,7 @@ namespace Tecs::abi {
                 lock.cacheCounter = cacheInvalidationCounter;
             }
 
-            constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
+            constexpr uint32_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
             if constexpr (std::is_const<ReturnType>()) {
                 auto *&cachedStorage = std::get<const CompType *>(lock.cachedStorage);
                 if (!cachedStorage) {
@@ -162,7 +162,7 @@ namespace Tecs::abi {
             }
             auto *&cachedPreviousStorage = std::get<const CompType *>(lock.cachedPreviousStorage);
             if (!cachedPreviousStorage) {
-                constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
+                constexpr uint32_t componentIndex = LockType::ECS::template GetComponentIndex<CompType>();
                 cachedPreviousStorage =
                     static_cast<CompType *>(Tecs_get_previous_entity_storage(lock.base.get(), componentIndex));
             }
@@ -175,7 +175,7 @@ namespace Tecs::abi {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
 
-            constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
             return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (tecs_entity_t)(*this), componentIndex, &value));
         }
 
@@ -186,7 +186,7 @@ namespace Tecs::abi {
 
             T temp = T(std::forward<Args>(args)...);
 
-            constexpr size_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = LockType::ECS::template GetComponentIndex<T>();
             return *static_cast<T *>(Tecs_entity_set(lock.base.get(), (tecs_entity_t)(*this), componentIndex, &temp));
         }
 

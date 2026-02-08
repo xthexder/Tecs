@@ -26,7 +26,7 @@ namespace Tecs::abi {
                     throw std::runtime_error("Lock is missing AddRemove permissions");
                 }
             } else {
-                size_t componentIndex = 0;
+                uint32_t componentIndex = 0;
                 (
                     [&] {
                         if constexpr (is_write_allowed<AllComponentTypes, LockType>()) {
@@ -70,7 +70,7 @@ namespace Tecs::abi {
         template<typename... PermissionsSource, std::enable_if_t<is_lock_subset<PermissionsSource...>(), int> = 0>
         inline Lock(const Lock<ECS, PermissionsSource...> &source) : base(source.base) {}
 
-        inline size_t GetTransactionId() const {
+        inline uint64_t GetTransactionId() const {
             return Tecs_lock_get_transaction_id(base.get());
         }
 
@@ -78,7 +78,7 @@ namespace Tecs::abi {
         inline const EntityView PreviousEntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<T>();
             tecs_entity_view_t view = {};
             (void)Tecs_previous_entities_with(base.get(), componentIndex, &view);
             return EntityView(view);
@@ -88,7 +88,7 @@ namespace Tecs::abi {
         inline const EntityView EntitiesWith() const {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<T>();
             tecs_entity_view_t view = {};
             (void)Tecs_entities_with(base.get(), componentIndex, &view);
             return EntityView(view);
@@ -142,7 +142,7 @@ namespace Tecs::abi {
                 "Can't get non-const reference of read only Component.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<CompType>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<CompType>();
             if constexpr (std::is_const<ReturnType>()) {
                 return *static_cast<const CompType *>(Tecs_const_get(base.get(), componentIndex));
             } else {
@@ -156,7 +156,7 @@ namespace Tecs::abi {
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<CompType>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<CompType>();
             return *static_cast<const CompType *>(Tecs_get_previous(base.get(), componentIndex));
         }
 
@@ -165,7 +165,7 @@ namespace Tecs::abi {
             static_assert(is_write_allowed<T, LockType>(), "Component is not locked for writing.");
             static_assert(is_global_component<T>(), "Only global components can be accessed without an Entity");
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<T>();
             return *static_cast<T *>(Tecs_set(base.get(), componentIndex, &value));
         }
 
@@ -176,7 +176,7 @@ namespace Tecs::abi {
 
             T temp = T(std::forward<Args>(args)...);
 
-            constexpr size_t componentIndex = ECS::template GetComponentIndex<T>();
+            constexpr uint32_t componentIndex = ECS::template GetComponentIndex<T>();
             return *static_cast<T *>(Tecs_set(base.get(), componentIndex, &temp));
         }
 

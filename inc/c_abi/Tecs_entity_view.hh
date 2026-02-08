@@ -12,7 +12,7 @@ namespace Tecs::abi {
     public:
         typedef const Entity element_type;
         typedef Entity value_type;
-        typedef size_t size_type;
+        typedef uint64_t size_type;
         typedef std::ptrdiff_t difference_type;
 
         typedef const Entity *pointer;
@@ -26,7 +26,7 @@ namespace Tecs::abi {
             typedef const Entity &reference;
             typedef std::random_access_iterator_tag iterator_category;
 
-            iterator(const tecs_entity_view_t &view, size_t index = 0)
+            iterator(const tecs_entity_view_t &view, uint64_t index = 0)
                 : view(view), i(index), cachedBase(begin_uncached()), cacheCounter(cacheInvalidationCounter) {}
 
             inline const Entity *begin_uncached() const {
@@ -60,7 +60,7 @@ namespace Tecs::abi {
             }
 
             inline reference operator[](difference_type n) const {
-                size_t index = i + n;
+                uint64_t index = i + n;
 #ifndef TECS_UNCHECKED_MODE
                 if (index < view.start_index || index >= view.end_index) {
                     throw std::runtime_error("EntityView::iterator::operator[]: index out of bounds");
@@ -118,7 +118,7 @@ namespace Tecs::abi {
             }
 
             const tecs_entity_view_t &view;
-            size_t i;
+            uint64_t i;
 
             mutable const Entity *cachedBase;
             mutable size_t cacheCounter;
@@ -132,7 +132,7 @@ namespace Tecs::abi {
             if (view.storage == nullptr) {
                 throw std::runtime_error("EntityView storage is null");
             }
-            size_t storage_size = Tecs_entity_view_storage_size(&view);
+            uint64_t storage_size = Tecs_entity_view_storage_size(&view);
             if (view.start_index > storage_size) {
                 throw std::runtime_error("EntityView start index out of range: " + std::to_string(view.start_index));
             } else if (view.end_index > storage_size) {

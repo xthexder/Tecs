@@ -111,7 +111,7 @@ namespace Tecs {
         }
 
 #ifndef TECS_HEADER_ONLY
-        inline size_t GetTransactionId() const {
+        inline uint64_t GetTransactionId() const {
             return transaction->GetTransactionId();
         }
 #endif

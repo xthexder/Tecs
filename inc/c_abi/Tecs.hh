@@ -119,7 +119,7 @@ namespace Tecs::abi {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)Tecs_ecs_get_instance_id(base);
         }
 
-        inline size_t GetNextTransactionId() const {
+        inline uint64_t GetNextTransactionId() const {
             return Tecs_ecs_get_next_transaction_id(base);
         }
 
@@ -127,21 +127,21 @@ namespace Tecs::abi {
          * Returns the index of a Component type for use in a bitset.
          */
         template<typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        inline static constexpr uint32_t GetComponentIndex() {
             return GetComponentIndex<0, U>();
         }
 
         /**
          * Returns the number of Component types registered in this ECS instance.
          */
-        inline static constexpr size_t GetComponentCount() {
+        inline static constexpr uint32_t GetComponentCount() {
             return sizeof...(Tn);
         }
 
         /**
          * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
          */
-        inline std::string GetComponentName(size_t componentIndex) {
+        inline std::string GetComponentName(uint32_t componentIndex) {
             size_t size = Tecs_ecs_get_component_name(componentIndex, 0, nullptr);
             std::string str(size, '\0');
             Tecs_ecs_get_component_name(componentIndex, size, str.data());
@@ -169,8 +169,8 @@ namespace Tecs::abi {
         }
 
     private:
-        template<size_t I, typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        template<uint32_t I, typename U>
+        inline static constexpr uint32_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
 
             if constexpr (std::is_same<U, typename std::tuple_element<I, std::tuple<Tn...>>::type>::value) {
