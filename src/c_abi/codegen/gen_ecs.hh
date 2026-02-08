@@ -52,21 +52,21 @@ TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction_bitstr(tecs_ecs_t *ecsPtr, c
         DynamicLock::PermissionBitset(std::string(writePermissions)));
 }
 
-TECS_EXPORT size_t Tecs_ecs_get_instance_id(tecs_ecs_t *ecsPtr) {
+TECS_EXPORT uint64_t Tecs_ecs_get_instance_id(tecs_ecs_t *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return ecs->GetInstanceId();
 }
 
-TECS_EXPORT size_t Tecs_ecs_get_next_transaction_id(tecs_ecs_t *ecsPtr) {
+TECS_EXPORT uint64_t Tecs_ecs_get_next_transaction_id(tecs_ecs_t *ecsPtr) {
     ECS *ecs = static_cast<ECS *>(ecsPtr);
     return ecs->GetNextTransactionId();
 }
 
-TECS_EXPORT size_t Tecs_ecs_get_component_count() {
+TECS_EXPORT uint32_t Tecs_ecs_get_component_count() {
     return ECS::GetComponentCount();
 }
 
-TECS_EXPORT size_t Tecs_ecs_get_component_size(size_t componentIndex) {
+TECS_EXPORT size_t Tecs_ecs_get_component_size(uint32_t componentIndex) {
     // For each component...
 )RAWSTR";
     for (size_t i = 0; i < names.size(); i++) {
@@ -84,7 +84,7 @@ TECS_EXPORT size_t Tecs_ecs_get_component_size(size_t componentIndex) {
     }
 }
 
-TECS_EXPORT size_t Tecs_ecs_get_component_name(size_t componentIndex, size_t bufferSize, char *output) {
+TECS_EXPORT size_t Tecs_ecs_get_component_name(uint32_t componentIndex, size_t bufferSize, char *output) {
     std::string name;
     // For each component...
 )RAWSTR";

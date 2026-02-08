@@ -80,7 +80,7 @@ namespace Tecs {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
         }
 
-        inline size_t GetNextTransactionId() const {
+        inline uint64_t GetNextTransactionId() const {
             return nextTransactionId;
         }
 
@@ -88,14 +88,14 @@ namespace Tecs {
          * Returns the index of a Component type for use in a bitset.
          */
         template<typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        inline static constexpr uint32_t GetComponentIndex() {
             return GetComponentIndex<0, U>();
         }
 
         /**
          * Returns the number of Component types registered in this ECS instance.
          */
-        inline static constexpr size_t GetComponentCount() {
+        inline static constexpr uint32_t GetComponentCount() {
             return sizeof...(Tn);
         }
 
@@ -114,7 +114,7 @@ namespace Tecs {
         /**
          * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
          */
-        inline static std::string GetComponentName(size_t componentIndex) {
+        inline static std::string GetComponentName(uint32_t componentIndex) {
             return GetComponentName<Tn...>(componentIndex);
         }
 
@@ -131,8 +131,8 @@ namespace Tecs {
         }
 
     private:
-        template<size_t I, typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        template<uint32_t I, typename U>
+        inline static constexpr uint32_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
 
             if constexpr (std::is_same<U, typename std::tuple_element_t<I, std::tuple<Tn...>>>()) {
@@ -143,7 +143,7 @@ namespace Tecs {
         }
 
         template<typename U, typename... Un>
-        inline static std::string GetComponentName(size_t index) {
+        inline static std::string GetComponentName(uint32_t index) {
             if (index == 0) {
                 return GetComponentName<U>();
             }
@@ -185,7 +185,7 @@ namespace Tecs {
 #endif
 
 #ifndef TECS_HEADER_ONLY
-        size_t ecsId;
+        uint64_t ecsId;
 #endif
 
         template<typename, typename...>

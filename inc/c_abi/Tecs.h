@@ -20,11 +20,11 @@ TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction(tecs_ecs_t *ecsPtr, uint64_t
 TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction_bitstr(tecs_ecs_t *ecsPtr, const char *readPermissions,
     const char *writePermissions);
 
-TECS_EXPORT size_t Tecs_ecs_get_instance_id(tecs_ecs_t *ecsPtr);
-TECS_EXPORT size_t Tecs_ecs_get_next_transaction_id(tecs_ecs_t *ecsPtr);
-TECS_EXPORT size_t Tecs_ecs_get_component_count();
-TECS_EXPORT size_t Tecs_ecs_get_component_size(size_t componentIndex);
-TECS_EXPORT size_t Tecs_ecs_get_component_name(size_t componentIndex, size_t bufferSize, char *output);
+TECS_EXPORT uint64_t Tecs_ecs_get_instance_id(tecs_ecs_t *ecsPtr);
+TECS_EXPORT uint64_t Tecs_ecs_get_next_transaction_id(tecs_ecs_t *ecsPtr);
+TECS_EXPORT uint32_t Tecs_ecs_get_component_count();
+TECS_EXPORT size_t Tecs_ecs_get_component_size(uint32_t componentIndex);
+TECS_EXPORT size_t Tecs_ecs_get_component_name(uint32_t componentIndex, size_t bufferSize, char *output);
 TECS_EXPORT size_t Tecs_ecs_get_bytes_per_entity();
 
 TECS_EXPORT void Tecs_lock_release(tecs_lock_t *dynLockPtr);

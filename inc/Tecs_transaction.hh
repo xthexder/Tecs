@@ -28,10 +28,10 @@ namespace Tecs {
     #endif
 
     // Used for detecting nested transactions
-    extern thread_local std::array<size_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
+    extern thread_local std::array<uint64_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
     extern thread_local size_t activeTransactionsCount;
-    extern std::atomic_size_t nextEcsId;
-    extern std::atomic_size_t nextTransactionId;
+    extern std::atomic_uint64_t nextEcsId;
+    extern std::atomic_uint64_t nextTransactionId;
 #endif
 
     /**
@@ -52,7 +52,7 @@ namespace Tecs {
 
         ECS &instance;
 #ifndef TECS_HEADER_ONLY
-        size_t transactionId;
+        uint64_t transactionId;
 #endif
 
         const PermissionBitset readPermissions;
@@ -90,7 +90,7 @@ namespace Tecs {
         }
 
 #ifndef TECS_HEADER_ONLY
-        inline size_t GetTransactionId() const {
+        inline uint64_t GetTransactionId() const {
             return transactionId;
         }
 #endif

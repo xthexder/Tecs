@@ -4,7 +4,7 @@
 
 extern "C" {
 
-TECS_EXPORT size_t Tecs_entity_view_storage_size(const tecs_entity_view_t *view) {
+TECS_EXPORT uint64_t Tecs_entity_view_storage_size(const tecs_entity_view_t *view) {
     auto *storage = static_cast<decltype(Tecs::EntityView::storage)>(view->storage);
     return storage->size();
 }
