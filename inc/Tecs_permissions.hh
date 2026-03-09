@@ -93,7 +93,7 @@ namespace Tecs {
 #define TECS_NAME_COMPONENT(ComponentType, ComponentName)                                                              \
     template<>                                                                                                         \
     struct Tecs::component_name<ComponentType> {                                                                       \
-        static constexpr char value[] = (ComponentName);                                                               \
+        static constexpr char value[] = ComponentName;                                                                 \
     };
 
     // contains<T, Un...>::value is true if T is part of the set Un...
