@@ -4,41 +4,24 @@
 
 template<typename S>
 void generateECSCC(S &out) {
-    out << "#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)" << std::endl;
-    out << "    #define _CRT_SECURE_NO_WARNINGS" << std::endl;
-    out << "#endif" << std::endl;
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
-#ifdef TECS_C_ABI_ECS_INCLUDE
-    out << std::endl << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE);
-#endif
     out << R"RAWSTR(
-#include <Tecs.hh>
-#include <c_abi/Tecs.h>
-#include <cstring>
-
-)RAWSTR";
-    out << "using ECS = " << TypeToString<TECS_C_ABI_ECS_NAME>();
-    out << R"RAWSTR(;
-using DynamicLock = Tecs::DynamicLock<ECS>;
-
-extern "C" {
-
 TECS_EXPORT tecs_ecs_t *Tecs_make_ecs_instance() {
     return new ECS();
 }
 
 TECS_EXPORT void Tecs_release_ecs_instance(tecs_ecs_t *ecsPtr) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
-    delete ecs;
+    ECS *instance = static_cast<ECS *>(ecsPtr);
+    delete instance;
 }
 
 TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction(tecs_ecs_t *ecsPtr, uint64_t readPermissions, uint64_t writePermissions) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    ECS *instance = static_cast<ECS *>(ecsPtr);
     if constexpr (1 + ECS::GetComponentCount() > std::numeric_limits<uint64_t>::digits) {
         std::cerr << "Too many components to use uint64 init: " << ECS::GetComponentCount() << std::endl;
         return nullptr;
     } else {
-        return new DynamicLock(*ecs,
+        return new DynamicLock(*instance,
             DynamicLock::PermissionBitset(readPermissions),
             DynamicLock::PermissionBitset(writePermissions));
     }
@@ -46,20 +29,20 @@ TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction(tecs_ecs_t *ecsPtr, uint64_t
 
 TECS_EXPORT tecs_lock_t *Tecs_ecs_start_transaction_bitstr(tecs_ecs_t *ecsPtr, const char *readPermissions,
     const char *writePermissions) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
-    return new DynamicLock(*ecs,
+    ECS *instance = static_cast<ECS *>(ecsPtr);
+    return new DynamicLock(*instance,
         DynamicLock::PermissionBitset(std::string(readPermissions)),
         DynamicLock::PermissionBitset(std::string(writePermissions)));
 }
 
 TECS_EXPORT uint64_t Tecs_ecs_get_instance_id(tecs_ecs_t *ecsPtr) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
-    return ecs->GetInstanceId();
+    ECS *instance = static_cast<ECS *>(ecsPtr);
+    return instance->GetInstanceId();
 }
 
 TECS_EXPORT uint64_t Tecs_ecs_get_next_transaction_id(tecs_ecs_t *ecsPtr) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
-    return ecs->GetNextTransactionId();
+    ECS *instance = static_cast<ECS *>(ecsPtr);
+    return instance->GetNextTransactionId();
 }
 
 TECS_EXPORT uint32_t Tecs_ecs_get_component_count() {
@@ -115,7 +98,5 @@ TECS_EXPORT void Tecs_lock_release(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     delete dynLock;
 }
-
-} // extern "C"
 )RAWSTR";
 }

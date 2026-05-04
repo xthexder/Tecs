@@ -1,3 +1,5 @@
+#include "c_abi/Tecs.h"
+#include "c_abi/Tecs_entity_view.h"
 #include "test_components.hh"
 #include "test_ecs.hh"
 #include "tests.hh"
@@ -6,7 +8,9 @@
 #include <Tecs.hh>
 #include <c_abi/Tecs.hh>
 #include <c_abi/Tecs_entity.hh>
+#include <c_abi/Tecs_gen.h>
 #include <c_abi/Tecs_lock.hh>
+#include <cstdint>
 #include <iostream>
 
 using namespace testing;
@@ -155,6 +159,25 @@ int main(int /* argc */, char ** /* argv */) {
         }
         for (Tecs::abi::Entity ent : validTransforms) {
             std::cout << std::to_string(ent) << std::endl;
+        }
+    }
+    {
+        Timer t("Test entities with generated API");
+        auto readLock = ecs.StartTransaction<Tecs::Read<Renderable, Transform>>();
+
+        tecs_entity_view_t validRenderables = {};
+        Tecs_entities_with_renderable(readLock.base.get(), &validRenderables);
+        tecs_entity_view_t validTransforms = {};
+        Tecs_entities_with_transform(readLock.base.get(), &validTransforms);
+        for (const tecs_entity_t *ent = Tecs_entity_view_begin(&validRenderables);
+            ent != Tecs_entity_view_end(&validRenderables);
+            ent++) {
+            std::cout << std::to_string(Tecs::Entity(*ent)) << std::endl;
+        }
+        for (const tecs_entity_t *ent = Tecs_entity_view_begin(&validTransforms);
+            ent != Tecs_entity_view_end(&validTransforms);
+            ent++) {
+            std::cout << std::to_string(Tecs::Entity(*ent)) << std::endl;
         }
     }
     // {
