@@ -10,7 +10,9 @@
 #define STRING(s) #s
 #define STRINGIFY(s) STRING(s)
 
-#ifdef TECS_C_ABI_ECS_INCLUDE
+#ifdef TECS_C_ABI_ECS_IMPL_INCLUDE
+    #include TECS_C_ABI_ECS_IMPL_INCLUDE
+#elif defined(TECS_C_ABI_ECS_INCLUDE)
     #include TECS_C_ABI_ECS_INCLUDE
 #endif
 #ifndef TECS_C_ABI_ECS_NAME

@@ -68,6 +68,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Launch C-ABI Tests (Linux)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Tecs-c_abi_test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Launch Tests (Linux)",
             "type": "cppdbg",
             "request": "launch",

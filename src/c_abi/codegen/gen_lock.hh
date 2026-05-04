@@ -4,30 +4,6 @@
 
 template<typename S>
 void generateLockH(S &out) {
-    out << R"RAWSTR(#pragma once
-
-#include "c_abi/Tecs_entity.h"
-#include "c_abi/Tecs_entity_view.h"
-#include "c_abi/Tecs_export.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <assert.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-static_assert(sizeof(bool) == 1, "Unexpected bool size");
-)RAWSTR";
-#ifdef TECS_C_ABI_ECS_C_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
-#endif
-    out << R"RAWSTR(
-
-typedef void tecs_lock_t;
-)RAWSTR";
     auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
     for (size_t i = 0; i < snakeCaseNames.size(); i++) {
@@ -53,11 +29,6 @@ typedef void tecs_lock_t;
             out << "TECS_EXPORT void Tecs_unset_" << scn << "(tecs_lock_t *dynLockPtr);" << std::endl;
         }
     }
-    out << R"RAWSTR(
-#ifdef __cplusplus
-}
-#endif
-)RAWSTR";
 }
 
 template<typename S>
@@ -65,23 +36,7 @@ void generateLockCC(S &out) {
     auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
     auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
-#ifdef TECS_C_ABI_ECS_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
-#endif
-#ifdef TECS_C_ABI_ECS_C_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
-#endif
     out << R"RAWSTR(
-#include <Tecs.hh>
-#include <c_abi/Tecs_lock.h>
-
-)RAWSTR";
-    out << "using ECS = " << TypeToString<TECS_C_ABI_ECS_NAME>();
-    out << R"RAWSTR(;
-using DynamicLock = Tecs::DynamicLock<ECS>;
-
-extern "C" {
-
 TECS_EXPORT uint64_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return dynLock->GetTransactionId();
@@ -563,7 +518,5 @@ TECS_EXPORT tecs_lock_t *Tecs_lock_read_only(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return new DynamicLock(dynLock->ReadOnlySubset());
 }
-
-} // extern "C"
 )RAWSTR";
 }

@@ -4,28 +4,6 @@
 
 template<typename S>
 void generateEntityH(S &out) {
-    out << R"RAWSTR(#pragma once
-
-#include "c_abi/Tecs_export.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <assert.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-static_assert(sizeof(bool) == 1, "Unexpected bool size");
-)RAWSTR";
-#ifdef TECS_C_ABI_ECS_C_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
-#endif
-    out << R"RAWSTR(
-typedef void tecs_lock_t;
-typedef uint64_t tecs_entity_t;
-)RAWSTR";
     auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
     auto cnames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCTypeName();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
@@ -53,11 +31,6 @@ typedef uint64_t tecs_entity_t;
         out << "TECS_EXPORT void Tecs_entity_unset_" << scn << "(tecs_lock_t *dynLockPtr, tecs_entity_t entity);"
             << std::endl;
     }
-    out << R"RAWSTR(
-#ifdef __cplusplus
-}
-#endif
-)RAWSTR";
 }
 
 template<typename S>
@@ -67,23 +40,7 @@ void generateEntityCC(S &out) {
     auto cnames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCTypeName();
     auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
     auto copyableList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCopyableList();
-#ifdef TECS_C_ABI_ECS_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
-#endif
-#ifdef TECS_C_ABI_ECS_C_INCLUDE
-    out << "#include " STRINGIFY(TECS_C_ABI_ECS_C_INCLUDE) << std::endl;
-#endif
     out << R"RAWSTR(
-#include <Tecs.hh>
-#include <c_abi/Tecs_lock.h>
-
-)RAWSTR";
-    out << "using ECS = " << TypeToString<TECS_C_ABI_ECS_NAME>();
-    out << R"RAWSTR(;
-using DynamicLock = Tecs::DynamicLock<ECS>;
-
-extern "C" {
-
 TECS_EXPORT const void *Tecs_get_entity_storage(tecs_lock_t *dynLockPtr, uint32_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     // For each component...
@@ -481,7 +438,4 @@ TECS_EXPORT void Tecs_entity_destroy(tecs_lock_t *dynLockPtr, tecs_entity_t enti
         out << "}" << std::endl;
         out << std::endl;
     }
-    out << R"RAWSTR(
-} // extern "C"
-)RAWSTR";
 }

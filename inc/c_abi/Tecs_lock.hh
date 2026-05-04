@@ -13,13 +13,13 @@ namespace Tecs::abi {
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
-        std::shared_ptr<tecs_lock_t> base;
-
         mutable std::tuple<const AllComponentTypes *...> cachedStorage;
         mutable std::tuple<const AllComponentTypes *...> cachedPreviousStorage;
         mutable size_t cacheCounter;
 
     public:
+        std::shared_ptr<tecs_lock_t> base;
+
         inline Lock(const std::shared_ptr<tecs_lock_t> &lock) : base(lock) {
             if constexpr (is_add_remove_allowed<LockType>()) {
                 if (!Tecs_lock_is_add_remove_allowed(lock.get())) {

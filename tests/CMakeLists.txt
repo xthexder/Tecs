@@ -27,6 +27,7 @@ endif()
 
 TecsGenerateCHeaders(
     TARGET_NAME ${PROJECT_NAME}-benchmark-cabi-gen
+    OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/benchmark-cabi
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
     SOURCES
@@ -105,6 +106,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
 
     TecsGenerateCHeaders(
         TARGET_NAME ${PROJECT_NAME}-benchmark-tracy-cabi-gen
+        OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/benchmark-tracy-cabi
         ECS_INCLUDE_PATH "test_components.hh"
         ECS_NAME testing::ECS
         SOURCES
@@ -155,6 +157,7 @@ endif()
 
 TecsGenerateCHeaders(
     TARGET_NAME ${PROJECT_NAME}-tests-cabi-gen
+    OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/tests-cabi
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
     SOURCES
