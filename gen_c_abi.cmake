@@ -1,6 +1,6 @@
 function(TecsGenerateCHeaders)
     set(options OBJECT_TARGET)
-    set(oneValueArgs TARGET_NAME OUTPUT_DIR ECS_INCLUDE_PATH ECS_IMPL_PATH ECS_NAME COMPONENT_TYPE_PREFIX)
+    set(oneValueArgs TARGET_NAME HEADER_OUTPUT_DIR ECS_INCLUDE_PATH ECS_IMPL_PATH ECS_NAME COMPONENT_TYPE_PREFIX)
     set(multiValueArgs SOURCES LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS)
     cmake_parse_arguments(PARSE_ARGV 0 arg "${options}" "${oneValueArgs}" "${multiValueArgs}")
 
@@ -41,25 +41,25 @@ function(TecsGenerateCHeaders)
 
     add_custom_command(
         OUTPUT
-            ${arg_OUTPUT_DIR}/include/c_abi/Tecs_gen.h
-            ${arg_OUTPUT_DIR}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
         COMMAND
             ${arg_TARGET_NAME}-codegen
-            ${arg_OUTPUT_DIR}/include/c_abi/Tecs_gen.h
-            ${arg_OUTPUT_DIR}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
         DEPENDS ${arg_TARGET_NAME}-codegen
     )
 
     add_custom_target(${arg_TARGET_NAME}-codegen-output
         DEPENDS
-            ${arg_OUTPUT_DIR}/include/c_abi/Tecs_gen.h
-            ${arg_OUTPUT_DIR}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
     )
 
     set(BUILD_FILE_LIST
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_entity_view.cc
         ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_tracing.cc
-        ${arg_OUTPUT_DIR}/Tecs_gen.cc
+        ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
         ${arg_SOURCES}
     )
 
@@ -73,7 +73,7 @@ function(TecsGenerateCHeaders)
         ${arg_TARGET_NAME}
         PUBLIC
             ${TECS_PROJECT_ROOT}/inc
-            ${arg_OUTPUT_DIR}/include
+            ${arg_HEADER_OUTPUT_DIR}
         PRIVATE
             ${arg_INCLUDE_DIRECTORIES}
     )

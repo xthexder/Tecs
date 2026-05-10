@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
  * See src/c_abi/codegen/gen_main.cc to modify
  */
 
- #pragma once
+#pragma once
 
 #include "c_abi/Tecs_entity.h"
 #include "c_abi/Tecs_entity_view.h"
