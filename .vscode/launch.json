@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "Launch Tests (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-tests.exe",
             "args": [],
@@ -14,7 +14,7 @@
         },
         {
             "name": "Launch Benchmark (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-benchmark.exe",
             "args": [],
@@ -25,7 +25,7 @@
         },
         {
             "name": "Launch Benchmark Tracy (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-benchmark-tracy.exe",
             "args": [],
@@ -36,7 +36,7 @@
         },
         {
             "name": "Launch Benchmark C-ABI (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-benchmark-cabi.exe",
             "args": [],
@@ -46,8 +46,19 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Launch Benchmark C-ABI (Linux)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Tecs-benchmark-cabi",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/tests/",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Launch Benchmark Tracy C-ABI (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-benchmark-tracy-cabi.exe",
             "args": [],
@@ -58,7 +69,7 @@
         },
         {
             "name": "Launch C-ABI Tests (Windows)",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-c_abi_test.exe",
             "args": [],

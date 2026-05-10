@@ -6,9 +6,9 @@
 #include "utils.hh"
 
 #include <Tecs.hh>
+#include <Tecs_gen.h>
 #include <c_abi/Tecs.hh>
 #include <c_abi/Tecs_entity.hh>
-#include <c_abi/Tecs_gen.h>
 #include <c_abi/Tecs_lock.hh>
 #include <cstdint>
 #include <iostream>
