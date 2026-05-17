@@ -4,8 +4,8 @@
 
 template<typename S>
 void generateLockH(S &out) {
-    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
-    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
+    auto snakeCaseNames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
+    auto globalList = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentGlobalList();
     for (size_t i = 0; i < snakeCaseNames.size(); i++) {
         auto &scn = snakeCaseNames[i];
         out << std::endl;
@@ -33,9 +33,9 @@ void generateLockH(S &out) {
 
 template<typename S>
 void generateLockCC(S &out) {
-    auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
-    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
-    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
+    auto names = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentNames();
+    auto snakeCaseNames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
+    auto globalList = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentGlobalList();
     out << R"RAWSTR(
 TECS_EXPORT uint64_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);

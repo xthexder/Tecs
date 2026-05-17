@@ -1,11 +1,10 @@
 #include "test_components.hh"
 #include "utils.hh"
 
-#include <c_abi/Tecs.hh>
+#include <Tecs_abi.hh>
 #include <chrono>
 #include <cstring>
 #include <future>
-#include <iomanip>
 #include <thread>
 
 #ifdef _WIN32
@@ -19,19 +18,19 @@
 using namespace testing;
 using namespace Tecs;
 
-#ifdef BENCHMARK_CABI
-TECS_IMPLEMENT_C_ABI
+#ifdef BENCHMARK_ABI
+TECS_IMPLEMENT_ABI
 #endif
 
 namespace benchmark {
-#ifdef BENCHMARK_CABI
+#ifdef BENCHMARK_ABI
     using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
     using Entity = Tecs::abi::Entity;
 #endif
 
     std::atomic_bool running;
     std::atomic_bool success;
-#ifdef BENCHMARK_CABI
+#ifdef BENCHMARK_ABI
     static AbiECS ecs = AbiECS();
 #else
     static testing::ECS ecs;
@@ -42,7 +41,7 @@ namespace benchmark {
     static std::thread::id transformThreadId;
     static std::thread::id scriptTransactionThreadId;
 
-#ifndef BENCHMARK_CABI
+#ifndef BENCHMARK_ABI
     Observer<testing::ECS, ComponentModifiedEvent<Script>> scriptObserver;
 #endif
     std::atomic_size_t scriptUpdateCount;
@@ -206,7 +205,7 @@ namespace benchmark {
                     i++;
                 }
                 if (iteration % 10 == 9) {
-#ifndef BENCHMARK_CABI
+#ifndef BENCHMARK_ABI
                     ComponentModifiedEvent<Script> scriptEventEntity;
                     while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
                         size_t updateNumber = scriptUpdateCount++;
@@ -276,7 +275,7 @@ namespace benchmark {
     }
 
     int runBenchmark() {
-#ifdef BENCHMARK_CABI
+#ifdef BENCHMARK_ABI
         std::cout << "Compiled against Tecs C ABI" << std::endl;
 #endif
 #if __cpp_lib_atomic_wait
@@ -366,7 +365,7 @@ namespace benchmark {
             }
             t = timer3;
         }
-#ifndef BENCHMARK_CABI
+#ifndef BENCHMARK_ABI
         {
             MultiTimer timer1("Watch for script events Start");
             MultiTimer timer2("Watch for script events Run");
@@ -443,7 +442,7 @@ namespace benchmark {
         trace.SaveToCSV("benchmark-trace.csv");
 #endif
 
-#ifndef BENCHMARK_CABI
+#ifndef BENCHMARK_ABI
         {
             MultiTimer timer1("Read script modified events Start");
             MultiTimer timer2("Read script modified events Run");

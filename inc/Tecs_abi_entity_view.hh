@@ -1,11 +1,10 @@
 #pragma once
 
-#include "Tecs_entity.hh"
-#include "Tecs_entity_view.h"
+#include "Tecs_abi_entity.hh"
+#include "Tecs_abi_entity_view.h"
 
 #include <iterator>
 #include <limits>
-#include <vector>
 
 namespace Tecs::abi {
     class EntityView {

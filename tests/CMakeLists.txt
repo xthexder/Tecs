@@ -26,8 +26,8 @@ else()
 endif()
 
 TecsGenerateCHeaders(
-    TARGET_NAME ${PROJECT_NAME}-benchmark-cabi-gen
-    HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-benchmark-cabi-gen
+    TARGET_NAME ${PROJECT_NAME}-benchmark-abi-gen
+    HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-benchmark-abi-gen
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
     SOURCES
@@ -38,25 +38,25 @@ TecsGenerateCHeaders(
         TECS_ENABLE_PERFORMANCE_TRACING
 )
 
-add_executable(${PROJECT_NAME}-benchmark-cabi
+add_executable(${PROJECT_NAME}-benchmark-abi
     benchmark.cpp
 )
-target_link_libraries(${PROJECT_NAME}-benchmark-cabi ${PROJECT_NAME}-benchmark-cabi-gen)
+target_link_libraries(${PROJECT_NAME}-benchmark-abi ${PROJECT_NAME}-benchmark-abi-gen)
 target_include_directories(
-    ${PROJECT_NAME}-benchmark-cabi
+    ${PROJECT_NAME}-benchmark-abi
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_compile_definitions(${PROJECT_NAME}-benchmark-cabi PRIVATE BENCHMARK_CABI TECS_UNCHECKED_MODE TECS_ENABLE_PERFORMANCE_TRACING)
+target_compile_definitions(${PROJECT_NAME}-benchmark-abi PRIVATE BENCHMARK_ABI TECS_UNCHECKED_MODE TECS_ENABLE_PERFORMANCE_TRACING)
 if(WIN32)
     # Link winmm library for timeBeginPeriod()
-    target_link_libraries(${PROJECT_NAME}-benchmark-cabi winmm)
+    target_link_libraries(${PROJECT_NAME}-benchmark-abi winmm)
 endif()
 
 if(lto_supported)
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(STATUS "IPO / LTO enabled")
-        set_target_properties(${PROJECT_NAME}-benchmark-cabi PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+        set_target_properties(${PROJECT_NAME}-benchmark-abi PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 else()
     message(STATUS "IPO / LTO not supported: ${lto_error}")
@@ -105,8 +105,8 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
     endif()
 
     TecsGenerateCHeaders(
-        TARGET_NAME ${PROJECT_NAME}-benchmark-tracy-cabi-gen
-        HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-benchmark-tracy-cabi-gen
+        TARGET_NAME ${PROJECT_NAME}-benchmark-tracy-abi-gen
+        HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-benchmark-tracy-abi-gen
         ECS_INCLUDE_PATH "test_components.hh"
         ECS_NAME testing::ECS
         SOURCES
@@ -122,19 +122,19 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
             TECS_UNCHECKED_MODE
     )
 
-    add_executable(${PROJECT_NAME}-benchmark-tracy-cabi
+    add_executable(${PROJECT_NAME}-benchmark-tracy-abi
         benchmark.cpp
     )
-    target_link_libraries(${PROJECT_NAME}-benchmark-tracy-cabi ${PROJECT_NAME}-benchmark-tracy-cabi-gen TracyClient)
+    target_link_libraries(${PROJECT_NAME}-benchmark-tracy-abi ${PROJECT_NAME}-benchmark-tracy-abi-gen TracyClient)
     target_include_directories(
-        ${PROJECT_NAME}-benchmark-tracy-cabi
+        ${PROJECT_NAME}-benchmark-tracy-abi
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}
     )
     target_compile_definitions(
-        ${PROJECT_NAME}-benchmark-tracy-cabi
+        ${PROJECT_NAME}-benchmark-tracy-abi
         PRIVATE
-            BENCHMARK_CABI
+            BENCHMARK_ABI
             TECS_ENABLE_TRACY
             TECS_TRACY_INCLUDE_LOCKS
             TECS_TRACY_INCLUDE_DETAILED_COMMIT
@@ -142,13 +142,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
     )
     if(WIN32)
         # Link winmm library for timeBeginPeriod()
-        target_link_libraries(${PROJECT_NAME}-benchmark-tracy-cabi winmm)
+        target_link_libraries(${PROJECT_NAME}-benchmark-tracy-abi winmm)
     endif()
 
     if(lto_supported)
         if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
             message(STATUS "IPO / LTO enabled")
-            set_target_properties(${PROJECT_NAME}-benchmark-tracy-cabi PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+            set_target_properties(${PROJECT_NAME}-benchmark-tracy-abi PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
         endif()
     else()
         message(STATUS "IPO / LTO not supported: ${lto_error}")
@@ -156,8 +156,8 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
 endif()
 
 TecsGenerateCHeaders(
-    TARGET_NAME ${PROJECT_NAME}-tests-cabi-gen
-    HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-tests-cabi-gen
+    TARGET_NAME ${PROJECT_NAME}-tests-abi-gen
+    HEADER_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}-tests-abi-gen
     ECS_INCLUDE_PATH "test_components.hh"
     ECS_NAME testing::ECS
     SOURCES
@@ -169,12 +169,12 @@ TecsGenerateCHeaders(
 add_executable(${PROJECT_NAME}-tests tests.cpp)
 target_link_libraries(${PROJECT_NAME}-tests ${PROJECT_NAME})
 
-add_executable(${PROJECT_NAME}-c_abi_test
-    c_abi_test.cpp
+add_executable(${PROJECT_NAME}-abi_test
+    abi_test.cpp
 )
-target_link_libraries(${PROJECT_NAME}-c_abi_test ${PROJECT_NAME}-tests-cabi-gen)
+target_link_libraries(${PROJECT_NAME}-abi_test ${PROJECT_NAME}-tests-abi-gen)
 target_include_directories(
-    ${PROJECT_NAME}-c_abi_test
+    ${PROJECT_NAME}-abi_test
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )

@@ -1,6 +1,6 @@
 
+#include <Tecs_abi_entity_view.hh>
 #include <Tecs_entity_view.hh>
-#include <c_abi/Tecs_entity_view.hh>
 
 extern "C" {
 

@@ -1,15 +1,15 @@
 #pragma once
 
-#include "Tecs.h"
-#include "Tecs_lock.hh"
+#include "Tecs_abi.h"
+#include "Tecs_abi_lock.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
-    #include "Tecs_tracing.hh"
+    #include "Tecs_abi_tracing.hh"
 #endif
 
 #include <bitset>
 
 // Declare this once in the root namespace
-#define TECS_IMPLEMENT_C_ABI thread_local size_t Tecs::abi::cacheInvalidationCounter;
+#define TECS_IMPLEMENT_ABI thread_local size_t Tecs::abi::cacheInvalidationCounter;
 
 namespace Tecs::abi {
     /**

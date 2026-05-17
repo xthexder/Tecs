@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Tecs_entity.h"
-#include "Tecs_entity_view.h"
-#include "Tecs_export.h"
+#include "Tecs_abi_entity.h"
+#include "Tecs_abi_entity_view.h"
+#include "Tecs_abi_export.h"
 
 #ifdef __cplusplus
 extern "C" {

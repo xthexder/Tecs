@@ -4,9 +4,9 @@
 
 template<typename S>
 void generateEntityH(S &out) {
-    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
-    auto cnames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCTypeName();
-    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
+    auto snakeCaseNames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
+    auto cnames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentCTypeName();
+    auto globalList = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentGlobalList();
     for (size_t i = 0; i < snakeCaseNames.size(); i++) {
         if (globalList[i]) continue;
         auto &scn = snakeCaseNames[i];
@@ -35,11 +35,11 @@ void generateEntityH(S &out) {
 
 template<typename S>
 void generateEntityCC(S &out) {
-    auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
-    auto snakeCaseNames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
-    auto cnames = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCTypeName();
-    auto globalList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentGlobalList();
-    auto copyableList = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentCopyableList();
+    auto names = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentNames();
+    auto snakeCaseNames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentSnakeCaseNames();
+    auto cnames = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentCTypeName();
+    auto globalList = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentGlobalList();
+    auto copyableList = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentCopyableList();
     out << R"RAWSTR(
 TECS_EXPORT const void *Tecs_get_entity_storage(tecs_lock_t *dynLockPtr, uint32_t componentIndex) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
