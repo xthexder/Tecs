@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Tecs_permissions.hh"
-#include "Tecs_entity_view.hh"
-#include "Tecs_lock.h"
+#include "Tecs_abi_entity_view.hh"
+#include "Tecs_abi_lock.h"
+#include "Tecs_permissions.hh"
 
 #include <memory>
 

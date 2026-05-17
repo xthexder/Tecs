@@ -4,7 +4,7 @@
 
 template<typename S>
 void generateECSCC(S &out) {
-    auto names = CodeGenerator<TECS_C_ABI_ECS_NAME>::GetComponentNames();
+    auto names = CodeGenerator<TECS_ABI_ECS_NAME>::GetComponentNames();
     out << R"RAWSTR(
 TECS_EXPORT tecs_ecs_t *Tecs_make_ecs_instance() {
     return new ECS();

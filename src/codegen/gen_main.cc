@@ -2,6 +2,8 @@
 #include "gen_entity.hh"
 #include "gen_lock.hh"
 
+#include <fstream>
+
 int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "Usage: codegen out/ecs.h out/ecs.cc" << std::endl;
@@ -11,14 +13,14 @@ int main(int argc, char **argv) {
         auto out = std::ofstream(argv[1], std::ios::trunc);
         out << R"RAWSTR(/*
  * THIS FILE IS AUTO-GENERATED -- DO NOT EDIT
- * See src/c_abi/codegen/gen_main.cc to modify
+ * See src/codegen/gen_main.cc to modify
  */
 
 #pragma once
 
-#include "c_abi/Tecs_entity.h"
-#include "c_abi/Tecs_entity_view.h"
-#include "c_abi/Tecs_export.h"
+#include "Tecs_abi_entity.h"
+#include "Tecs_abi_entity_view.h"
+#include "Tecs_abi_export.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,8 +33,8 @@ extern "C" {
 
 static_assert(sizeof(bool) == 1, "Unexpected bool size");
 )RAWSTR";
-#ifdef TECS_C_ABI_ECS_INCLUDE
-        out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
+#ifdef TECS_ABI_ECS_INCLUDE
+        out << "#include " STRINGIFY(TECS_ABI_ECS_INCLUDE) << std::endl;
 #endif
         out << R"RAWSTR(
 typedef void tecs_lock_t;
@@ -50,7 +52,7 @@ typedef uint64_t tecs_entity_t;
         auto out = std::ofstream(argv[2], std::ios::trunc);
         out << R"RAWSTR(/*
  * THIS FILE IS AUTO-GENERATED -- DO NOT EDIT
- * See src/c_abi/codegen/gen_main.cc to modify
+ * See src/codegen/gen_main.cc to modify
  */
 
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
@@ -58,19 +60,19 @@ typedef uint64_t tecs_entity_t;
 #endif
 
 )RAWSTR";
-#ifdef TECS_C_ABI_ECS_IMPL_INCLUDE
-        out << "#include " STRINGIFY(TECS_C_ABI_ECS_IMPL_INCLUDE) << std::endl;
-#elif defined(TECS_C_ABI_ECS_INCLUDE)
-        out << "#include " STRINGIFY(TECS_C_ABI_ECS_INCLUDE) << std::endl;
+#ifdef TECS_ABI_ECS_IMPL_INCLUDE
+        out << "#include " STRINGIFY(TECS_ABI_ECS_IMPL_INCLUDE) << std::endl;
+#elif defined(TECS_ABI_ECS_INCLUDE)
+        out << "#include " STRINGIFY(TECS_ABI_ECS_INCLUDE) << std::endl;
 #endif
         out << R"RAWSTR(
 #include <Tecs.hh>
-#include <c_abi/Tecs.h>
-#include <c_abi/Tecs_lock.h>
+#include <Tecs_abi.h>
+#include <Tecs_abi_lock.h>
 #include <cstring>
 
 )RAWSTR";
-        out << "using ECS = " << TypeToString<TECS_C_ABI_ECS_NAME>();
+        out << "using ECS = " << TypeToString<TECS_ABI_ECS_NAME>();
         out << R"RAWSTR(;
 using DynamicLock = Tecs::DynamicLock<ECS>;
 

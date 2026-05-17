@@ -4,16 +4,16 @@
     #endif
 
     #include <Tecs.hh>
+    #include <Tecs_abi_tracing.h>
     #include <Tecs_tracing.hh>
-    #include <c_abi/Tecs_tracing.h>
     #include <cstring>
 
-    #ifdef TECS_C_ABI_ECS_INCLUDE
-        #include TECS_C_ABI_ECS_INCLUDE
+    #ifdef TECS_ABI_ECS_INCLUDE
+        #include TECS_ABI_ECS_INCLUDE
     #endif
 
-    #ifdef TECS_C_ABI_ECS_NAME
-using ECS = TECS_C_ABI_ECS_NAME;
+    #ifdef TECS_ABI_ECS_NAME
+using ECS = TECS_ABI_ECS_NAME;
     #else
 using ECS = Tecs::ECS<>;
     #endif

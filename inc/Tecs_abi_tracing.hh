@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tecs_tracing.h"
+#include "Tecs_abi_tracing.h"
 
 #include <memory>
 #include <string>

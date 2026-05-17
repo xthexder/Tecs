@@ -1,15 +1,14 @@
-#include "c_abi/Tecs.h"
-#include "c_abi/Tecs_entity_view.h"
+#include "Tecs_abi_entity_view.h"
 #include "test_components.hh"
 #include "test_ecs.hh"
 #include "tests.hh"
 #include "utils.hh"
 
 #include <Tecs.hh>
-#include <Tecs_gen.h>
-#include <c_abi/Tecs.hh>
-#include <c_abi/Tecs_entity.hh>
-#include <c_abi/Tecs_lock.hh>
+#include <Tecs_abi.hh>
+#include <Tecs_abi_entity.hh>
+#include <Tecs_abi_gen.h>
+#include <Tecs_abi_lock.hh>
 #include <cstdint>
 #include <iostream>
 
@@ -17,7 +16,7 @@ using namespace testing;
 
 using AbiECS = Tecs::abi::ECS<Transform, Renderable, Script, GlobalComponent>;
 
-TECS_IMPLEMENT_C_ABI
+TECS_IMPLEMENT_ABI
 
 #define ENTITY_COUNT 10000
 

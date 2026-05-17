@@ -1,26 +1,23 @@
 #pragma once
 
-#include <Tecs.hh>
+#include <Tecs_abi.hh>
 #include <cstring>
-#include <fstream>
-#include <iostream>
-#include <memory>
 #include <source_location>
 
 #define STRING(s) #s
 #define STRINGIFY(s) STRING(s)
 
-#ifdef TECS_C_ABI_ECS_IMPL_INCLUDE
-    #include TECS_C_ABI_ECS_IMPL_INCLUDE
-#elif defined(TECS_C_ABI_ECS_INCLUDE)
-    #include TECS_C_ABI_ECS_INCLUDE
+#ifdef TECS_ABI_ECS_IMPL_INCLUDE
+    #include TECS_ABI_ECS_IMPL_INCLUDE
+#elif defined(TECS_ABI_ECS_INCLUDE)
+    #include TECS_ABI_ECS_INCLUDE
 #endif
-#ifndef TECS_C_ABI_ECS_NAME
+#ifndef TECS_ABI_ECS_NAME
 using ECS = Tecs::ECS<>;
-    #define TECS_C_ABI_ECS_NAME ECS
+    #define TECS_ABI_ECS_NAME ECS
 #endif
-#ifndef TECS_C_ABI_TYPE_PREFIX
-    #define TECS_C_ABI_TYPE_PREFIX ""
+#ifndef TECS_ABI_TYPE_PREFIX
+    #define TECS_ABI_TYPE_PREFIX ""
 #endif
 
 template<typename T>
@@ -48,7 +45,7 @@ auto TypeToString() {
     return embeddingSignature.substr(typeStart, typeLength);
 }
 
-std::string SnakeCaseTypeName(std::string_view name) {
+inline std::string SnakeCaseTypeName(std::string_view name) {
     std::string snakeCaseName;
     bool wasCaps = true;
     bool wasSep = false;
@@ -75,13 +72,13 @@ template<typename ECS, typename T>
 std::string TypeToCName() {
     if constexpr (std::is_enum<T>()) {
         if constexpr (sizeof(T) == sizeof(int)) {
-            return std::string("enum ") + TECS_C_ABI_TYPE_PREFIX +
+            return std::string("enum ") + TECS_ABI_TYPE_PREFIX +
                    SnakeCaseTypeName(ECS::template GetComponentName<T>()) + "_t";
         } else {
             return std::string(TypeToString<std::underlying_type_t<T>>());
         }
     } else {
-        return TECS_C_ABI_TYPE_PREFIX + SnakeCaseTypeName(ECS::template GetComponentName<T>()) + "_t";
+        return TECS_ABI_TYPE_PREFIX + SnakeCaseTypeName(ECS::template GetComponentName<T>()) + "_t";
     }
 }
 

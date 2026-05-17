@@ -9,7 +9,7 @@ function(TecsGenerateCHeaders)
 
     set(TECS_PROJECT_ROOT ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
-    add_executable(${arg_TARGET_NAME}-codegen ${TECS_PROJECT_ROOT}/src/c_abi/codegen/gen_main.cc)
+    add_executable(${arg_TARGET_NAME}-codegen ${TECS_PROJECT_ROOT}/src/codegen/gen_main.cc)
     target_link_libraries(${arg_TARGET_NAME}-codegen PRIVATE ${arg_LINK_LIBRARIES})
     target_include_directories(
         ${arg_TARGET_NAME}-codegen
@@ -18,8 +18,8 @@ function(TecsGenerateCHeaders)
             ${arg_INCLUDE_DIRECTORIES}
     )
     target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
-        TECS_C_ABI_ECS_NAME=${arg_ECS_NAME}
-        TECS_C_ABI_TYPE_PREFIX="${arg_COMPONENT_TYPE_PREFIX}"
+        TECS_ABI_ECS_NAME=${arg_ECS_NAME}
+        TECS_ABI_TYPE_PREFIX="${arg_COMPONENT_TYPE_PREFIX}"
         TECS_SHARED_INTERNAL
         ${arg_COMPILE_DEFINITIONS}
     )
@@ -29,37 +29,37 @@ function(TecsGenerateCHeaders)
 
     if(DEFINED arg_ECS_INCLUDE_PATH)
         target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
-            TECS_C_ABI_ECS_INCLUDE="${arg_ECS_INCLUDE_PATH}"
+            TECS_ABI_ECS_INCLUDE="${arg_ECS_INCLUDE_PATH}"
         )
     endif()
 
     if(DEFINED arg_ECS_IMPL_PATH)
         target_compile_definitions(${arg_TARGET_NAME}-codegen PRIVATE
-            TECS_C_ABI_ECS_IMPL_INCLUDE="${arg_ECS_IMPL_PATH}"
+            TECS_ABI_ECS_IMPL_INCLUDE="${arg_ECS_IMPL_PATH}"
         )
     endif()
 
     add_custom_command(
         OUTPUT
-            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
-            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_abi_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_abi_gen.cc
         COMMAND
             ${arg_TARGET_NAME}-codegen
-            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
-            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_abi_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_abi_gen.cc
         DEPENDS ${arg_TARGET_NAME}-codegen
     )
 
     add_custom_target(${arg_TARGET_NAME}-codegen-output
         DEPENDS
-            ${arg_HEADER_OUTPUT_DIR}/Tecs_gen.h
-            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
+            ${arg_HEADER_OUTPUT_DIR}/Tecs_abi_gen.h
+            ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_abi_gen.cc
     )
 
     set(BUILD_FILE_LIST
-        ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_entity_view.cc
-        ${TECS_PROJECT_ROOT}/src/c_abi/Tecs_tracing.cc
-        ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_gen.cc
+        ${TECS_PROJECT_ROOT}/src/Tecs_abi_entity_view.cc
+        ${TECS_PROJECT_ROOT}/src/Tecs_abi_tracing.cc
+        ${CMAKE_CURRENT_BINARY_DIR}/${arg_TARGET_NAME}/Tecs_abi_gen.cc
         ${arg_SOURCES}
     )
 

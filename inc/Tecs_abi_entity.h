@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tecs_export.h"
+#include "Tecs_abi_export.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +27,8 @@ TECS_EXPORT bool Tecs_entity_has_bitset(tecs_lock_t *dynLockPtr, tecs_entity_t e
 TECS_EXPORT bool Tecs_entity_had_bitset(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint64_t componentBits);
 TECS_EXPORT const void *Tecs_entity_const_get(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex);
 TECS_EXPORT void *Tecs_entity_get(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex);
-TECS_EXPORT const void *Tecs_entity_get_previous(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex);
+TECS_EXPORT const void *Tecs_entity_get_previous(tecs_lock_t *dynLockPtr, tecs_entity_t entity,
+    uint32_t componentIndex);
 TECS_EXPORT void *Tecs_entity_set(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex,
     const void *value);
 TECS_EXPORT void Tecs_entity_unset(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex);

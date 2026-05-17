@@ -1,14 +1,13 @@
 #pragma once
 
-#include "../Tecs_permissions.hh"
-#include "Tecs_entity.h"
+#include "Tecs_abi_entity.h"
+#include "Tecs_permissions.hh"
 
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
-#include <stdexcept>
 #include <string>
 
 #ifndef TECS_ENTITY_INDEX_TYPE

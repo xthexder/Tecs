@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Tecs.h"
-#include "Tecs_export.h"
+#include "Tecs_abi.h"
+#include "Tecs_abi_export.h"
 
 #ifdef __cplusplus
 extern "C" {
