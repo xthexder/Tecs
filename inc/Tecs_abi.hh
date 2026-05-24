@@ -7,6 +7,7 @@
 #endif
 
 #include <bitset>
+#include <stdexcept>
 
 // Declare this once in the root namespace
 #define TECS_IMPLEMENT_ABI thread_local size_t Tecs::abi::cacheInvalidationCounter;

@@ -12,7 +12,7 @@
 
 #include <atomic>
 #include <cstddef>
-#include <thread>
+#include <stdexcept>
 #include <vector>
 
 #ifndef TECS_SPINLOCK_RETRY_YIELD

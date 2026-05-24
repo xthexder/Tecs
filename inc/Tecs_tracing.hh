@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Tecs_permissions.hh"
 #include "nonstd/span.hpp"
 
 #include <array>
@@ -10,6 +9,7 @@
 #include <map>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
