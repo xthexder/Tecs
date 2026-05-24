@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Tecs_entity.hh"
+#include "Tecs_lock.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING

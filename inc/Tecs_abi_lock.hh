@@ -5,6 +5,7 @@
 #include "Tecs_permissions.hh"
 
 #include <memory>
+#include <stdexcept>
 
 namespace Tecs::abi {
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>

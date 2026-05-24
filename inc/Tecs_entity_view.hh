@@ -4,6 +4,7 @@
 
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 namespace Tecs {

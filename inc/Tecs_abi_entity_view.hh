@@ -5,6 +5,7 @@
 
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 
 namespace Tecs::abi {
     class EntityView {

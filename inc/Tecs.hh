@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Tecs_entity.hh"
-#include "Tecs_lock.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
 #include "Tecs_storage.hh"
+#include "Tecs_transaction.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -12,9 +12,9 @@
 #include <bitset>
 #include <cstddef>
 #include <deque>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
-#include <vector>
 
 namespace Tecs {
     /**
