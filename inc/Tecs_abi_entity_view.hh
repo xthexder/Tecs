@@ -153,11 +153,11 @@ namespace Tecs::abi {
         }
 
         inline reverse_iterator rbegin() const noexcept {
-            return reverse_iterator(iterator{base, base.end_index});
+            return reverse_iterator(end());
         }
 
         inline reverse_iterator rend() const noexcept {
-            return reverse_iterator(iterator{base, base.start_index + 1});
+            return reverse_iterator(begin());
         }
 
         inline reference operator[](size_type index) const {
