@@ -76,7 +76,7 @@ namespace Tecs {
         }
 #endif
 
-        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
+        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const noexcept {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
         }
 
