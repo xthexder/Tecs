@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Tecs_entity.hh"
-#include "Tecs_lock.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
 #include "Tecs_storage.hh"
+#include "Tecs_transaction.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -12,9 +12,9 @@
 #include <bitset>
 #include <cstddef>
 #include <deque>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
-#include <vector>
 
 namespace Tecs {
     /**
@@ -76,22 +76,26 @@ namespace Tecs {
         }
 #endif
 
-        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
+        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const noexcept {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
+        }
+
+        inline uint64_t GetNextTransactionId() const {
+            return nextTransactionId;
         }
 
         /**
          * Returns the index of a Component type for use in a bitset.
          */
         template<typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        inline static constexpr uint32_t GetComponentIndex() {
             return GetComponentIndex<0, U>();
         }
 
         /**
          * Returns the number of Component types registered in this ECS instance.
          */
-        inline static constexpr size_t GetComponentCount() {
+        inline static constexpr uint32_t GetComponentCount() {
             return sizeof...(Tn);
         }
 
@@ -108,6 +112,13 @@ namespace Tecs {
         }
 
         /**
+         * Returns the registered name of the Nth Component type, or a default of "ComponentN" if none is set.
+         */
+        inline static std::string GetComponentName(uint32_t componentIndex) {
+            return GetComponentName<Tn...>(componentIndex);
+        }
+
+        /**
          * Returns true if the Component type is part of this ECS.
          */
         template<typename U>
@@ -120,14 +131,26 @@ namespace Tecs {
         }
 
     private:
-        template<size_t I, typename U>
-        inline static constexpr size_t GetComponentIndex() {
+        template<uint32_t I, typename U>
+        inline static constexpr uint32_t GetComponentIndex() {
             static_assert(I < sizeof...(Tn), "Component does not exist");
 
-            if constexpr (std::is_same<U, typename std::tuple_element<I, std::tuple<Tn...>>::type>::value) {
+            if constexpr (std::is_same<U, typename std::tuple_element_t<I, std::tuple<Tn...>>>()) {
                 return I;
             } else {
                 return GetComponentIndex<I + 1, U>();
+            }
+        }
+
+        template<typename U, typename... Un>
+        inline static std::string GetComponentName(uint32_t index) {
+            if (index == 0) {
+                return GetComponentName<U>();
+            }
+            if constexpr (sizeof...(Un) > 0) {
+                return GetComponentName<Un...>(index - 1);
+            } else {
+                throw std::runtime_error("Component does not exist");
             }
         }
 
@@ -162,15 +185,13 @@ namespace Tecs {
 #endif
 
 #ifndef TECS_HEADER_ONLY
-        size_t ecsId;
+        uint64_t ecsId;
 #endif
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
-        template<template<typename...> typename, typename...>
-        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs

@@ -1,7 +1,6 @@
 #include "complex_component.hh"
 #include "components.hh"
 
-#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -124,9 +123,7 @@ int main(int /* argc */, char ** /* argv */) {
     for (auto &[id, name] : threadNames) {
         trace.SetThreadName(name, id);
     }
-    std::ofstream traceFile("example-trace.csv");
-    trace.SaveToCSV(traceFile);
-    traceFile.close();
+    trace.SaveToCSV("example-trace.csv");
 
     return 0;
 }
