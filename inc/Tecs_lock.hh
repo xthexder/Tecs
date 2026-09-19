@@ -46,8 +46,10 @@ namespace Tecs {
      */
     template<template<typename...> typename ECSType, typename... AllComponentTypes, typename... Permissions>
     class Lock<ECSType<AllComponentTypes...>, Permissions...> {
-    private:
+    public:
         using PermissionBitset = std::bitset<1 + sizeof...(AllComponentTypes)>;
+
+    private:
         using ECS = ECSType<AllComponentTypes...>;
         using LockType = Lock<ECS, Permissions...>;
 
@@ -104,6 +106,24 @@ namespace Tecs {
 
         inline bool IsAddRemoveAllowed() const {
             return writePermissions[0];
+        }
+
+        static inline constexpr PermissionBitset GetWritePermissions() {
+            PermissionBitset writePermissions;
+            writePermissions[0] = is_add_remove_allowed<LockType>();
+            ((writePermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_write_allowed<AllComponentTypes, LockType>()),
+                ...);
+            return writePermissions;
+        }
+
+        static inline constexpr PermissionBitset GetReadPermissions() {
+            PermissionBitset readPermissions;
+            readPermissions[0] = true;
+            ((readPermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_read_allowed<AllComponentTypes, LockType>()),
+                ...);
+            return readPermissions;
         }
 
         inline constexpr ECS &GetInstance() const {
@@ -566,6 +586,14 @@ namespace Tecs {
             : Lock<ECS>(instance, std::make_shared<Transaction<ECS>>(instance, readPermissions, writePermissions),
                   writePermissions),
               readPermissions(readPermissions) {}
+
+        inline PermissionBitset GetWritePermissions() const {
+            return BaseLockType::writePermissions;
+        }
+
+        inline PermissionBitset GetReadPermissions() const {
+            return readPermissions;
+        }
 
         template<typename... DynamicPermissions>
         std::optional<DynamicLock<ECS, DynamicPermissions...>> TryLock() const {

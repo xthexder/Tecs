@@ -19,6 +19,8 @@ namespace Tecs::abi {
         mutable size_t cacheCounter;
 
     public:
+        using PermissionBitset = std::bitset<1 + sizeof...(AllComponentTypes)>;
+
         std::shared_ptr<tecs_lock_t> base;
 
         inline Lock(const std::shared_ptr<tecs_lock_t> &lock) : base(lock) {
@@ -65,6 +67,24 @@ namespace Tecs::abi {
         template<typename... RequestedPermissions>
         static constexpr bool has_permissions() {
             return Lock<ECS, RequestedPermissions...>::template is_lock_subset<LockType>();
+        }
+
+        static inline constexpr PermissionBitset GetWritePermissions() {
+            PermissionBitset writePermissions;
+            writePermissions[0] = is_add_remove_allowed<LockType>();
+            ((writePermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_write_allowed<AllComponentTypes, LockType>()),
+                ...);
+            return writePermissions;
+        }
+
+        static inline constexpr PermissionBitset GetReadPermissions() {
+            PermissionBitset readPermissions;
+            readPermissions[0] = true;
+            ((readPermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
+                     is_read_allowed<AllComponentTypes, LockType>()),
+                ...);
+            return readPermissions;
         }
 
         // Reference an existing transaction
