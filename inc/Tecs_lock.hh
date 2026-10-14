@@ -587,11 +587,11 @@ namespace Tecs {
                   writePermissions),
               readPermissions(readPermissions) {}
 
-        inline PermissionBitset GetWritePermissions() const {
+        inline PermissionBitset GetDynamicWritePermissions() const {
             return BaseLockType::writePermissions;
         }
 
-        inline PermissionBitset GetReadPermissions() const {
+        inline PermissionBitset GetDynamicReadPermissions() const {
             return readPermissions;
         }
 
