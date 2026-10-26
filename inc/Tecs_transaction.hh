@@ -505,7 +505,7 @@ namespace Tecs {
                 out << "WriteAll";
             } else {
                 bool firstOut = true, firstRead = true, firstWrite = true;
-                for (size_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
+                for (uint32_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
                     if (writePermissions[i]) {
                         if (firstWrite) {
                             firstWrite = false;
@@ -531,7 +531,7 @@ namespace Tecs {
                     }
                     out << "ReadAll";
                 } else {
-                    for (size_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
+                    for (uint32_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
                         if (readPermissions[i] && !writePermissions[i]) {
                             if (firstRead) {
                                 firstRead = false;
