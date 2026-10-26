@@ -78,7 +78,23 @@ function(TecsGenerateCHeaders)
             ${arg_INCLUDE_DIRECTORIES}
     )
     add_dependencies(${arg_TARGET_NAME} ${arg_TARGET_NAME}-codegen-output)
-    target_compile_definitions(${arg_TARGET_NAME} PRIVATE TECS_SHARED_INTERNAL ${arg_COMPILE_DEFINITIONS})
+    target_compile_definitions(${arg_TARGET_NAME} PRIVATE
+        TECS_ABI_ECS_NAME=${arg_ECS_NAME}
+        TECS_ABI_TYPE_PREFIX="${arg_COMPONENT_TYPE_PREFIX}"
+        TECS_SHARED_INTERNAL
+        ${arg_COMPILE_DEFINITIONS}
+    )
+    if(DEFINED arg_ECS_INCLUDE_PATH)
+        target_compile_definitions(${arg_TARGET_NAME} PRIVATE
+            TECS_ABI_ECS_INCLUDE="${arg_ECS_INCLUDE_PATH}"
+        )
+    endif()
+    if(DEFINED arg_ECS_IMPL_PATH)
+        target_compile_definitions(${arg_TARGET_NAME} PRIVATE
+            TECS_ABI_ECS_IMPL_INCLUDE="${arg_ECS_IMPL_PATH}"
+        )
+    endif()
+
     if(NOT arg_OBJECT_TARGET)
         if(lto_supported)
             if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")

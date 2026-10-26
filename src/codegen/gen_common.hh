@@ -12,10 +12,6 @@
 #elif defined(TECS_ABI_ECS_INCLUDE)
     #include TECS_ABI_ECS_INCLUDE
 #endif
-#ifndef TECS_ABI_ECS_NAME
-using ECS = Tecs::ECS<>;
-    #define TECS_ABI_ECS_NAME ECS
-#endif
 #ifndef TECS_ABI_TYPE_PREFIX
     #define TECS_ABI_TYPE_PREFIX ""
 #endif

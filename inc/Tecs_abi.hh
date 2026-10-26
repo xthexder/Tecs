@@ -2,6 +2,7 @@
 
 #include "Tecs_abi.h"
 #include "Tecs_abi_lock.hh"
+#include "Tecs_permissions.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_abi_tracing.hh"
 #endif
