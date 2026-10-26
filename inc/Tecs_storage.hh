@@ -29,7 +29,7 @@ namespace Tecs {
     public:
         /**
          * Lock this Component type for reading. Multiple readers can hold this lock at once.
-         * This function will only block if a writer is in the process of commiting.
+         * This function will only block if a writer is in the process of committing.
          *
          * ReadUnlock() must be called exactly once after reading has completed.
          */

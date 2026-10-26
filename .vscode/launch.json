@@ -91,7 +91,7 @@
         },
         {
             "name": "Launch Tests (Linux)",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-tests",
             "args": [],
@@ -110,7 +110,7 @@
         },
         {
             "name": "Launch Benchmark (Linux)",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/Tecs-benchmark",
             "args": [],

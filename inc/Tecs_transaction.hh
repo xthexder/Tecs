@@ -4,6 +4,9 @@
 #include "Tecs_lock.hh"
 #include "Tecs_observer.hh"
 #include "Tecs_permissions.hh"
+
+#include <functional>
+#include <memory>
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -32,7 +35,6 @@ namespace Tecs {
     extern thread_local std::array<uint64_t, TECS_MAX_ACTIVE_TRANSACTIONS_PER_THREAD> activeTransactions;
     extern thread_local size_t activeTransactionsCount;
     extern std::atomic_uint64_t nextEcsId;
-    extern std::atomic_uint64_t nextTransactionId;
 #endif
 
     /**
@@ -75,6 +77,10 @@ namespace Tecs {
             return writePermissions[0];
         }
 
+        inline bool IsReadPreviousAllowed() const {
+            return readPermissions[0];
+        }
+
         template<typename T>
         inline void SetAccessFlag() {
             if constexpr (std::is_same<T, AddRemove>()) {
@@ -107,7 +113,6 @@ namespace Tecs {
 #endif
 
 #ifndef TECS_HEADER_ONLY
-            transactionId = ++nextTransactionId;
             for (size_t i = 0; i < activeTransactionsCount; i++) {
                 if (activeTransactions[i] == instance.ecsId)
                     throw std::runtime_error("Nested transactions are not allowed");
@@ -118,6 +123,8 @@ namespace Tecs {
             }
             activeTransactions[activeTransactionsCount++] = instance.ecsId;
 #endif
+
+            transactionId = ++instance.nextTransactionId;
 
             PermissionBitset acquired;
             // Templated lambda functions for Lock/Unlock so they can be looped over at runtime.
@@ -198,6 +205,17 @@ namespace Tecs {
 #ifdef TECS_ENABLE_TRACY
             ZoneNamedN(tracyTxScope, "EndTransaction", true);
 #endif
+            if (instance.beforeCommitCallback) {
+#ifdef TECS_ENABLE_TRACY
+                ZoneNamedN(tracyBeforeCommitScope, "BeforeCommitCallback", true);
+#endif
+                DynamicLock<ECS> dynamicLock(instance,
+                    std::shared_ptr<Transaction<ECS>>(this, [](auto *) {}),
+                    readPermissions,
+                    writePermissions);
+                instance.beforeCommitCallback(dynamicLock);
+            }
+
             if (IsAddRemoveAllowed() && writeAccessedFlags[0]) PreCommitAddRemoveMetadata();
 
             ( // For each AllComponentTypes, unlock any Noop Writes or Read locks early
@@ -234,10 +252,17 @@ namespace Tecs {
                     }(),
                     ...);
             }
+            const uint64_t commitId = ++instance.nextCommitId;
             { // Swap read and write storage, and release commit lock for all held locks
 #if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_DETAILED_COMMIT)
                 ZoneNamedN(tracyCommitScope2, "Commit", true);
 #endif
+                if (instance.onCommitCallback) {
+#ifdef TECS_ENABLE_TRACY
+                    ZoneNamedN(tracyOnCommitScope, "OnCommitCallback", true);
+#endif
+                    instance.onCommitCallback(instance, transactionId, commitId);
+                }
 
                 // Commit observers
                 if (IsAddRemoveAllowed() && writeAccessedFlags[0]) {
@@ -330,6 +355,13 @@ namespace Tecs {
                 instance.metadata.WriteUnlock();
             } else {
                 instance.metadata.ReadUnlock();
+            }
+
+            if (instance.afterCommitCallback) {
+#ifdef TECS_ENABLE_TRACY
+                ZoneNamedN(tracyAfterCommitScope, "AfterCommitCallback", true);
+#endif
+                instance.afterCommitCallback(instance, transactionId, commitId);
             }
 
 #ifndef TECS_HEADER_ONLY
@@ -510,12 +542,13 @@ namespace Tecs {
             ZoneScopedN("PermissionsStrGen");
             std::stringstream out, write, read;
             out << "Permissions<";
+            bool firstOut = true;
             if (IsAddRemoveAllowed()) {
                 out << "AddRemove";
             } else if (writePermissions.all()) {
                 out << "WriteAll";
             } else {
-                bool firstOut = true, firstRead = true, firstWrite = true;
+                bool firstRead = true, firstWrite = true;
                 for (size_t i = 1; i <= sizeof...(AllComponentTypes); i++) {
                     if (writePermissions[i]) {
                         if (firstWrite) {
@@ -534,7 +567,7 @@ namespace Tecs {
                     }
                     out << "Write<" << write.str() << ">";
                 }
-                if (readPermissions.all()) {
+                if ((readPermissions | PermissionBitset(1)).all()) { // All except ReadPrevious
                     if (firstOut) {
                         firstOut = false;
                     } else {
@@ -561,6 +594,14 @@ namespace Tecs {
                         out << "Read<" << read.str() << ">";
                     }
                 }
+            }
+            if (IsReadPreviousAllowed()) {
+                if (firstOut) {
+                    firstOut = false;
+                } else {
+                    out << ", ";
+                }
+                out << "ReadPrevious";
             }
             out << ">";
             return out.str();

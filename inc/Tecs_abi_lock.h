@@ -21,6 +21,7 @@ TECS_EXPORT uint64_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr);
 TECS_EXPORT bool Tecs_lock_is_add_remove_allowed(tecs_lock_t *dynLockPtr);
 TECS_EXPORT bool Tecs_lock_is_write_allowed(tecs_lock_t *dynLockPtr, uint32_t componentIndex);
 TECS_EXPORT bool Tecs_lock_is_read_allowed(tecs_lock_t *dynLockPtr, uint32_t componentIndex);
+TECS_EXPORT bool Tecs_lock_is_read_previous_allowed(tecs_lock_t *dynLockPtr);
 
 TECS_EXPORT uint64_t Tecs_previous_entities_with(tecs_lock_t *dynLockPtr, uint32_t componentIndex,
     tecs_entity_view_t *output);
@@ -40,7 +41,7 @@ TECS_EXPORT void Tecs_unset(tecs_lock_t *dynLockPtr, uint32_t componentIndex);
 // void StopWatching(Observer<Event> observer);
 
 // New lock must be released
-TECS_EXPORT tecs_lock_t *Tecs_lock_read_only(tecs_lock_t *dynLockPtr);
+TECS_EXPORT tecs_lock_t *Tecs_lock_previous_lock(tecs_lock_t *dynLockPtr);
 
 #ifdef __cplusplus
 } // extern "C"

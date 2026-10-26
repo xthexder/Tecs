@@ -84,6 +84,46 @@ namespace Tecs {
             return nextTransactionId;
         }
 
+        inline uint64_t GetNextCommitId() const {
+            return nextCommitId;
+        }
+
+        /**
+         * Sets a callback to run at the end of each transaction before it is committed.
+         *
+         * The transaction is still active during this callback, allowing further modification of ECS data.
+         * This callback may be called from multiple transactions at once, so it must be thread-safe.
+         *
+         * Callback signature: void beforeCommit(const DynamicLock<ECS> &lock)
+         */
+        void SetBeforeCommitCallback(std::function<void(const DynamicLock<ECS<Tn...>> &)> &&callback) {
+            beforeCommitCallback = std::move(callback);
+        }
+
+        /**
+         * Sets a callback to run during each transaction commmit.
+         *
+         * This callback is executed on the same thread as the committing transaction.
+         * During commit, there is guaranteed to no other transactions running.
+         *
+         * Callback signature: void onCommit(ECS &instance, uint64_t transactionId, uint64_t commitId)
+         */
+        void SetOnCommitCallback(std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> &&callback) {
+            onCommitCallback = std::move(callback);
+        }
+
+        /**
+         * Sets a callback to run after each transaction is committed and all locks are released.
+         *
+         * This callback is executed on the same thread as the committed transaction.
+         * This callback may be called from multiple threads at once, so it must be thread-safe.
+         *
+         * Callback signature: void afterCommit(ECS &instance, uint64_t transactionId, uint64_t commitId)
+         */
+        void SetAfterCommitCallback(std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> &&callback) {
+            afterCommitCallback = std::move(callback);
+        }
+
         /**
          * Returns the index of a Component type for use in a bitset.
          */
@@ -179,6 +219,11 @@ namespace Tecs {
 
         ObserverList<EntityAddRemoveEvent> entityAddEvents;
         ObserverList<EntityAddRemoveEvent> entityRemoveEvents;
+        std::function<void(const DynamicLock<ECS<Tn...>> &)> beforeCommitCallback;
+        std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> onCommitCallback, afterCommitCallback;
+
+        std::atomic_uint64_t nextTransactionId;
+        std::atomic_uint64_t nextCommitId;
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo transactionTrace;

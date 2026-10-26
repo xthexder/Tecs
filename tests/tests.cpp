@@ -1,5 +1,6 @@
 #include "tests.hh"
 
+#include "Tecs_permissions.hh"
 #include "test_components.hh"
 #include "test_ecs.hh"
 #include "utils.hh"
@@ -24,7 +25,8 @@ int main(int /* argc */, char ** /* argv */) {
     std::cout << ecs.GetBytesPerEntity() << " bytes per entity * N = " << (ecs.GetBytesPerEntity() * ENTITY_COUNT)
               << " bytes total" << std::endl;
 
-    Assert(Tecs::nextTransactionId == 0, "Expected next transaction id to be 0");
+    Assert(ecs.GetNextTransactionId() == 0, "Expected next transaction id to be 0");
+    Assert(ecs.GetNextCommitId() == 0, "Expected next commit id to be 0");
 
     Tecs::Observer<ECS, Tecs::EntityAddRemoveEvent> entityObserver;
     Tecs::Observer<ECS, Tecs::ComponentAddRemoveEvent<Transform>> transformObserver;
@@ -37,12 +39,14 @@ int main(int /* argc */, char ** /* argv */) {
         globalCompObserver = writeLock.Watch<Tecs::ComponentAddRemoveEvent<GlobalComponent>>();
 
         Assert(writeLock.GetTransactionId() == 1, "Expected transaction id to be 1");
+        Assert(ecs.GetNextCommitId() == 0, "Expected next commit id to be 0");
     }
-    Assert(Tecs::nextTransactionId == 1, "Expected next transaction id to be 1");
+    Assert(ecs.GetNextTransactionId() == 1, "Expected next transaction id to be 1");
+    Assert(ecs.GetNextCommitId() == 1, "Expected next commit id to be 1");
     bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
         auto &gc = writeLock.Set<GlobalComponent>(0);
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
@@ -63,10 +67,11 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(globalComponentInitialized, "Global component should be initialized");
 
         Assert(writeLock.GetTransactionId() == 2, "Expected transaction id to be 2");
+        Assert(ecs.GetNextCommitId() == 1, "Expected next commit id to be 1");
     }
     {
         Timer t("Test update global counter");
-        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
+        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>, Tecs::ReadPrevious>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -92,7 +97,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test remove global component");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -197,7 +202,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test add remove entities in single transaction");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         for (size_t i = 0; i < 100; i++) {
             Tecs::Entity e = writeLock.NewEntity();
             Assert(e.index == ENTITY_COUNT + i,
@@ -233,7 +238,7 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test add remove entities in two transactions");
         std::vector<Tecs::Entity> entityList;
         {
-            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
             for (size_t i = 0; i < 100; i++) {
                 Tecs::Entity e = writeLock.NewEntity();
                 Assert(e.index == ENTITY_COUNT + i,
@@ -257,7 +262,7 @@ int main(int /* argc */, char ** /* argv */) {
             }
         }
         {
-            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
             for (Tecs::Entity &e : entityList) {
                 Assert(e.Existed(writeLock), "Entity should exist before transaction");
                 auto eCopy = e;
@@ -271,7 +276,7 @@ int main(int /* argc */, char ** /* argv */) {
         Timer t("Test add remove reuses entity index with updated generation");
         std::vector<Tecs::Entity> entityList;
         {
-            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
             for (size_t i = 0; i < 100; i++) {
                 Tecs::Entity e = writeLock.NewEntity();
                 Assert(e.index == ENTITY_COUNT + i,
@@ -295,7 +300,7 @@ int main(int /* argc */, char ** /* argv */) {
             }
         }
         {
-            auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+            auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
             for (Tecs::Entity &e : entityList) {
                 Assert(e.Existed(writeLock), "Entity should exist before transaction");
                 auto eCopy = e;
@@ -307,7 +312,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test operations on null entity");
-        auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto lock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         Tecs::Entity ent;
 
         Assert(!ent.Existed(lock), "Null entity should not exist at start of transaction");
@@ -511,7 +516,7 @@ int main(int /* argc */, char ** /* argv */) {
     {
         Timer t("Test read-modify-write values");
         // Read locks can be created after a write lock without deadlock, but not the other way around.
-        auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>>();
+        auto writeLock = ecs.StartTransaction<Tecs::Write<Transform>, Tecs::ReadPrevious>();
         size_t entityCount = 0;
         for (Tecs::Entity e : writeLock.EntitiesWith<Transform>()) {
             // Both current and previous values can be read at the same time.
@@ -535,7 +540,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test write was committed");
-        auto readLock = ecs.StartTransaction<Tecs::Read<Transform>>();
+        auto readLock = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::ReadPrevious>();
         size_t entityCount = 0;
         for (Tecs::Entity e : readLock.EntitiesWith<Transform>()) {
             auto &currentTransform = e.Get<Transform>(readLock);
@@ -550,7 +555,8 @@ int main(int /* argc */, char ** /* argv */) {
         }
         Assert(entityCount == ENTITY_COUNT, "Didn't see enough entities with Transform");
     }
-    Assert(Tecs::nextTransactionId == 17, "Expected next transaction id to be 17");
+    Assert(ecs.GetNextTransactionId() == 17, "Expected next transaction id to be 17");
+    Assert(ecs.GetNextCommitId() == 17, "Expected next commit id to be 17");
     {
         Timer t("Test lock reference counting");
         std::unique_ptr<Tecs::Lock<ECS, Tecs::Write<Script>>> outerLock;
@@ -562,22 +568,23 @@ int main(int /* argc */, char ** /* argv */) {
 
             outerLock.reset(new Tecs::Lock<ECS, Tecs::Write<Script>>(transaction));
         }
-        // Transaction should not be commited yet.
+        // Transaction should not be committed yet.
         std::thread readThread([writtenId] {
-            // Try reading the written bit to make sure the write transaction is not yet commited.
+            // Try reading the written bit to make sure the write transaction is not yet committed.
             auto transaction = ecs.StartTransaction<Tecs::Read<Script>>();
             Assert(writtenId.Get<Script>(transaction).data[3] != 99, "Script data should not be set to 99");
         });
         readThread.join();
         outerLock.reset(nullptr);
-        // Transaction should now be commited.
+        // Transaction should now be committed.
         {
-            // Try reading the written bit to make sure the write transaction is commited.
+            // Try reading the written bit to make sure the write transaction is committed.
             auto transaction = ecs.StartTransaction<Tecs::Read<Script>>();
             Assert(writtenId.Get<Script>(transaction).data[3] == 99, "Script data should be set to 99");
         }
     }
-    Assert(Tecs::nextTransactionId == 20, "Expected next transaction id to be 20");
+    Assert(ecs.GetNextTransactionId() == 20, "Expected next transaction id to be 20");
+    Assert(ecs.GetNextCommitId() == 20, "Expected next commit id to be 20");
     {
         Timer t("Test read lock reference write transaction can see changes");
         auto transaction = ecs.StartTransaction<Tecs::Write<Script>>();
@@ -650,7 +657,8 @@ int main(int /* argc */, char ** /* argv */) {
             entities2[prevSize + i].Destroy(writeLock);
         }
     }
-    Assert(Tecs::nextTransactionId == 26, "Expected next transaction id to be 26");
+    Assert(ecs.GetNextTransactionId() == 26, "Expected next transaction id to be 26");
+    Assert(ecs.GetNextCommitId() == 26, "Expected next commit id to be 26");
     {
         Timer t("Test write priority");
         std::vector<std::thread> readThreads;
@@ -676,11 +684,12 @@ int main(int /* argc */, char ** /* argv */) {
             thread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == 127, "Expected next transaction id to be 127");
+    Assert(ecs.GetNextTransactionId() == 127, "Expected next transaction id to be 127");
+    Assert(ecs.GetNextCommitId() == 127, "Expected next commit id to be 127");
     Tecs::Entity constGetEntity;
     {
         Timer t("Test const Get does not add component");
-        auto lock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto lock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
 
         Tecs::Entity ent = lock.NewEntity();
         Assert(!ent.Existed(lock), "New entity should not exist at start of transaction");
@@ -709,7 +718,8 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!ent.Had<Transform>(lock), "Entity should not have previous Transform");
         constGetEntity = ent;
     }
-    Assert(Tecs::nextTransactionId == 128, "Expected next transaction id to be 128");
+    Assert(ecs.GetNextTransactionId() == 128, "Expected next transaction id to be 128");
+    Assert(ecs.GetNextCommitId() == 128, "Expected next commit id to be 128");
     {
         Timer t("Test const Get does not commit lock");
         {
@@ -758,7 +768,8 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == 131, "Expected next transaction id to be 131");
+    Assert(ecs.GetNextTransactionId() == 131, "Expected next transaction id to be 131");
+    Assert(ecs.GetNextCommitId() == 131, "Expected next commit id to be 131");
     {
         auto lock = ecs.StartTransaction<Tecs::AddRemove>();
         constGetEntity.Destroy(lock);
@@ -772,7 +783,7 @@ int main(int /* argc */, char ** /* argv */) {
             e.Set<Transform>(writeLock, 42.0, 1.0, 64.0);
         }
         std::atomic_bool commitStart = false;
-        std::atomic_bool commited = false;
+        std::atomic_bool committed = false;
         std::vector<std::thread> readThreads;
         readThreads.emplace_back([e]() {
             auto readLock = ecs.StartTransaction<>();
@@ -781,10 +792,10 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(e.Exists(readLock), "The entity should still exist for all transactions started before AddRemove.");
         });
         for (int i = 0; i < 100; i++) {
-            readThreads.emplace_back([&commitStart, &commited, e, i]() {
+            readThreads.emplace_back([&commitStart, &committed, e, i]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(i));
                 auto readLock = ecs.StartTransaction<>();
-                if (commited) {
+                if (committed) {
                     Assert(!e.Exists(readLock), "The entity should already be removed at this point.");
                 } else if (!commitStart) {
                     Assert(e.Exists(readLock), "The entity shouldn't be removed yet.");
@@ -800,7 +811,7 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(!e.Exists(writeLock), "Entity should not exist after it is destroyed.");
             commitStart = true;
         }
-        commited = true;
+        committed = true;
         {
             auto lock = ecs.StartTransaction<>();
             Assert(!e.Exists(lock), "Entity should not exist after test.");
@@ -813,7 +824,8 @@ int main(int /* argc */, char ** /* argv */) {
             Assert(!e.Exists(lock), "Entity should not exist after test.");
         }
     }
-    Assert(Tecs::nextTransactionId == 237, "Expected next transaction id to be 237");
+    Assert(ecs.GetNextTransactionId() == 237, "Expected next transaction id to be 237");
+    Assert(ecs.GetNextCommitId() == 237, "Expected next commit id to be 237");
     {
         Timer t("Test noop write transaction does not commit lock");
         {
@@ -823,7 +835,7 @@ int main(int /* argc */, char ** /* argv */) {
 
             std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
-                auto writeLock = ecs.StartTransaction<Tecs::Write<Script>>();
+                auto writeLock = ecs.StartTransaction<Tecs::Write<Script>, Tecs::ReadPrevious>();
                 Assert(readId.GetPrevious<Script>(writeLock).data[3] == previousValue,
                     "Script data should match read transaction");
 
@@ -833,7 +845,8 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == 239, "Expected next transaction id to be 239");
+    Assert(ecs.GetNextTransactionId() == 239, "Expected next transaction id to be 239");
+    Assert(ecs.GetNextCommitId() == 239, "Expected next commit id to be 239");
     {
         Timer t("Test write transaction does not commit untouched components");
         {
@@ -843,7 +856,7 @@ int main(int /* argc */, char ** /* argv */) {
 
             std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
-                auto writeLock = ecs.StartTransaction<Tecs::Write<Transform, Script>>();
+                auto writeLock = ecs.StartTransaction<Tecs::Write<Transform, Script>, Tecs::ReadPrevious>();
                 Tecs::Entity writeId = writeLock.EntitiesWith<Transform>()[0];
                 writeId.Get<Transform>(writeLock).pos[2]++;
 
@@ -856,7 +869,8 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == 241, "Expected next transaction id to be 241");
+    Assert(ecs.GetNextTransactionId() == 241, "Expected next transaction id to be 241");
+    Assert(ecs.GetNextCommitId() == 241, "Expected next commit id to be 241");
     {
         Timer t("Test noop add/remove transaction does not commit");
         {
@@ -866,7 +880,7 @@ int main(int /* argc */, char ** /* argv */) {
 
             std::thread writeThread([readId, previousValue] {
                 // Try starting a write transaction while another read transaction is active.
-                auto addRemoveLock = ecs.StartTransaction<Tecs::AddRemove>();
+                auto addRemoveLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
 
                 Assert(readId.GetPrevious<Script>(addRemoveLock).data[3] == previousValue,
                     "Script data should match read transaction");
@@ -877,7 +891,8 @@ int main(int /* argc */, char ** /* argv */) {
             writeThread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == 243, "Expected next transaction id to be 243");
+    Assert(ecs.GetNextTransactionId() == 243, "Expected next transaction id to be 243");
+    Assert(ecs.GetNextCommitId() == 243, "Expected next commit id to be 243");
     {
         Timer t("Test overlapping commit transactions don't deadlock");
         Tecs::Entity readIdA, readIdB;
@@ -925,7 +940,8 @@ int main(int /* argc */, char ** /* argv */) {
         writeThreadA.join();
         writeThreadB.join();
     }
-    Assert(Tecs::nextTransactionId == 246, "Expected next transaction id to be 246");
+    Assert(ecs.GetNextTransactionId() == 246, "Expected next transaction id to be 246");
+    Assert(ecs.GetNextCommitId() == 246, "Expected next commit id to be 246");
     {
         Timer t("Test read with const lock");
         const auto lock = ecs.StartTransaction<Tecs::Read<Transform>>();
@@ -1104,7 +1120,8 @@ int main(int /* argc */, char ** /* argv */) {
         Assert(!transformObserver.Poll(readLock, transformEvent), "No events should have occured");
         Assert(!globalCompObserver.Poll(readLock, globalCompEvent), "No events should have occured");
     }
-    Assert(Tecs::nextTransactionId == 253, "Expected next transaction id to be 253");
+    Assert(ecs.GetNextTransactionId() == 253, "Expected next transaction id to be 253");
+    Assert(ecs.GetNextCommitId() == 253, "Expected next commit id to be 253");
     {
         Timer t("Test cross-component write commit");
         std::thread blockingThread;
@@ -1127,10 +1144,10 @@ int main(int /* argc */, char ** /* argv */) {
             // Start another write transaction while this one is active to ensure it occurs as soon as possible after
             // the above transaction.
             blockingThread = std::thread([] {
-                // Script is the last component in the ECS, and is the first to be commited / unlocked.
+                // Script is the last component in the ECS, and is the first to be committed / unlocked.
                 auto lock = ecs.StartTransaction<Tecs::ReadAll, Tecs::Write<Script>>();
 
-                // At this point all components should be commited from the above transaction.
+                // At this point all components should be committed from the above transaction.
                 for (Tecs::Entity e : lock.EntitiesWith<Transform>()) {
                     Assert(e.Get<Transform>(lock).pos[1] == 2, "Expected position.y to be 2");
                 }
@@ -1149,7 +1166,8 @@ int main(int /* argc */, char ** /* argv */) {
 
         blockingThread.join();
     }
-    Assert(Tecs::nextTransactionId == 255, "Expected next transaction id to be 255");
+    Assert(ecs.GetNextTransactionId() == 255, "Expected next transaction id to be 255");
+    Assert(ecs.GetNextCommitId() == 255, "Expected next commit id to be 255");
     size_t expectedTransactionId = 255;
     {
         Timer t("Test continuous overlapping reads");
@@ -1201,8 +1219,10 @@ int main(int /* argc */, char ** /* argv */) {
             thread.join();
         }
     }
-    Assert(Tecs::nextTransactionId == expectedTransactionId,
+    Assert(ecs.GetNextTransactionId() == expectedTransactionId,
         "Expected next transaction id to be " + std::to_string(expectedTransactionId));
+    Assert(ecs.GetNextCommitId() == expectedTransactionId,
+        "Expected next commit id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test AddRemove commit lock metadata race");
         for (size_t i = 0; i < 10; i++) {
@@ -1278,27 +1298,39 @@ int main(int /* argc */, char ** /* argv */) {
             }
         }
     }
-    Assert(Tecs::nextTransactionId == expectedTransactionId,
+    Assert(ecs.GetNextTransactionId() == expectedTransactionId,
         "Expected next transaction id to be " + std::to_string(expectedTransactionId));
+    Assert(ecs.GetNextCommitId() == expectedTransactionId,
+        "Expected next commit id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test nested transactions");
         try {
             auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
+            Assert(ecs.GetNextTransactionId() == expectedTransactionId + 1,
+                "Expected next transaction id to be " + std::to_string(expectedTransactionId + 1));
             auto lockB = ecs.StartTransaction<Tecs::Read<Renderable>, Tecs::Write<Script>>();
             Assert(false, "Nested transactions should not succeed.");
         } catch (std::runtime_error &e) {
             std::string msg = e.what();
             Assert(msg == "Nested transactions are not allowed", "Received wrong runtime_error: " + msg);
         }
-        expectedTransactionId += 2;
+        expectedTransactionId++; // Nested transaction does not start
     }
+    Assert(ecs.GetNextTransactionId() == expectedTransactionId,
+        "Expected next transaction id to be " + std::to_string(expectedTransactionId));
+    Assert(ecs.GetNextCommitId() == expectedTransactionId,
+        "Expected next commit id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test nested transactions across ecs instances");
         testing::ECS ecs2;
         auto lockA = ecs.StartTransaction<Tecs::Read<Transform>, Tecs::Write<Renderable>>();
         auto lockB = ecs2.StartTransaction<Tecs::Read<Renderable>, Tecs::Write<Script>>();
-        expectedTransactionId += 2;
+        expectedTransactionId++; // Nested transaction is from a different ECS
     }
+    Assert(ecs.GetNextTransactionId() == expectedTransactionId,
+        "Expected next transaction id to be " + std::to_string(expectedTransactionId));
+    Assert(ecs.GetNextCommitId() == expectedTransactionId,
+        "Expected next commit id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test count entities");
         {
@@ -1330,10 +1362,15 @@ int main(int /* argc */, char ** /* argv */) {
 
             e.generation++;
             Assert(theMap[e] == 0, "Expected value to not be set");
+
+            Assert(ecs.GetNextCommitId() == expectedTransactionId - 1,
+                "Expected next commit id to be " + std::to_string(expectedTransactionId - 1));
         }
     }
-    Assert(Tecs::nextTransactionId == expectedTransactionId,
+    Assert(ecs.GetNextTransactionId() == expectedTransactionId,
         "Expected next transaction id to be " + std::to_string(expectedTransactionId));
+    Assert(ecs.GetNextCommitId() == expectedTransactionId,
+        "Expected next commit id to be " + std::to_string(expectedTransactionId));
     {
         Timer t("Test total transaction count via transaction id");
         {

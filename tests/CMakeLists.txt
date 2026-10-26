@@ -70,7 +70,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(TracyClient PRIVATE -Wno-unused-result -Wno-unused-function -Wno-maybe-uninitialized)
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field -Wno-unused-function)
+        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field -Wno-unused-function -Wno-c11-extensions)
     endif()
 
     add_executable(${PROJECT_NAME}-benchmark-tracy
