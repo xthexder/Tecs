@@ -50,6 +50,11 @@ namespace Tecs::abi {
                     }(),
                     ...);
             }
+            if constexpr (is_read_previous_allowed<LockType>()) {
+                if (!Tecs_lock_is_read_previous_allowed(lock.get())) {
+                    throw std::runtime_error("Lock is missing ReadPrevious permissions");
+                }
+            }
         }
 
         // Returns true if this lock type can be constructed from a lock with the specified source permissions
@@ -80,7 +85,7 @@ namespace Tecs::abi {
 
         static inline constexpr PermissionBitset GetReadPermissions() {
             PermissionBitset readPermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             ((readPermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
                      is_read_allowed<AllComponentTypes, LockType>()),
                 ...);
@@ -97,6 +102,7 @@ namespace Tecs::abi {
 
         template<typename T>
         inline const EntityView PreviousEntitiesWith() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             constexpr uint32_t componentIndex = ECS::template GetComponentIndex<T>();
@@ -116,6 +122,7 @@ namespace Tecs::abi {
         }
 
         inline const EntityView PreviousEntities() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             tecs_entity_view_t view = {};
             (void)Tecs_previous_entities(base.get(), &view);
             return EntityView(view);
@@ -149,6 +156,7 @@ namespace Tecs::abi {
 
         template<typename... Tn>
         inline bool Had() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(all_global_components<Tn...>(), "Only global components can be accessed without an Entity");
 
             return (Tecs_had(base.get(), ECS::template GetComponentIndex<Tn>()) && ...);
@@ -173,6 +181,7 @@ namespace Tecs::abi {
 
         template<typename T>
         inline const T &GetPrevious() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
@@ -237,15 +246,16 @@ namespace Tecs::abi {
         }
 
         /**
-         * Convert this lock into a read-only variant.
+         * Convert this lock into a variant that can only read components as they were at the start of this transaction.
          *
          * Reads performed through this lock will not be able to see writes from the parent lock, and instead will
          * return the previous value.
          */
-        inline auto ReadOnlySubset() const {
+        inline auto PreviousLock() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using NewLockType = Lock<ECS, typename FlattenPermissions<LockType>::type_readonly>;
             static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
-            std::shared_ptr<tecs_lock_t> lockPtr(Tecs_lock_read_only(base.get()), [](auto *ptr) {
+            std::shared_ptr<tecs_lock_t> lockPtr(Tecs_lock_previous_lock(base.get()), [](auto *ptr) {
                 Tecs_lock_release(ptr);
             });
             return NewLockType(lockPtr);

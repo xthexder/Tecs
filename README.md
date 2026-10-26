@@ -23,7 +23,7 @@ Tecs is a core component of the [Stray Photons Game Engine](https://github.com/f
 
 Tecs operates on read and write transactions, using 2 copies of the component data so that read and
 write operations can be executed simultaneously. The only time a read transaction will block is when
-a write transaction is being commited on the same component type.
+a write transaction is being committed on the same component type.
 
 Data is stored in such a way that it can be efficiently copied at a low level, minimizing the amount of
 time read operations are blocked. To further minimize the overhead of locking and thread synchronization,
@@ -37,18 +37,18 @@ A Tecs Entity on its own is just an id, but if a Lock is held by a Transaction, 
 access Component data. The following Entity operations are only valid if the held Lock has the
 correct permissions.
 
-| Operation                                        | Required Permissions | Description                                                                 |
-|--------------------------------------------------|----------------------|-----------------------------------------------------------------------------|
-| `bool Entity::Exists`                            | `Read<Any>`          | Check if an Entity is valid and exists in the ECS instance.                 |
-| `bool Entity::Has<T>`                            | `Read<Any>`          | Check if an Entity currently has a Component of type T.                     |
-| `bool Entity::Had<T>`                            | `Read<Any>`          | Check if an Entity had a Component of T at the start of the Transaction.    |
-| `const T &Entity::Get<T>`                        | `Read<T>`            | Read the current value of an Entity's T Component.                          |
-| `T &Entity::Get<T>`                              | `Write<T>`           | Get a mutable reference to the current value of an Entity's T Component.    |
-| `const T &Entity::Get<const T>`                  | `Read<T>`            | Get an immutable reference to the current value of an Entity's T Component. |
-| `const T &Entity::GetPrevious<T>`                | `Read<T>`            | Read the value of an Entity's T Component at the start of the Transaction.  |
-| `// Existing Component` <br> `T &Entity::Set<T>` | `Write<T>`           | Set the current value of an existing T Component. <br> Note: The existence of a component is checked at runtime and will throw an exception if the required permissions aren't held |
-| `// New Component` <br> `T &Entity::Set<T>`      | `AddRemove`          | Add a new Component of type T to an Entity, or replace the current value.   |
-| `void Entity::Unset<T>`                          | `AddRemove`          | Remove the T Component from an Entity.                                      |
+| Operation                                        | Required Permissions    | Description                                                                 |
+|--------------------------------------------------|-------------------------|-----------------------------------------------------------------------------|
+| `bool Entity::Exists`                            | `Read<Any>`             | Check if an Entity is valid and exists in the ECS instance.                 |
+| `bool Entity::Has<T>`                            | `Read<Any>`             | Check if an Entity currently has a Component of type T.                     |
+| `bool Entity::Had<T>`                            | `ReadPrevious`          | Check if an Entity had a Component of T at the start of the Transaction.    |
+| `const T &Entity::Get<T>`                        | `Read<T>`               | Read the current value of an Entity's T Component.                          |
+| `T &Entity::Get<T>`                              | `Write<T>`              | Get a mutable reference to the current value of an Entity's T Component.    |
+| `const T &Entity::Get<const T>`                  | `Read<T>`               | Get an immutable reference to the current value of an Entity's T Component. |
+| `const T &Entity::GetPrevious<T>`                | `Read<T>, ReadPrevious` | Read the value of an Entity's T Component at the start of the Transaction.  |
+| `// Existing Component` <br> `T &Entity::Set<T>` | `Write<T>`              | Set the current value of an existing T Component. <br> Note: The existence of a Component is checked at runtime and will throw an exception if the required permissions aren't held |
+| `// New Component` <br> `T &Entity::Set<T>`      | `AddRemove`             | Add a new Component of type T to an Entity, or replace the current value.   |
+| `void Entity::Unset<T>`                          | `AddRemove`             | Remove the T Component from an Entity.                                      |
 
 ### Event Operations
 
@@ -63,6 +63,15 @@ correct permissions.
  - `EntityAddRemoveEvent`
  - `ComponentAddRemoveEvent<ComponentType>`
  - `ComponentModifiedEvent<ComponentType>`
+
+### Permissions
+
+| Permission         | Description                                                      |
+|--------------------|------------------------------------------------------------------|
+| **`Read<T>`**      | Allows for multiple transactions to access a Component at once, guaranteeing the value read will not change during the transaction. Reads can run concurrently with writes, but may block during transaction commits. |
+| **`ReadPrevious`** | Aguments `Read<T>` by allowing a transaction to read a Component's data from the start of the transaction. |
+| **`Write<T>`**     | Allows a single transaction to write to a Component at once. Changes are not visible to other transactions until the transaction commits. |
+| **`AddRemove`**    | Allows for creating and destroying both entities and components. This permission includes `Write<T>` permissions for all components, and will block all other writes until committed. |
 
 ## Examples
 
@@ -104,7 +113,7 @@ static World ecs;
     }
 
     // When `transaction` goes out of scope, it is deconstructed and
-    // any changes made to entities will be commited to the ECS.
+    // any changes made to entities will be committed to the ECS.
 }
 
 { // Start a read transaction to access entity data

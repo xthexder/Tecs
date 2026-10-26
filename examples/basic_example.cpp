@@ -26,7 +26,7 @@ int main(int /* argc */, char ** /* argv */) {
             transaction.NewEntity().Set<Position>(transaction);
         }
 
-        // When `transaction` goes out of scope, it is deconstructed and any changes made to entities will be commited
+        // When `transaction` goes out of scope, it is deconstructed and any changes made to entities will be committed
         // to the ECS.
     }
 

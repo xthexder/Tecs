@@ -82,7 +82,7 @@ namespace Tecs::abi {
 
             std::bitset<1 + sizeof...(Tn)> readPermissions;
             std::bitset<1 + sizeof...(Tn)> writePermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             writePermissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
             ((

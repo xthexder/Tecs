@@ -34,6 +34,7 @@ namespace Tecs {
      * Tecs::Write<Components...>
      * Tecs::WriteAll
      * Tecs::AddRemove
+     * Tecs::ReadPrevious
      *
      * // Examples:
      * using ECSType = Tecs::ECS<A, B, C>;
@@ -66,7 +67,7 @@ namespace Tecs {
         // Start a new transaction
         inline Lock(ECS &instance) : instance(instance) {
             PermissionBitset readPermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             writePermissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
             ((
@@ -82,6 +83,8 @@ namespace Tecs {
         static constexpr bool is_lock_subset() {
             using SourceLockType = Lock<ECS, PermissionsSource...>;
             if constexpr (is_add_remove_allowed<LockType>() && !is_add_remove_allowed<SourceLockType>()) {
+                return false;
+            } else if constexpr (is_read_previous_allowed<LockType>() && !is_read_previous_allowed<SourceLockType>()) {
                 return false;
             } else {
                 return std::conjunction<Tecs::is_lock_subset<AllComponentTypes, LockType, SourceLockType>...>();
@@ -119,7 +122,7 @@ namespace Tecs {
 
         static inline constexpr PermissionBitset GetReadPermissions() {
             PermissionBitset readPermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             ((readPermissions[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
                      is_read_allowed<AllComponentTypes, LockType>()),
                 ...);
@@ -138,6 +141,7 @@ namespace Tecs {
 
         template<typename T>
         inline const EntityView PreviousEntitiesWith() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             return instance.template Storage<T>().readValidEntities;
@@ -155,6 +159,7 @@ namespace Tecs {
         }
 
         inline const EntityView PreviousEntities() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             return instance.metadata.readValidEntities;
         }
 
@@ -221,6 +226,7 @@ namespace Tecs {
 
         template<typename... Tn>
         inline bool Had() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(all_global_components<Tn...>(), "Only global components can be accessed without an Entity");
 
             return instance.template BitsetHas<Tn...>(instance.globalReadMetadata);
@@ -286,6 +292,7 @@ namespace Tecs {
 
         template<typename T>
         inline const T *GetPreviousStorage() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
 
@@ -294,6 +301,7 @@ namespace Tecs {
 
         template<typename T>
         inline const T &GetPrevious() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(is_global_component<CompType>(), "Only global components can be accessed without an Entity");
@@ -423,13 +431,14 @@ namespace Tecs {
         }
 
         /**
-         * Convert this lock into a read-only variant.
+         * Convert this lock into a variant that can only read components as they were at the start of this transaction.
          *
          * Reads performed through this lock will not be able to see writes from the parent lock, and instead will
          * return the previous value.
          */
-        inline auto ReadOnlySubset() const {
-            using NewLockType = Lock<ECS, typename FlattenPermissions<LockType, AllComponentTypes...>::type_readonly>;
+        inline auto PreviousLock() const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
+            using NewLockType = Lock<ECS, typename FlattenPermissions<LockType>::type_readonly>;
             static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
             return NewLockType(this->instance, this->transaction, {});
         }
@@ -531,14 +540,14 @@ namespace Tecs {
             std::bitset<1 + sizeof...(AllComponentTypes)> result;
             if constexpr (sizeof...(AllComponentTypes) <= std::numeric_limits<uint64_t>::digits) {
                 // clang-format off
-                constexpr uint64_t mask = 1 | ((
+                constexpr uint64_t mask = (uint64_t)is_read_previous_allowed<LockType>() | ((
                     ((uint64_t)is_read_allowed<AllComponentTypes, LockType>())
                         << (1 + ECS::template GetComponentIndex<AllComponentTypes>())
                 ) | ...);
                 // clang-format on
                 result = std::bitset<1 + sizeof...(AllComponentTypes)>(mask);
             } else {
-                result[0] = true;
+                result[0] = is_read_previous_allowed<LockType>();
                 ((result[1 + ECS::template GetComponentIndex<AllComponentTypes>()] =
                          is_read_allowed<AllComponentTypes, LockType>()),
                     ...);
@@ -580,12 +589,21 @@ namespace Tecs {
         template<typename LockType>
         DynamicLock(const LockType &lock) : BaseLockType(lock), readPermissions(generateReadBitset(lock)) {}
 
+        // Create from an existing static lock, masking the read and write permissions
+        template<typename LockType>
+        inline DynamicLock(const LockType &lock, PermissionBitset readPermissions, PermissionBitset writePermissions)
+            : BaseLockType(lock.instance, lock.transaction, lock.writePermissions & writePermissions),
+              readPermissions(generateReadBitset(lock) & readPermissions) {}
+
         // Start a new transaction from runtime permissions
         inline DynamicLock(ECS &instance, const PermissionBitset &readPermissions,
             const PermissionBitset &writePermissions)
             : Lock<ECS>(instance, std::make_shared<Transaction<ECS>>(instance, readPermissions, writePermissions),
                   writePermissions),
-              readPermissions(readPermissions) {}
+              readPermissions(readPermissions) {
+            static_assert(sizeof...(StaticPermissions) == 0,
+                "Constructing DynamicLock<> with dynamic + static permissions not supported");
+        }
 
         inline PermissionBitset GetDynamicWritePermissions() const {
             return BaseLockType::writePermissions;
@@ -620,5 +638,7 @@ namespace Tecs {
     private:
         template<typename, typename...>
         friend class DynamicLock;
+        template<typename>
+        friend class Transaction;
     };
 }; // namespace Tecs

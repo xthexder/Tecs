@@ -1,4 +1,5 @@
 #include "Tecs_abi_entity_view.h"
+#include "Tecs_permissions.hh"
 #include "test_components.hh"
 #include "test_ecs.hh"
 #include "tests.hh"
@@ -48,7 +49,7 @@ int main(int /* argc */, char ** /* argv */) {
     bool globalComponentInitialized = false;
     {
         Timer t("Test initializing global components");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         Assert(!writeLock.Has<GlobalComponent>(), "ECS must start with no global component");
         auto &gc = writeLock.Set<GlobalComponent>(0);
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
@@ -72,7 +73,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test update global counter");
-        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>>();
+        auto writeLock = ecs.StartTransaction<Tecs::Write<GlobalComponent>, Tecs::ReadPrevious>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
@@ -98,7 +99,7 @@ int main(int /* argc */, char ** /* argv */) {
     }
     {
         Timer t("Test remove global component");
-        auto writeLock = ecs.StartTransaction<Tecs::AddRemove>();
+        auto writeLock = ecs.StartTransaction<Tecs::AddRemove, Tecs::ReadPrevious>();
         Assert(writeLock.Has<GlobalComponent>(), "ECS should have a global component");
 
         auto &gc = writeLock.Get<GlobalComponent>();
