@@ -185,7 +185,7 @@ namespace benchmark {
         MultiTimer timer1("ScriptTransactionWorkerThread StartTransaction");
         MultiTimer timer2("ScriptTransactionWorkerThread Run");
         MultiTimer timer3("ScriptTransactionWorkerThread Commit");
-        size_t iteration = 0;
+        [[maybe_unused]] size_t iteration = 0;
         while (running) {
             // auto start = std::chrono::high_resolution_clock::now();
             {
@@ -204,8 +204,8 @@ namespace benchmark {
                     }
                     i++;
                 }
-                if (iteration % 10 == 9) {
 #ifndef BENCHMARK_ABI
+                if (iteration % 10 == 9) {
                     ComponentModifiedEvent<Script> scriptEventEntity;
                     while (scriptObserver.Poll(writeLock, scriptEventEntity)) {
                         size_t updateNumber = scriptUpdateCount++;
@@ -218,8 +218,8 @@ namespace benchmark {
                             success = false;
                         }
                     }
-#endif
                 }
+#endif
                 t = timer3;
             }
             std::this_thread::yield();

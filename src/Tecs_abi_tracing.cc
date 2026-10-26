@@ -15,7 +15,7 @@
     #ifdef TECS_ABI_ECS_NAME
 using ECS = TECS_ABI_ECS_NAME;
     #else
-using ECS = Tecs::ECS<>;
+        #error "TECS_ABI_ECS_NAME is not set"
     #endif
 
 extern "C" {

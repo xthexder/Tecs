@@ -2,6 +2,7 @@
 
 #include "Tecs_abi.h"
 #include "Tecs_abi_lock.hh"
+#include "Tecs_permissions.hh"
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_abi_tracing.hh"
 #endif
@@ -81,7 +82,7 @@ namespace Tecs::abi {
 
             std::bitset<1 + sizeof...(Tn)> readPermissions;
             std::bitset<1 + sizeof...(Tn)> writePermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             writePermissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
             ((
