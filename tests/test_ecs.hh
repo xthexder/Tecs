@@ -14,3 +14,8 @@ namespace testing {
 }; // namespace testing
 
 TECS_GLOBAL_COMPONENT(testing::GlobalComponent);
+
+TECS_NAME_COMPONENT(testing::Transform, "Transform");
+TECS_NAME_COMPONENT(testing::Renderable, "Renderable");
+TECS_NAME_COMPONENT(testing::Script, "Script");
+TECS_NAME_COMPONENT(testing::GlobalComponent, "GlobalComponent");

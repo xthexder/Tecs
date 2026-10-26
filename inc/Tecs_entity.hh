@@ -2,6 +2,7 @@
 
 #include "Tecs_permissions.hh"
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -56,26 +57,25 @@ namespace Tecs {
     struct Entity {
         // Workaround for Clang so that std::atomic<Tecs::Entity> operations can be inlined as if uint64. See issue:
         // https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs
-        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) +
-                sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_GENERATION_TYPE generation;
-        TECS_ENTITY_INDEX_TYPE index;
+        alignas(sizeof(TECS_ENTITY_GENERATION_TYPE) + sizeof(TECS_ENTITY_INDEX_TYPE)) TECS_ENTITY_INDEX_TYPE index;
+        TECS_ENTITY_GENERATION_TYPE generation;
 
-        inline Entity() : generation(0), index(0) {}
+        inline Entity() : index(0), generation(0) {}
 
         inline Entity(uint64_t eid)
-            : generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)),
-              index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {}
+            : index(eid & std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()),
+              generation(eid >> (sizeof(TECS_ENTITY_INDEX_TYPE) * 8)) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation)
-            : generation(generation), index(index) {}
+            : index(index), generation(generation) {}
         inline Entity(TECS_ENTITY_INDEX_TYPE index, TECS_ENTITY_GENERATION_TYPE generation,
             TECS_ENTITY_ECS_IDENTIFIER_TYPE ecsId)
-            : generation(GenerationWithIdentifier(generation, ecsId)), index(index) {}
+            : index(index), generation(GenerationWithIdentifier(generation, ecsId)) {}
 
     public:
         template<typename LockType>
         inline bool Exists(const LockType &lock) const {
-            auto &metadataList =
-                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) return false;
 
             auto &metadata = metadataList[index];
@@ -84,6 +84,7 @@ namespace Tecs {
 
         template<typename LockType>
         inline bool Existed(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             if (index >= lock.instance.metadata.readComponents.size()) return false;
 
             auto &metadata = lock.instance.metadata.readComponents[index];
@@ -93,8 +94,8 @@ namespace Tecs {
         template<typename... Tn, typename LockType>
         inline bool Has(const LockType &lock) const {
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
-            auto &metadataList =
-                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) return false;
 
             auto &metadata = metadataList[index];
@@ -102,14 +103,38 @@ namespace Tecs {
                    lock.instance.template BitsetHas<Tn...>(metadata);
         }
 
+        template<typename LockType,
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits), int> = 0>
+        inline bool HasBitset(const LockType &lock,
+            const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
+            if (index >= metadataList.size()) return false;
+
+            auto &metadata = metadataList[index];
+            return metadata[0] && metadata.generation == generation && (metadata & componentBits) == componentBits;
+        }
+
         template<typename... Tn, typename LockType>
         inline bool Had(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
             if (index >= lock.instance.metadata.readComponents.size()) return false;
 
             auto &metadata = lock.instance.metadata.readComponents[index];
             return metadata[0] && metadata.generation == generation &&
                    lock.instance.template BitsetHas<Tn...>(metadata);
+        }
+
+        template<typename LockType,
+            std::enable_if_t<(LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits), int> = 0>
+        inline bool HadBitset(const LockType &lock,
+            const std::bitset<1 + LockType::ECS::GetComponentCount()> &componentBits) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
+            if (index >= lock.instance.metadata.readComponents.size()) return false;
+
+            auto &metadata = lock.instance.metadata.readComponents[index];
+            return metadata[0] && metadata.generation == generation && (metadata & componentBits) == componentBits;
         }
 
         template<typename T, typename LockType,
@@ -123,8 +148,8 @@ namespace Tecs {
             static_assert(!is_global_component<CompType>(), "Global components must be accessed through lock.Get()");
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadataList =
-                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
@@ -139,12 +164,12 @@ namespace Tecs {
 
             if constexpr (is_add_remove_allowed<LockType>() && !std::is_const<ReturnType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
-                                                         : lock.instance.metadata.readComponents;
+                auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                              : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
 #endif
                 if (!lock.instance.template BitsetHas<CompType>(metadata)) {
-                    lock.base->writeAccessedFlags[0] = true;
+                    lock.transaction->template SetAccessFlag<AddRemove>();
                     lock.instance.metadata.AccessEntity(index);
 
                     // Reset value before allowing reading.
@@ -161,8 +186,8 @@ namespace Tecs {
 #endif
             }
 
-            if constexpr (!std::is_const<ReturnType>()) lock.base->template SetAccessFlag<CompType>(index);
-            if (lock.instance.template BitsetHas<CompType>(lock.permissions)) {
+            if constexpr (!std::is_const<ReturnType>()) lock.transaction->template SetAccessFlag<CompType>(index);
+            if (lock.instance.template BitsetHas<CompType>(lock.writePermissions)) {
                 return storage.writeComponents[index];
             } else {
                 return storage.readComponents[index];
@@ -171,6 +196,7 @@ namespace Tecs {
 
         template<typename T, typename LockType>
         inline const T &GetPrevious(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(!is_global_component<CompType>(),
@@ -200,8 +226,8 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadataList =
-                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
@@ -214,12 +240,12 @@ namespace Tecs {
 
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
-                                                         : lock.instance.metadata.readComponents;
+                auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                              : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
-                    lock.base->writeAccessedFlags[0] = true;
+                    lock.transaction->template SetAccessFlag<AddRemove>();
                     lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
@@ -233,7 +259,7 @@ namespace Tecs {
 #endif
             }
 
-            lock.base->template SetAccessFlag<T>(index);
+            lock.transaction->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = value;
         }
 
@@ -243,8 +269,8 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Global components must be accessed through lock.Set()");
 
 #ifndef TECS_UNCHECKED_MODE
-            auto &metadataList =
-                lock.permissions[0] ? lock.instance.metadata.writeComponents : lock.instance.metadata.readComponents;
+            auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                          : lock.instance.metadata.readComponents;
             if (index >= metadataList.size()) {
                 throw std::runtime_error("Entity does not exist: " + std::to_string(*this));
             }
@@ -257,12 +283,12 @@ namespace Tecs {
 
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
-                auto &metadataList = lock.permissions[0] ? lock.instance.metadata.writeComponents
-                                                         : lock.instance.metadata.readComponents;
+                auto &metadataList = lock.writePermissions[0] ? lock.instance.metadata.writeComponents
+                                                              : lock.instance.metadata.readComponents;
                 auto &metadata = metadataList[index];
 #endif
                 if (!lock.instance.template BitsetHas<T>(metadata)) {
-                    lock.base->writeAccessedFlags[0] = true;
+                    lock.transaction->template SetAccessFlag<AddRemove>();
                     lock.instance.metadata.AccessEntity(index);
 
                     metadata[1 + lock.instance.template GetComponentIndex<T>()] = true;
@@ -276,7 +302,7 @@ namespace Tecs {
 #endif
             }
 
-            lock.base->template SetAccessFlag<T>(index);
+            lock.transaction->template SetAccessFlag<T>(index);
             return lock.instance.template Storage<T>().writeComponents[index] = T(std::forward<Args>(args)...);
         }
 
@@ -319,7 +345,7 @@ namespace Tecs {
 
             // Invalidate the entity and all of its Components
             lock.RemoveAllComponents(copy);
-            lock.base->writeAccessedFlags[0] = true;
+            lock.transaction->template SetAccessFlag<AddRemove>();
             lock.instance.metadata.AccessEntity(copy);
             lock.instance.metadata.writeComponents[copy][0] = false;
             size_t validIndex = lock.instance.metadata.validEntityIndexes[copy];

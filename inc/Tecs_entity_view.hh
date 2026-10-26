@@ -4,6 +4,7 @@
 
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 namespace Tecs {
@@ -134,11 +135,11 @@ namespace Tecs {
         }
 
         inline reverse_iterator rbegin() const noexcept {
-            return reverse_iterator(iterator{*this, end_index});
+            return reverse_iterator(end());
         }
 
         inline reverse_iterator rend() const noexcept {
-            return reverse_iterator(iterator{*this, start_index + 1});
+            return reverse_iterator(begin());
         }
 
         inline reference operator[](size_type index) const {
@@ -165,9 +166,8 @@ namespace Tecs {
             return EntityView(*storage, start_index + offset, std::min(end_index, start_index + offset + count));
         }
 
-    private:
         const std::vector<Entity> *storage = nullptr;
         size_t start_index = 0;
         size_t end_index = 0;
     };
-}; // namespace Tecs
+} // namespace Tecs

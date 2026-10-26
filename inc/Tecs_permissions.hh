@@ -12,8 +12,13 @@ namespace Tecs {
     class Lock {};
     template<typename, typename...>
     class DynamicLock {};
-    template<typename, typename...>
+    template<typename>
     class Transaction {};
+
+    namespace abi {
+        template<typename, typename...>
+        class Lock {};
+    } // namespace abi
 
     /**
      * Lock permissions are passed in as template arguments when creating a Transaction or Lock.
@@ -42,6 +47,7 @@ namespace Tecs {
     struct Write {};
     struct WriteAll {};
     struct AddRemove {};
+    struct ReadPrevious {};
 
     /**
      * When a component is marked as global by this type trait, it can be accessed without referencing an entity.
@@ -88,7 +94,7 @@ namespace Tecs {
 #define TECS_NAME_COMPONENT(ComponentType, ComponentName)                                                              \
     template<>                                                                                                         \
     struct Tecs::component_name<ComponentType> {                                                                       \
-        static constexpr char value[] = (ComponentName);                                                               \
+        static constexpr char value[] = ComponentName;                                                                 \
     };
 
     // contains<T, Un...>::value is true if T is part of the set Un...
@@ -109,6 +115,8 @@ namespace Tecs {
     struct is_write_allowed : std::false_type {};
     template<typename Lock>
     struct is_add_remove_allowed : std::false_type {};
+    template<typename Lock>
+    struct is_read_previous_allowed : std::false_type {};
 
     // Lock<Permissions...> and DynamicLock<Permissions...> specializations
     // clang-format off
@@ -120,6 +128,10 @@ namespace Tecs {
     struct is_read_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_read_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_read_allowed<T, const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_allowed<T, Permissions>...> {};
 
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
@@ -129,15 +141,36 @@ namespace Tecs {
     struct is_write_allowed<T, DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
     template<typename T, typename ECSType, typename... Permissions>
     struct is_write_allowed<T, const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, abi::Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
+    template<typename T, typename ECSType, typename... Permissions>
+    struct is_write_allowed<T, const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_write_allowed<T, Permissions>...> {};
 
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_allowed<Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_allowed<const Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_allowed<DynamicLock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
     template<typename ECSType, typename... Permissions>
-    struct is_add_remove_allowed<const DynamicLock<ECSType, Permissions...>> : contains<AddRemove, Permissions...> {};
+    struct is_add_remove_allowed<const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<abi::Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_add_remove_allowed<const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_add_remove_allowed<Permissions>...> {};
+
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<Lock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<const Lock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<const DynamicLock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
+    template<typename ECSType, typename... Permissions>
+    struct is_read_previous_allowed<const abi::Lock<ECSType, Permissions...>> : std::disjunction<is_read_previous_allowed<Permissions>...> {};
     // clang-format on
 
     // Check SubLock <= Lock for component type T
@@ -174,6 +207,8 @@ namespace Tecs {
     struct is_write_allowed<T, AddRemove> : std::true_type {};
     template<>
     struct is_add_remove_allowed<AddRemove> : std::true_type {};
+    template<>
+    struct is_read_previous_allowed<ReadPrevious> : std::true_type {};
 
     // Helpers for converting a lock type to a de-duplicated permission list
     template<typename... Permissions>
@@ -185,21 +220,25 @@ namespace Tecs {
 
     namespace detail {
         template<typename>
-        struct tuple_to_read {
-            using type = Read<>;
+        struct tuple_to {
+            using read = Read<>;
+            using write = Write<>;
         };
         template<typename... Tn>
-        struct tuple_to_read<std::tuple<Tn...>> {
-            using type = Read<std::remove_pointer_t<Tn>...>;
+        struct tuple_to<std::tuple<Tn...>> {
+            using read = Read<std::remove_pointer_t<Tn>...>;
+            using write = Write<std::remove_pointer_t<Tn>...>;
         };
 
-        template<typename>
-        struct tuple_to_write {
-            using type = Write<>;
+        template<typename ECS, typename...>
+        struct tuple_to_lock {
+            using type = Lock<ECS>;
+            using type_dynamic = DynamicLock<ECS>;
         };
-        template<typename... Tn>
-        struct tuple_to_write<std::tuple<Tn...>> {
-            using type = Write<std::remove_pointer_t<Tn>...>;
+        template<typename ECS, typename... Tn>
+        struct tuple_to_lock<ECS, std::tuple<Tn...>> {
+            using type = Lock<ECS, std::remove_pointer_t<Tn>...>;
+            using type_dynamic = DynamicLock<ECS, std::remove_pointer_t<Tn>...>;
         };
 
         template<typename LockType, typename AllTuple, size_t... Indices>
@@ -217,11 +256,16 @@ namespace Tecs {
         template<typename LockType, typename AllTuple, size_t... Indices>
         static constexpr auto flatten_readonly(std::index_sequence<Indices...>) {
             // clang-format off
-            return std::tuple_cat(std::conditional_t<
+            auto readonly = std::tuple_cat(std::conditional_t<
                 is_read_allowed<std::tuple_element_t<Indices, AllTuple>, LockType>::value,
                 std::tuple<std::tuple_element_t<Indices, AllTuple> *>,
                 std::tuple<>
             >{}...);
+            if constexpr (is_read_previous_allowed<LockType>()) {
+                return std::tuple_cat(readonly, std::tuple<ReadPrevious>{});
+            } else {
+                return readonly;
+            }
             // clang-format on
         }
 
@@ -239,7 +283,11 @@ namespace Tecs {
         template<typename LockType, typename AllTuple>
         static constexpr auto flatten() {
             if constexpr (is_add_remove_allowed<LockType>()) {
-                return TransactionPermissions<AddRemove>{};
+                if constexpr (is_read_previous_allowed<LockType>()) {
+                    return TransactionPermissions<AddRemove, ReadPrevious>{};
+                } else {
+                    return TransactionPermissions<AddRemove>{};
+                }
             } else {
                 using ReadPerm =
                     decltype(flatten_read<LockType, AllTuple>(std::make_index_sequence<std::tuple_size_v<AllTuple>>()));
@@ -247,28 +295,54 @@ namespace Tecs {
                     std::make_index_sequence<std::tuple_size_v<AllTuple>>()));
                 if constexpr (std::is_same<ReadPerm, std::tuple<>>()) {
                     if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
-                        return TransactionPermissions<>{};
+                        if constexpr (is_read_previous_allowed<LockType>()) {
+                            return TransactionPermissions<ReadPrevious>{};
+                        } else {
+                            return TransactionPermissions<>{};
+                        }
                     } else {
-                        return TransactionPermissions<typename tuple_to_write<WritePerm>::type>{};
+                        if constexpr (is_read_previous_allowed<LockType>()) {
+                            return TransactionPermissions<typename tuple_to<WritePerm>::write, ReadPrevious>{};
+                        } else {
+                            return TransactionPermissions<typename tuple_to<WritePerm>::write>{};
+                        }
                     }
                 } else {
                     if constexpr (std::is_same<WritePerm, std::tuple<>>()) {
-                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type>{};
+                        if constexpr (is_read_previous_allowed<LockType>()) {
+                            return TransactionPermissions<typename tuple_to<ReadPerm>::read, ReadPrevious>{};
+                        } else {
+                            return TransactionPermissions<typename tuple_to<ReadPerm>::read>{};
+                        }
                     } else {
-                        return TransactionPermissions<typename tuple_to_read<ReadPerm>::type,
-                            typename tuple_to_write<WritePerm>::type>{};
+                        if constexpr (is_read_previous_allowed<LockType>()) {
+                            return TransactionPermissions<typename tuple_to<ReadPerm>::read,
+                                typename tuple_to<WritePerm>::write,
+                                ReadPrevious>{};
+                        } else {
+                            return TransactionPermissions<typename tuple_to<ReadPerm>::read,
+                                typename tuple_to<WritePerm>::write>{};
+                        }
                     }
                 }
             }
         }
     } // namespace detail
 
-    template<typename LockType, typename... AllComponentTypes>
-    struct FlattenPermissions {
-        using AllTuple = std::tuple<AllComponentTypes...>;
+    template<typename>
+    struct FlattenPermissions {};
 
-        using type = decltype(detail::flatten<LockType, AllTuple>());
-        using type_readonly = typename detail::tuple_to_read<decltype(detail::flatten_readonly<LockType, AllTuple>(
-            std::make_index_sequence<sizeof...(AllComponentTypes)>()))>::type;
+    template<template<typename, typename...> typename LockType, template<typename...> typename ECSType,
+        typename... AllComponentTypes, typename... Permissions>
+    struct FlattenPermissions<LockType<ECSType<AllComponentTypes...>, Permissions...>> {
+        using AllTuple = std::tuple<AllComponentTypes...>;
+        using FullLockType = LockType<ECSType<AllComponentTypes...>, Permissions...>;
+
+        using type = decltype(detail::flatten<FullLockType, AllTuple>());
+        using type_readonly = typename detail::tuple_to<decltype(detail::flatten_readonly<FullLockType, AllTuple>(
+            std::make_index_sequence<sizeof...(AllComponentTypes)>()))>::read;
+
+        using type_lock = typename detail::tuple_to_lock<type>::type;
+        using type_dynamic_lock = typename detail::tuple_to_lock<type>::type_dynamic;
     };
 }; // namespace Tecs

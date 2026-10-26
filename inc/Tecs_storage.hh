@@ -12,7 +12,7 @@
 
 #include <atomic>
 #include <cstddef>
-#include <thread>
+#include <stdexcept>
 #include <vector>
 
 #ifndef TECS_SPINLOCK_RETRY_YIELD
@@ -21,13 +21,15 @@
 
 static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic_int is not lock-free");
 
+typedef void tecs_lock_t;
+
 namespace Tecs {
     template<typename T>
     class ComponentIndex {
     public:
         /**
          * Lock this Component type for reading. Multiple readers can hold this lock at once.
-         * This function will only block if a writer is in the process of commiting.
+         * This function will only block if a writer is in the process of committing.
          *
          * ReadUnlock() must be called exactly once after reading has completed.
          */
@@ -359,10 +361,8 @@ namespace Tecs {
 
         template<typename, typename...>
         friend class Lock;
-        template<typename, typename...>
+        template<typename>
         friend class Transaction;
-        template<template<typename...> typename, typename...>
-        friend class BaseTransaction;
         friend struct Entity;
     };
 } // namespace Tecs
