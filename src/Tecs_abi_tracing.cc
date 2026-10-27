@@ -8,25 +8,25 @@
     #include <Tecs_tracing.hh>
     #include <cstring>
 
-    #ifdef TECS_ABI_ECS_INCLUDE
+    #ifdef TECS_ABI_ECS_IMPL_INCLUDE
+        #include TECS_ABI_ECS_IMPL_INCLUDE
+    #elif defined(TECS_ABI_ECS_INCLUDE)
         #include TECS_ABI_ECS_INCLUDE
     #endif
 
-    #ifdef TECS_ABI_ECS_NAME
-using ECS = TECS_ABI_ECS_NAME;
-    #else
+    #ifndef TECS_ABI_ECS_NAME
         #error "TECS_ABI_ECS_NAME is not set"
     #endif
 
 extern "C" {
 
 TECS_EXPORT void Tecs_ecs_start_perf_trace(tecs_ecs_t *ecsPtr) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    TECS_ABI_ECS_NAME *ecs = static_cast<TECS_ABI_ECS_NAME *>(ecsPtr);
     ecs->StartTrace();
 }
 
 TECS_EXPORT tecs_perf_trace_t *Tecs_ecs_stop_perf_trace(tecs_ecs_t *ecsPtr) {
-    ECS *ecs = static_cast<ECS *>(ecsPtr);
+    TECS_ABI_ECS_NAME *ecs = static_cast<TECS_ABI_ECS_NAME *>(ecsPtr);
     return new Tecs::PerformanceTrace(ecs->StopTrace());
 }
 
