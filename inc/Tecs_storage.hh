@@ -2,6 +2,8 @@
 
 #include "Tecs_entity.hh"
 #include "Tecs_observer.hh"
+
+#include <cstdlib>
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
     #include "Tecs_tracing.hh"
 #endif
@@ -12,6 +14,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -24,6 +27,9 @@ static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic_int is not lock-free");
 typedef void tecs_lock_t;
 
 namespace Tecs {
+    template<typename T>
+    struct ComponentStore;
+
     template<typename T>
     class ComponentIndex {
     public:
@@ -348,12 +354,10 @@ namespace Tecs {
         std::atomic_uint32_t readers = 0;
         std::atomic_uint32_t writer = 0;
 
-        std::vector<T> readComponents;
-        std::vector<T> writeComponents;
-        std::vector<Entity> readValidEntities;
-        std::vector<Entity> writeValidEntities;
+        ComponentStore<T> read;
+        ComponentStore<T> write;
         std::vector<size_t> validEntityIndexes; // Size of writeComponents, Indexes into writeValidEntities
-        std::vector<TECS_ENTITY_INDEX_TYPE> writeAccessedEntities; // Indexes into writeComponents
+        std::vector<TECS_ENTITY_INDEX_TYPE> writeAccessedEntities; // Indexes into write.components
 
         ObserverList<ComponentAddRemoveEvent<T>> componentAddEvents;
         ObserverList<ComponentAddRemoveEvent<T>> componentRemoveEvents;
@@ -365,4 +369,75 @@ namespace Tecs {
         friend class Transaction;
         friend struct Entity;
     };
+
+    template<typename T>
+    struct ComponentStore {
+    public:
+        ComponentStore() {}
+        ~ComponentStore() {
+            reset();
+        }
+
+        ComponentStore &operator=(ComponentStore &&other) = default;
+        ComponentStore &operator=(const ComponentStore &other) {
+            if (other.components && other.capacity > capacity) {
+                reset();
+                components = (T *)new uint8_t[sizeof(T) * other.capacity];
+                capacity = other.capacity;
+            } else {
+                for (const Entity &ent : validEntities) {
+                    if (ent && ent.index >= capacity) continue;
+                    std::destroy_at<T>(&components[ent.index]);
+                }
+            }
+            for (const Entity &ent : other.validEntities) {
+                if (ent && ent.index >= capacity) continue;
+                new (&components[ent.index]) T(other.components[ent.index]);
+            }
+            validEntities = other.validEntities;
+            return *this;
+        }
+
+        void reset() {
+            if (components) {
+                for (const Entity &ent : validEntities) {
+                    if (ent && ent.index >= capacity) continue;
+                    std::destroy_at<T>(&components[ent.index]);
+                }
+                delete[] (uint8_t *)components;
+                components = nullptr;
+            }
+            capacity = 0;
+            validEntities.clear();
+        }
+
+        void reserve(TECS_ENTITY_INDEX_TYPE newCapacity) {
+            if (newCapacity > 0 && newCapacity > capacity) {
+                T *newComponents = (T *)new uint8_t[sizeof(T) * newCapacity];
+                if (components) {
+                    for (const Entity &ent : validEntities) {
+                        if (ent && ent.index >= capacity) continue;
+                        new (&newComponents[ent.index]) T(std::move(components[ent.index]));
+                        std::destroy_at<T>(&components[ent.index]);
+                    }
+                    delete[] (uint8_t *)components;
+                }
+                components = newComponents;
+                capacity = newCapacity;
+            }
+        }
+
+        T *components = nullptr;
+        TECS_ENTITY_INDEX_TYPE capacity = 0;
+        std::vector<Entity> validEntities;
+    };
 } // namespace Tecs
+
+namespace std {
+    template<typename T>
+    void swap(Tecs::ComponentStore<T> &a, Tecs::ComponentStore<T> &b) {
+        std::swap(a.components, b.components);
+        std::swap(a.capacity, b.capacity);
+        std::swap(a.validEntities, b.validEntities);
+    }
+} // namespace std

@@ -144,7 +144,7 @@ namespace Tecs {
             static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
-            return instance.template Storage<T>().readValidEntities;
+            return instance.template Storage<T>().read.validEntities;
         }
 
         template<typename T>
@@ -152,22 +152,22 @@ namespace Tecs {
             static_assert(!is_global_component<T>(), "Entities can't have global components");
 
             if (IsAddRemoveAllowed()) {
-                return instance.template Storage<T>().writeValidEntities;
+                return instance.template Storage<T>().write.validEntities;
             } else {
-                return instance.template Storage<T>().readValidEntities;
+                return instance.template Storage<T>().read.validEntities;
             }
         }
 
         inline const EntityView PreviousEntities() const {
             static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
-            return instance.metadata.readValidEntities;
+            return instance.metadata.read.validEntities;
         }
 
         inline const EntityView Entities() const {
             if (IsAddRemoveAllowed()) {
-                return instance.metadata.writeValidEntities;
+                return instance.metadata.write.validEntities;
             } else {
-                return instance.metadata.readValidEntities;
+                return instance.metadata.read.validEntities;
             }
         }
 
@@ -183,17 +183,19 @@ namespace Tecs {
             Entity entity;
             if (instance.freeEntities.empty()) {
                 // Allocate a new set of entities and components
-                size_t nextIndex = instance.metadata.writeComponents.size();
-                size_t newSize = nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE;
+                size_t nextIndex = instance.metadata.write.capacity;
+                size_t newSize = std::max(nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE, nextIndex * 2);
+                size_t batchCount = newSize - nextIndex;
                 if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
                     throw std::runtime_error("New entity index overflows type: " + std::to_string(newSize));
                 }
-                instance.metadata.writeComponents.resize(newSize);
+                instance.metadata.write.reserve(newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
-                (AllocateComponents<AllComponentTypes>(TECS_ENTITY_ALLOCATION_BATCH_SIZE), ...);
+                (AllocateComponents<AllComponentTypes>(batchCount), ...);
 
                 // Add all but 1 of the new Entity ids to the free list.
-                for (size_t count = 1; count < TECS_ENTITY_ALLOCATION_BATCH_SIZE; count++) {
+                std::uninitialized_default_construct_n(&instance.metadata.write.components[nextIndex], batchCount);
+                for (size_t count = 1; count < batchCount; count++) {
                     TECS_ENTITY_INDEX_TYPE newIndex = (TECS_ENTITY_INDEX_TYPE)(nextIndex + count);
                     instance.freeEntities.emplace_back(newIndex, 1, (TECS_ENTITY_ECS_IDENTIFIER_TYPE)instance.ecsId);
                 }
@@ -203,9 +205,9 @@ namespace Tecs {
                 instance.freeEntities.pop_front();
             }
 
-            instance.metadata.writeComponents[entity.index][0] = true;
-            instance.metadata.writeComponents[entity.index].generation = entity.generation;
-            auto &validEntities = instance.metadata.writeValidEntities;
+            instance.metadata.write.components[entity.index][0] = true;
+            instance.metadata.write.components[entity.index].generation = entity.generation;
+            auto &validEntities = instance.metadata.write.validEntities;
             instance.metadata.validEntityIndexes[entity.index] = validEntities.size();
             validEntities.emplace_back(entity);
             instance.metadata.AccessEntity(entity.index);
@@ -244,9 +246,9 @@ namespace Tecs {
 
             auto &storage = instance.template Storage<CompType>();
             if (instance.template BitsetHas<CompType>(writePermissions)) {
-                return storage.writeComponents.data();
+                return storage.write.components;
             } else {
-                return storage.readComponents.data();
+                return storage.read.components;
             }
         }
 
@@ -263,6 +265,7 @@ namespace Tecs {
             auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
+            if (!std::is_const<ReturnType>()) transaction->template SetAccessFlag<CompType>();
             auto &storage = instance.template Storage<CompType>();
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
@@ -272,9 +275,9 @@ namespace Tecs {
                     transaction->template SetAccessFlag<AddRemove>();
 
                     metadata[1 + instance.template GetComponentIndex<CompType>()] = true;
-                    storage.writeComponents.resize(1);
-                    // Reset value before allowing reading.
-                    storage.writeComponents[0] = {};
+                    storage.write.reserve(1);
+                    storage.write.validEntities.emplace_back(0);
+                    return *new (&storage.write.components[0]) CompType();
                 }
 #ifndef TECS_UNCHECKED_MODE
             } else if (!instance.template BitsetHas<CompType>(metadata)) {
@@ -282,11 +285,10 @@ namespace Tecs {
 #endif
             }
 
-            if (!std::is_const<ReturnType>()) transaction->template SetAccessFlag<CompType>();
             if (instance.template BitsetHas<CompType>(writePermissions)) {
-                return storage.writeComponents[0];
+                return storage.write.components[0];
             } else {
-                return storage.readComponents[0];
+                return storage.read.components[0];
             }
         }
 
@@ -296,7 +298,7 @@ namespace Tecs {
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
 
-            return instance.template Storage<CompType>().readComponents.data();
+            return instance.template Storage<CompType>().read.components;
         }
 
         template<typename T>
@@ -311,7 +313,7 @@ namespace Tecs {
                 throw std::runtime_error("Missing global component of type: " + std::string(typeid(CompType).name()));
             }
 #endif
-            return instance.template Storage<CompType>().readComponents[0];
+            return instance.template Storage<CompType>().read.components[0];
         }
 
         template<typename T>
@@ -323,6 +325,8 @@ namespace Tecs {
             auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
+            transaction->template SetAccessFlag<T>();
+            auto &storage = instance.template Storage<T>();
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
                 auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -331,7 +335,9 @@ namespace Tecs {
                     transaction->template SetAccessFlag<AddRemove>();
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
-                    instance.template Storage<T>().writeComponents.resize(1);
+                    storage.write.reserve(1);
+                    storage.write.validEntities.emplace_back(0);
+                    return *new (&storage.write.components[0]) T(value);
                 }
 #ifndef TECS_UNCHECKED_MODE
             } else if (!instance.template BitsetHas<T>(metadata)) {
@@ -339,8 +345,7 @@ namespace Tecs {
 #endif
             }
 
-            transaction->template SetAccessFlag<T>();
-            return instance.template Storage<T>().writeComponents[0] = value;
+            return storage.writeComponents[0] = value;
         }
 
         template<typename T, typename... Args>
@@ -352,6 +357,8 @@ namespace Tecs {
             auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
 #endif
 
+            transaction->template SetAccessFlag<T>();
+            auto &storage = instance.template Storage<T>();
             if constexpr (is_add_remove_allowed<LockType>()) {
 #ifdef TECS_UNCHECKED_MODE
                 auto &metadata = IsAddRemoveAllowed() ? instance.globalWriteMetadata : instance.globalReadMetadata;
@@ -360,7 +367,9 @@ namespace Tecs {
                     transaction->template SetAccessFlag<AddRemove>();
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = true;
-                    instance.template Storage<T>().writeComponents.resize(1);
+                    storage.write.reserve(1);
+                    storage.write.validEntities.emplace_back(0);
+                    return *new (&storage.write.components[0]) T(std::forward<Args>(args)...);
                 }
 #ifndef TECS_UNCHECKED_MODE
             } else if (!instance.template BitsetHas<T>(metadata)) {
@@ -368,8 +377,7 @@ namespace Tecs {
 #endif
             }
 
-            transaction->template SetAccessFlag<T>();
-            return instance.template Storage<T>().writeComponents[0] = T(std::forward<Args>(args)...);
+            return storage.write.components[0] = T(std::forward<Args>(args)...);
         }
 
         template<typename... Tn>
@@ -454,8 +462,8 @@ namespace Tecs {
                 transaction->template SetAccessFlag<T>();
 
                 auto &storage = instance.template Storage<T>();
-                size_t newSize = storage.writeComponents.size() + count;
-                storage.writeComponents.resize(newSize);
+                size_t newSize = storage.write.capacity + count;
+                storage.write.reserve(newSize);
                 storage.validEntityIndexes.resize(newSize);
             } else {
                 (void)count; // Unreferenced parameter warning on MSVC
@@ -465,17 +473,17 @@ namespace Tecs {
         template<typename T>
         inline void RemoveComponents(TECS_ENTITY_INDEX_TYPE index) const {
             if constexpr (!is_global_component<T>()) { // Ignore global components
-                auto &metadata = instance.metadata.writeComponents[index];
+                auto &metadata = instance.metadata.write.components[index];
                 if (instance.template BitsetHas<T>(metadata)) {
                     transaction->template SetAccessFlag<AddRemove>();
                     transaction->template SetAccessFlag<T>(index);
                     instance.metadata.AccessEntity(index);
 
                     metadata[1 + instance.template GetComponentIndex<T>()] = false;
-                    auto &compIndex = instance.template Storage<T>();
-                    compIndex.writeComponents[index] = {};
-                    size_t validIndex = compIndex.validEntityIndexes[index];
-                    compIndex.writeValidEntities[validIndex] = Entity();
+                    auto &storage = instance.template Storage<T>();
+                    std::destroy_at<T>(&storage.write.components[index]);
+                    size_t validIndex = storage.validEntityIndexes[index];
+                    storage.write.validEntities[validIndex] = Entity();
                 }
             }
         }
@@ -490,7 +498,9 @@ namespace Tecs {
                 transaction->template SetAccessFlag<T>();
 
                 metadata[1 + instance.template GetComponentIndex<T>()] = false;
-                instance.template Storage<T>().writeComponents[0] = {};
+                auto &storage = instance.template Storage<T>();
+                std::destroy_at<T>(&storage.write.components[0]);
+                storage.write.validEntities.clear();
             }
         }
 
