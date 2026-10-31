@@ -185,11 +185,11 @@ namespace Tecs {
                 // Allocate a new set of entities and components
                 size_t nextIndex = instance.metadata.write.capacity;
                 size_t newSize = std::max(nextIndex + TECS_ENTITY_ALLOCATION_BATCH_SIZE, nextIndex * 2);
-                size_t batchCount = newSize - nextIndex;
                 if (newSize > std::numeric_limits<TECS_ENTITY_INDEX_TYPE>::max()) {
                     throw std::runtime_error("New entity index overflows type: " + std::to_string(newSize));
                 }
-                instance.metadata.write.reserve(newSize);
+                size_t batchCount = newSize - nextIndex;
+                instance.metadata.write.reserve((TECS_ENTITY_INDEX_TYPE)newSize);
                 instance.metadata.validEntityIndexes.resize(newSize);
                 (AllocateComponents<AllComponentTypes>(batchCount), ...);
 
@@ -463,7 +463,7 @@ namespace Tecs {
 
                 auto &storage = instance.template Storage<T>();
                 size_t newSize = storage.write.capacity + count;
-                storage.write.reserve(newSize);
+                storage.write.reserve((TECS_ENTITY_INDEX_TYPE)newSize);
                 storage.validEntityIndexes.resize(newSize);
             } else {
                 (void)count; // Unreferenced parameter warning on MSVC
