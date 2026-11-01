@@ -81,6 +81,7 @@ namespace Tecs::abi {
 
         template<typename LockType>
         inline bool Existed(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             return Tecs_entity_existed(lock.base.get(), (tecs_entity_t)(*this));
         }
 
@@ -103,6 +104,7 @@ namespace Tecs::abi {
 
         template<typename... Tn, typename LockType>
         inline bool Had(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             static_assert(!contains_global_components<Tn...>(), "Entities cannot have global components");
 
             if constexpr (LockType::ECS::GetComponentCount() < std::numeric_limits<uint64_t>::digits) {
@@ -149,6 +151,7 @@ namespace Tecs::abi {
 
         template<typename T, typename LockType>
         inline const T &GetPrevious(const LockType &lock) const {
+            static_assert(is_read_previous_allowed<LockType>(), "Reading previous state is not allowed by lock.");
             using CompType = std::remove_cv_t<T>;
             static_assert(is_read_allowed<CompType, LockType>(), "Component is not locked for reading.");
             static_assert(!is_global_component<CompType>(),

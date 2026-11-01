@@ -87,7 +87,8 @@ TECS_EXPORT const void *Tecs_get_previous_entity_storage(tecs_lock_t *dynLockPtr
                 << "\" << std::endl;" << std::endl;
             out << "        return nullptr;" << std::endl;
         } else {
-            out << "        auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
+            out << "        auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">, Tecs::ReadPrevious>();"
+                << std::endl;
             out << "        if (!lock) {" << std::endl;
             out << "            std::cerr << \"Error: Lock does not have " << names[i]
                 << " read permissions\" << std::endl;" << std::endl;
@@ -110,7 +111,12 @@ TECS_EXPORT bool Tecs_entity_exists(tecs_lock_t *dynLockPtr, tecs_entity_t entit
 
 TECS_EXPORT bool Tecs_entity_existed(tecs_lock_t *dynLockPtr, tecs_entity_t entity) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
-    return Tecs::Entity(entity).Existed(*dynLock);
+    auto lock = dynLock->TryLock<Tecs::ReadPrevious>();
+    if (!lock) {
+        std::cerr << "Error: Lock does not have ReadPrevious permissions" << std::endl;
+        return Tecs::Entity(entity).Exists(*dynLock);
+    }
+    return Tecs::Entity(entity).Existed(*lock);
 }
 
 TECS_EXPORT bool Tecs_entity_has(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex) {
@@ -158,7 +164,13 @@ TECS_EXPORT bool Tecs_entity_had(tecs_lock_t *dynLockPtr, tecs_entity_t entity, 
                 << "\" << std::endl;" << std::endl;
             out << "        return false;" << std::endl;
         } else {
-            out << "        return Tecs::Entity(entity).Had<" << names[i] << ">(*dynLock);" << std::endl;
+            out << "        auto lock = dynLock->TryLock<Tecs::ReadPrevious>();" << std::endl;
+            out << "        if (!lock) {" << std::endl;
+            out << "            std::cerr << \"Error: Lock does not have ReadPrevious permissions\" << std::endl;"
+                << std::endl;
+            out << "            return Tecs::Entity(entity).Has<" << names[i] << ">(*dynLock);" << std::endl;
+            out << "        }" << std::endl;
+            out << "        return Tecs::Entity(entity).Had<" << names[i] << ">(*lock);" << std::endl;
         }
     }
     out << "    } else {";
@@ -170,7 +182,12 @@ TECS_EXPORT bool Tecs_entity_had(tecs_lock_t *dynLockPtr, tecs_entity_t entity, 
 
 TECS_EXPORT bool Tecs_entity_had_bitset(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint64_t componentBits) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
-    return Tecs::Entity(entity).HadBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
+    auto lock = dynLock->TryLock<Tecs::ReadPrevious>();
+    if (!lock) {
+        std::cerr << "Error: Lock does not have ReadPrevious permissions" << std::endl;
+        return Tecs::Entity(entity).HasBitset<Tecs::Lock<ECS>>(*dynLock, DynamicLock::PermissionBitset(componentBits));
+    }
+    return Tecs::Entity(entity).HadBitset<Tecs::Lock<ECS, Tecs::ReadPrevious>>(*lock, DynamicLock::PermissionBitset(componentBits));
 }
 
 TECS_EXPORT const void *Tecs_entity_const_get(tecs_lock_t *dynLockPtr, tecs_entity_t entity, uint32_t componentIndex) {
@@ -348,10 +365,10 @@ TECS_EXPORT void Tecs_entity_destroy(tecs_lock_t *dynLockPtr, tecs_entity_t enti
         out << "TECS_EXPORT const " << cname << " *Tecs_get_previous_entity_" << scn
             << "_storage(tecs_lock_t *dynLockPtr) {" << std::endl;
         out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
-        out << "    auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">>();" << std::endl;
+        out << "    auto lock = dynLock->TryLock<Tecs::Read<" << names[i] << ">, Tecs::ReadPrevious>();" << std::endl;
         out << "    if (!lock) {" << std::endl;
-        out << "        std::cerr << \"Error: Lock does not have " << names[i] << " read permissions\" << std::endl;"
-            << std::endl;
+        out << "        std::cerr << \"Error: Lock does not have " << names[i]
+            << " read + ReadPrevious permissions\" << std::endl;" << std::endl;
         out << "        return nullptr;" << std::endl;
         out << "    }" << std::endl;
         out << "    return reinterpret_cast<const " << cname << " *>(lock->GetPreviousStorage<" << names[i] << ">());"
@@ -374,7 +391,12 @@ TECS_EXPORT void Tecs_entity_destroy(tecs_lock_t *dynLockPtr, tecs_entity_t enti
         out << "TECS_EXPORT bool Tecs_entity_had_" << scn << "(tecs_lock_t *dynLockPtr, tecs_entity_t entity) {"
             << std::endl;
         out << "    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);" << std::endl;
-        out << "    return Tecs::Entity(entity).Had<" << names[i] << ">(*dynLock);" << std::endl;
+        out << "    auto lock = dynLock->TryLock<Tecs::ReadPrevious>();" << std::endl;
+        out << "    if (!lock) {" << std::endl;
+        out << "        std::cerr << \"Error: Lock does not have ReadPrevious permissions\" << std::endl;" << std::endl;
+        out << "        return Tecs::Entity(entity).Has<" << names[i] << ">(*dynLock);" << std::endl;
+        out << "    }" << std::endl;
+        out << "    return Tecs::Entity(entity).Had<" << names[i] << ">(*lock);" << std::endl;
         out << "}" << std::endl;
         out << std::endl;
         out << "TECS_EXPORT const " << cname << " *Tecs_entity_const_get_" << scn

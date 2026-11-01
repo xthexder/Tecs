@@ -66,6 +66,7 @@ namespace Tecs::abi {
          * Permissions can be any combination of the following:
          * Tecs::Read<Components...>     - Allow read-only access to a list of Component types
          * Tecs::ReadAll                 - Allow read-only access to all existing Components
+         * Tecs::ReadPrevious            - Allow reading state as it was at the start of the transaction.
          * Tecs::Write<Components...>    - Allow write access to a list of Component types (existing Components only)
          * Tecs::WriteAll                - Allow write access to all existing Components
          * Tecs::AddRemove               - Allow the creation and deletion of new Entities and Components
@@ -82,7 +83,7 @@ namespace Tecs::abi {
 
             std::bitset<1 + sizeof...(Tn)> readPermissions;
             std::bitset<1 + sizeof...(Tn)> writePermissions;
-            readPermissions[0] = true;
+            readPermissions[0] = is_read_previous_allowed<LockType>();
             writePermissions[0] = is_add_remove_allowed<LockType>();
             // clang-format off
             ((

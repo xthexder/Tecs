@@ -43,6 +43,7 @@ namespace Tecs {
          * Permissions can be any combination of the following:
          * Tecs::Read<Components...>     - Allow read-only access to a list of Component types
          * Tecs::ReadAll                 - Allow read-only access to all existing Components
+         * Tecs::ReadPrevious            - Allow reading state as it was at the start of the transaction.
          * Tecs::Write<Components...>    - Allow write access to a list of Component types (existing Components only)
          * Tecs::WriteAll                - Allow write access to all existing Components
          * Tecs::AddRemove               - Allow the creation and deletion of new Entities and Components
@@ -76,12 +77,52 @@ namespace Tecs {
         }
 #endif
 
-        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const {
+        inline TECS_ENTITY_ECS_IDENTIFIER_TYPE GetInstanceId() const noexcept {
             return (TECS_ENTITY_ECS_IDENTIFIER_TYPE)ecsId;
         }
 
         inline uint64_t GetNextTransactionId() const {
             return nextTransactionId;
+        }
+
+        inline uint64_t GetNextCommitId() const {
+            return nextCommitId;
+        }
+
+        /**
+         * Sets a callback to run at the end of each transaction before it is committed.
+         *
+         * The transaction is still active during this callback, allowing further modification of ECS data.
+         * This callback may be called from multiple transactions at once, so it must be thread-safe.
+         *
+         * Callback signature: void beforeCommit(const DynamicLock<ECS> &lock)
+         */
+        void SetBeforeCommitCallback(std::function<void(const DynamicLock<ECS<Tn...>> &)> &&callback) {
+            beforeCommitCallback = std::move(callback);
+        }
+
+        /**
+         * Sets a callback to run during each transaction commmit.
+         *
+         * This callback is executed on the same thread as the committing transaction.
+         * During commit, there is guaranteed to no other transactions running.
+         *
+         * Callback signature: void onCommit(ECS &instance, uint64_t transactionId, uint64_t commitId)
+         */
+        void SetOnCommitCallback(std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> &&callback) {
+            onCommitCallback = std::move(callback);
+        }
+
+        /**
+         * Sets a callback to run after each transaction is committed and all locks are released.
+         *
+         * This callback is executed on the same thread as the committed transaction.
+         * This callback may be called from multiple threads at once, so it must be thread-safe.
+         *
+         * Callback signature: void afterCommit(ECS &instance, uint64_t transactionId, uint64_t commitId)
+         */
+        void SetAfterCommitCallback(std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> &&callback) {
+            afterCommitCallback = std::move(callback);
         }
 
         /**
@@ -179,6 +220,11 @@ namespace Tecs {
 
         ObserverList<EntityAddRemoveEvent> entityAddEvents;
         ObserverList<EntityAddRemoveEvent> entityRemoveEvents;
+        std::function<void(const DynamicLock<ECS<Tn...>> &)> beforeCommitCallback;
+        std::function<void(ECS<Tn...> &, uint64_t, uint64_t)> onCommitCallback, afterCommitCallback;
+
+        std::atomic_uint64_t nextTransactionId;
+        std::atomic_uint64_t nextCommitId;
 
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
         TraceInfo transactionTrace;
