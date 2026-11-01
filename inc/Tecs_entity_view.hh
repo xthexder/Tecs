@@ -4,6 +4,7 @@
 
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 namespace Tecs {
@@ -165,9 +166,8 @@ namespace Tecs {
             return EntityView(*storage, start_index + offset, std::min(end_index, start_index + offset + count));
         }
 
-    private:
         const std::vector<Entity> *storage = nullptr;
         size_t start_index = 0;
         size_t end_index = 0;
     };
-}; // namespace Tecs
+} // namespace Tecs

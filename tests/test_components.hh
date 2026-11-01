@@ -35,6 +35,18 @@ namespace testing {
     };
 }; // namespace testing
 
-TECS_NAME_COMPONENT(testing::Script, "Script");
-TECS_NAME_COMPONENT(testing::Renderable, "Renderable");
-TECS_NAME_COMPONENT(testing::GlobalComponent, "GlobalComponent");
+typedef struct transform_t {
+    testing::Transform transform;
+} transform_t;
+
+typedef struct renderable_t {
+    testing::Renderable renderable;
+} renderable_t;
+
+typedef struct script_t {
+    testing::Script script;
+} script_t;
+
+typedef struct global_component_t {
+    testing::GlobalComponent global;
+} global_component_t;
