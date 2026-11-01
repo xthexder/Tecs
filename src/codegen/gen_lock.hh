@@ -42,6 +42,11 @@ TECS_EXPORT uint64_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr) {
     return dynLock->GetTransactionId();
 }
 
+TECS_EXPORT uint64_t Tecs_lock_use_count(tecs_lock_t *dynLockPtr) {
+    DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
+    return dynLock->UseCount();
+}
+
 TECS_EXPORT bool Tecs_lock_is_add_remove_allowed(tecs_lock_t *dynLockPtr) {
     DynamicLock *dynLock = static_cast<DynamicLock *>(dynLockPtr);
     return dynLock->TryLock<Tecs::AddRemove>().has_value();

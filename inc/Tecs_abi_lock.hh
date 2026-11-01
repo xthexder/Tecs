@@ -208,13 +208,13 @@ namespace Tecs::abi {
         //     observer.eventListWeak.reset();
         // }
 
-        // template<typename... PermissionsSubset>
-        // inline Lock<ECS, PermissionsSubset...> Subset() const {
-        //     using NewLockType = Lock<ECS, PermissionsSubset...>;
-        //     static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
+        template<typename... PermissionsSubset>
+        inline Lock<ECS, PermissionsSubset...> Subset() const {
+            using NewLockType = Lock<ECS, PermissionsSubset...>;
+            static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
 
-        //     return NewLockType(*this);
-        // }
+            return NewLockType(base);
+        }
 
         /**
          * Convert this lock into a read-only variant.
@@ -222,15 +222,18 @@ namespace Tecs::abi {
          * Reads performed through this lock will not be able to see writes from the parent lock, and instead will
          * return the previous value.
          */
-        // inline auto ReadOnlySubset() const {
-        //     using NewLockType = Lock<ECS, typename FlattenPermissions<LockType,
-        //     AllComponentTypes...>::type_readonly>; static_assert(has_permissions<NewLockType>(), "Lock types are not
-        //     a subset of existing permissions."); return NewLockType(this->instance, this->base, {});
-        // }
+        inline auto ReadOnlySubset() const {
+            using NewLockType = Lock<ECS, typename FlattenPermissions<LockType>::type_readonly>;
+            static_assert(has_permissions<NewLockType>(), "Lock types are not a subset of existing permissions.");
+            std::shared_ptr<tecs_lock_t> lockPtr(Tecs_lock_read_only(base.get()), [](auto *ptr) {
+                Tecs_lock_release(ptr);
+            });
+            return NewLockType(lockPtr);
+        }
 
-        // long UseCount() const {
-        //     return base.use_count();
-        // }
+        uint64_t UseCount() const {
+            return Tecs_lock_use_count(base.get());
+        }
 
     private:
         friend struct Entity;

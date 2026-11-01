@@ -414,7 +414,7 @@ namespace Tecs {
             return NewLockType(this->instance, this->transaction, {});
         }
 
-        long UseCount() const {
+        uint64_t UseCount() const {
             return transaction.use_count();
         }
 

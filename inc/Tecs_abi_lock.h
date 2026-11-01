@@ -18,6 +18,7 @@ static_assert(sizeof(bool) == 1, "Unexpected bool size");
 typedef void tecs_lock_t;
 
 TECS_EXPORT uint64_t Tecs_lock_get_transaction_id(tecs_lock_t *dynLockPtr);
+TECS_EXPORT uint64_t Tecs_lock_use_count(tecs_lock_t *dynLockPtr);
 TECS_EXPORT bool Tecs_lock_is_add_remove_allowed(tecs_lock_t *dynLockPtr);
 TECS_EXPORT bool Tecs_lock_is_write_allowed(tecs_lock_t *dynLockPtr, uint32_t componentIndex);
 TECS_EXPORT bool Tecs_lock_is_read_allowed(tecs_lock_t *dynLockPtr, uint32_t componentIndex);
