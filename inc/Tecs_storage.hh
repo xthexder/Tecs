@@ -105,6 +105,9 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             traceInfo.Trace(TraceEvent::Type::ReadUnlock);
 #endif
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
+            tracyRead.BeforeUnlockShared();
+#endif
 
             uint32_t current = readers;
             if (current == READER_FREE || current == READER_LOCKED) {
@@ -113,9 +116,6 @@ namespace Tecs {
             readers.fetch_sub(1, std::memory_order_release);
 #if __cpp_lib_atomic_wait
             readers.notify_all();
-#endif
-#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
-            tracyRead.AfterUnlockShared();
 #endif
         }
 
@@ -252,6 +252,9 @@ namespace Tecs {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             traceInfo.Trace(TraceEvent::Type::CommitUnlock);
 #endif
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
+            tracyRead.BeforeUnlock();
+#endif
 
             // Unlock read copies immediately after commit completion
             uint32_t current = readers;
@@ -273,14 +276,14 @@ namespace Tecs {
 #if __cpp_lib_atomic_wait
             writer.notify_all();
 #endif
-#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
-            tracyRead.AfterUnlock();
-#endif
         }
 
         inline void WriteUnlock() {
 #ifdef TECS_ENABLE_PERFORMANCE_TRACING
             traceInfo.Trace(TraceEvent::Type::WriteUnlock);
+#endif
+#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
+            tracyWrite.BeforeUnlock();
 #endif
 
             // Unlock read and write copies
@@ -304,10 +307,6 @@ namespace Tecs {
             }
 #if __cpp_lib_atomic_wait
             writer.notify_all();
-#endif
-
-#if defined(TECS_ENABLE_TRACY) && defined(TECS_TRACY_INCLUDE_LOCKS)
-            tracyWrite.AfterUnlock();
 #endif
         }
 
