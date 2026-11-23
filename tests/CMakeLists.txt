@@ -64,13 +64,14 @@ endif()
 
 # Only build the tracy benchmark if the submodule is populated
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tracy/CMakeLists.txt)
+    set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
     set(TRACY_NO_EXIT ON CACHE BOOL "" FORCE)
     set(TRACY_ONLY_LOCALHOST ON CACHE BOOL "" FORCE)
     add_subdirectory(tracy)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(TracyClient PRIVATE -Wno-unused-result -Wno-unused-function -Wno-maybe-uninitialized)
+        target_compile_options(TracyClient PRIVATE -Wno-unused-result -Wno-unused-function -Wno-unused-variable -Wno-sign-compare -Wno-maybe-uninitialized)
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field -Wno-unused-function -Wno-c11-extensions)
+        target_compile_options(TracyClient PRIVATE -Wno-unused-private-field -Wno-unused-function -Wno-unused-variable -Wno-c11-extensions)
     endif()
 
     add_executable(${PROJECT_NAME}-benchmark-tracy
